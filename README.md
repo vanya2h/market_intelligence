@@ -10,7 +10,7 @@ This is an **information system**, not a trading bot. It surfaces what's happeni
 graph LR
     S[Scheduler] -->|hourly + 3x/day| C[Collector]
     C -->|raw snapshots| A[Analyzer]
-    A -->|regime state +<br/>multi-TF context| R[Agent Runner<br/>17 agents x 2 assets]
+    A -->|regime state +<br/>multi-TF context| R[Agent Runner<br/>18 agents x 2 assets]
     R -->|agent outputs| O[Orchestrator]
     O -->|brief| DB[(DB)]
     DB --> T[Telegram]
@@ -19,7 +19,7 @@ graph LR
 
 **Code computes, LLMs reason.** Deterministic rules detect regimes and flag anomalies. LLM agents interpret what it means in context. An orchestrator synthesizes everything into a scannable brief.
 
-## 17 Data Dimensions
+## 18 Data Dimensions
 
 | # | Dimension | # | Dimension |
 |---|-----------|---|-----------|
@@ -31,7 +31,7 @@ graph LR
 | 06 | Market Sentiment | 15 | Token Unlocks |
 | 07 | HTF Technical Structure | 16 | BTC Mining (BTC only) |
 | 08 | LTF Technical Structure | 17 | ETH Staking & Network (ETH only) |
-| 09 | Macro Environment | | |
+| 09 | Macro Environment | 18 | Equities Market Structure |
 
 ## Stack
 

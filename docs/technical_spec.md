@@ -19,7 +19,7 @@
 graph LR
     S[Scheduler] -->|hourly + 3x/day| C[Collector]
     C -->|raw snapshots| A[Analyzer]
-    A -->|regime state +<br/>multi-TF context| R[Agent Runner<br/>17 agents × 2 assets]
+    A -->|regime state +<br/>multi-TF context| R[Agent Runner<br/>18 agents × 2 assets]
     R -->|agent outputs| O[Orchestrator]
     O -->|brief| DB[(Brief DB)]
     DB --> T[Telegram]
@@ -29,7 +29,7 @@ graph LR
 1. **Scheduler** fires at configured times (hourly for continuous tier, 3x/day for periodic tier)
 2. **Collector** calls all data sources in parallel, saves raw `Snapshot` rows
 3. **Analyzer** applies deterministic rules, updates regime state machine, computes multi-timeframe highs/lows/percentiles
-4. **Agent Runner** sends enriched data to 17 Claude agents in parallel (one per dimension, per asset), saves `AgentOutput` rows
+4. **Agent Runner** sends enriched data to 18 Claude agents in parallel (one per dimension, per asset), saves `AgentOutput` rows
 5. **Orchestrator** receives all agent outputs, synthesizes a `Brief`, saves to DB
 6. **Telegram Bot** sends formatted brief to configured chat
 7. **Dashboard** reads from DB via API — always shows latest state

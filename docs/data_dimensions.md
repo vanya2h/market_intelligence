@@ -401,6 +401,61 @@ Longer timeframe windows (3m+) can be seeded from CoinGlass historical endpoints
 
 ---
 
+## 18 — Equities Market Structure
+
+**What it watches:** S&P 500 and Nasdaq structure — VIX level/term structure, put/call ratio, index vs key moving averages (20/50/200 DMA), market breadth (advance/decline, new highs/lows, % above 50/200 DMA), sector rotation and participation rate
+
+**Why it matters:** Crypto trades in the shadow of equities during high-correlation regimes (dimension 11). But even in low-correlation periods, a hostile equity environment (deteriorating breadth, rising VIX, breakdown below key MAs) creates a risk-off backdrop that suppresses capital flows into crypto. This dimension answers "is the broader risk environment healthy or fragile?" — context that the macro dimension (09) doesn't capture because macro tracks policy inputs (rates, CPI) while this tracks market outputs (how equities are actually behaving).
+
+**Data model:** Composite scoring with sub-pillar breakdown. Collected 3x/day (aligns with brief schedule).
+
+**Sub-pillars (each scored 0–100, weighted):**
+
+| Sub-pillar | Weight | Inputs |
+|---|---|---|
+| Volatility | 20% | VIX level, VIX percentile (1m/3m), VIX term structure (contango/backwardation), equity put/call ratio |
+| Trend | 30% | SPX vs 20/50/200 DMA, QQQ vs 20/50/200 DMA, slope of 50 DMA |
+| Breadth | 25% | % of S&P 500 above 50 DMA, % above 200 DMA, NYSE advance/decline ratio, new highs vs new lows |
+| Momentum | 15% | Sector leader/laggard spread, % of sectors in uptrend, RSI (SPX weekly) |
+| Event risk | 10% | FOMC within 48h, major earnings week, options expiry proximity |
+
+**Composite score interpretation:**
+
+| Score | Label | Meaning |
+|---|---|---|
+| 70–100 | `FAVORABLE` | Healthy equity environment — trend intact, breadth confirming, low vol. Risk-on tailwind for crypto. |
+| 40–69 | `MIXED` | Selective conditions — some pillars healthy, others deteriorating. Crypto may decouple or follow. |
+| 0–39 | `HOSTILE` | Broad equity weakness — poor breadth, elevated vol, broken trend. Risk-off headwind for crypto. |
+
+**Regime states:**
+`FAVORABLE` · `MIXED` · `HOSTILE` · `VOLATILITY_EVENT` · `BREADTH_DIVERGENCE` · `TREND_TRANSITION`
+
+**Transition rules (deterministic):**
+
+- composite > 70 → `FAVORABLE`
+- composite 40–70 → `MIXED`
+- composite < 40 → `HOSTILE`
+- VIX > 25 + VIX term structure in backwardation → `VOLATILITY_EVENT` (overrides composite)
+- SPX making new highs + % above 50 DMA < 50% → `BREADTH_DIVERGENCE` (warning: rally narrowing)
+- SPX crossing 200 DMA (either direction) + breadth confirming → `TREND_TRANSITION`
+
+**Key signals:**
+
+- Composite dropping from FAVORABLE to HOSTILE within 1 week → rapid deterioration, high alert
+- Breadth divergence persisting > 5 days → distribution underway, fragile rally
+- VIX term structure flipping to backwardation → near-term fear exceeding far-term, event-driven
+- % above 200 DMA < 40% → broad damage, not just index-level weakness
+- Composite recovering from HOSTILE while crypto hasn't bounced → potential crypto catch-up trade
+
+**Relationship to other dimensions:**
+
+- **Dimension 09 (Macro):** Macro tracks policy inputs; this tracks market outputs. Fed can be dovish while equities break down (and vice versa).
+- **Dimension 11 (Cross-Market Correlations):** Correlations tell you _how linked_ crypto is to equities; this tells you _what equities are actually doing_. Both matter.
+
+**Source:** FRED API (free — VIX via CBOE, S&P 500, advance/decline), Yahoo Finance (sector ETFs, breadth data, moving averages), CBOE (put/call ratio)
+
+---
+
 ## Data Source Summary
 
 | Source         | Dimensions Covered                    | Cost              | Auth              |
@@ -411,8 +466,11 @@ Longer timeframe windows (3m+) can be seeded from CoinGlass historical endpoints
 | Alternative.me | 06                                    | Free              | None              |
 | CryptoPanic    | 06, 10                                | Free tier         | API token         |
 | CryptoCompare  | 10                                    | Free tier         | API key           |
-| FRED           | 09, 11                                | Free              | API key           |
+| FRED           | 09, 11, 18                            | Free              | API key           |
 | Polymarket     | 12                                    | Free              | None              |
 | DefiLlama      | 13, 14, 17                            | Free              | None              |
+
+| Yahoo Finance  | 11, 18                                | Free              | None              |
+| CBOE           | 18                                    | Free              | None              |
 
 **Total data cost: ~$29/mo** (CoinGlass only paid source)

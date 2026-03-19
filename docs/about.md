@@ -34,7 +34,7 @@ graph TD
         A --> |Regime labels, signals,<br/>multi-timeframe context| SM[State Machine<br/>Regime transitions]
     end
 
-    subgraph "3. LLM Interpretation (17 agents × 2 assets)"
+    subgraph "3. LLM Interpretation (18 agents × 2 assets)"
         SM --> A1[Derivatives<br/>Agent]
         SM --> A2[Options<br/>Agent]
         SM --> A3[Exchange Flows<br/>Agent]
@@ -115,7 +115,7 @@ Each of the 17 data dimensions gets a card:
 
 ## Data Dimensions
 
-17 analytical dimensions, each with a collector, deterministic analyzer, and LLM agent. Full spec in [data_dimensions.md](data_dimensions.md).
+18 analytical dimensions, each with a collector, deterministic analyzer, and LLM agent. Full spec in [data_dimensions.md](data_dimensions.md).
 
 | #  | Dimension                | Type          | What It Watches                                  |
 |----|--------------------------|---------------|--------------------------------------------------|
@@ -136,6 +136,7 @@ Each of the 17 data dimensions gets a card:
 | 15 | Token Unlocks            | Per-asset     | Vesting schedules, upcoming unlocks              |
 | 16 | BTC Mining               | BTC only      | Hash rate, difficulty, miner revenue/outflows    |
 | 17 | ETH Staking & Network    | ETH only      | Staking rate, validator queues, burn rate, blobs |
+| 18 | Equities Market Structure| Shared        | VIX, SPX/QQQ trend, breadth, sector momentum    |
 
 ## Stack
 
@@ -182,7 +183,7 @@ Only after Phase A proves useful in daily use.
 ### Phase A
 
 - [ ] **M1: Data pipeline** — hourly + 3x/day collection across 17 dimensions for BTC & ETH
-- [ ] **M2: LLM agents** — 17 specialist agents + orchestrator producing market briefs
+- [ ] **M2: LLM agents** — 18 specialist agents + orchestrator producing market briefs
 - [ ] **M3: Telegram bot** — brief delivery 3x/day + "ask me" command
 - [ ] **M4: Dashboard** — indicator panels, agent reasoning, brief history
 - [ ] **M5: Iterate** — use daily for 1 month, refine prompts and brief format
