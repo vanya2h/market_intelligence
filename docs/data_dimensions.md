@@ -28,6 +28,7 @@ Each dimension is an independent analytical lens on the market. Every dimension 
 | ---------- | --------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
 | Continuous | 1h              | Derivatives (01), Options (02), Exchange flows (04), LTF technicals (08) | Intraday context needed for meaningful analysis |
 | Periodic   | 3x/day or daily | All others                                                               | Data itself changes slowly or is event-driven   |
+| Historical | Daily (batch)   | Derivatives (01), Whale activity (05)                                    | Hydromancer Reservoir — wallet-level Hyperliquid data via S3 parquet, enriches real-time sources |
 
 ### State machine + multi-timeframe context
 
@@ -111,6 +112,23 @@ Longer timeframe windows (3m+) can be seeded from CoinGlass historical endpoints
 
 **Source:** CoinGlass — funding rates, OI (OHLC + aggregated), liquidation history/heatmap, L/S ratio, taker volume
 
+**Source (Hyperliquid-specific):** Hydromancer Reservoir — wallet-level position snapshots, tick-level fills and liquidations, leverage distribution. Enriches CoinGlass aggregates with granular on-chain data.
+
+**Hyperliquid enrichment (from Hydromancer Reservoir):**
+
+Hydromancer provides wallet-level Hyperliquid data via S3 parquet files (`s3://hydromancer-reservoir`, requester-pays, DuckDB-queryable). This adds a layer of granularity on top of CoinGlass aggregates:
+
+- **Crowding analysis** — daily position snapshots contain every open position (user, market, size, notional, entry_price, leverage, leverage_type). Compute OI concentration in top N wallets, leverage distribution across the market, and long/short positioning by account size tier.
+- **Liquidation microstructure** — tick-level liquidation fills include the liquidated wallet address, mark price at liquidation, liquidation method (cross/isolated), and position size before liquidation. Detect cascade patterns (clusters of liquidations within short time windows) that CoinGlass aggregates obscure.
+- **L/S ratio from positions** — compute true long/short ratio from position snapshots by summing positive vs negative `size` values, weighted by notional. More accurate than exchange-reported ratios which may only cover top traders.
+- **Leverage distribution** — histogram of leverage multipliers across all open positions. Detect when the market is over-leveraged (median leverage rising) even before funding reacts.
+
+**Additional transition rules (Hyperliquid-specific):**
+
+- top 10 wallets hold > 40% of OI → `CROWDED_LONG` or `CROWDED_SHORT` (concentrated risk)
+- median leverage rising > 20% over 7d → `HEATING_UP` (strengthened)
+- liquidation cluster: > 50 liquidations within 5 minutes → `CAPITULATION` event signal
+
 ---
 
 ## 02 — Options & Implied Volatility
@@ -186,6 +204,24 @@ Longer timeframe windows (3m+) can be seeded from CoinGlass historical endpoints
 - Dormant wallet activation → long-term holder decision point
 
 **Source:** CoinGlass — whale transfers, large order tracking, Hyperliquid whale positions
+
+**Source (Hyperliquid-specific):** Hydromancer Reservoir — daily position snapshots, account values, builder/TWAP fills
+
+**Hyperliquid enrichment (from Hydromancer Reservoir):**
+
+Hydromancer transforms whale tracking from CoinGlass's curated alerts into a systematic, wallet-level dataset:
+
+- **Whale position tracker** — daily snapshots of every wallet's positions. Filter by `notional > $1M` (or any threshold) to build a whale watchlist. Track day-over-day changes in position size, entry price, and leverage for each whale.
+- **Account value distribution** — `account_values` dataset gives total equity per wallet per day. Track capital concentration (top 50 accounts as % of total), identify new large accounts entering, and detect capital flight (large accounts shrinking).
+- **Smart money execution patterns** — `builder_fills` reveal which frontend/aggregator routed each trade. `twap_fills` show institutional-style TWAP executions. High TWAP volume in a market suggests sophisticated accumulation/distribution.
+- **Whale realized PnL** — fills include `realized_pnl` per trade per wallet. Track whether whales are taking profit or cutting losses — a leading signal for directional conviction.
+
+**Key signals (Hyperliquid-specific):**
+
+- Top 20 accounts increasing BTC long notional > 10% in 24h → whale accumulation
+- New wallet enters top 50 by account value → capital inflow from new participant
+- TWAP fill volume > 2x daily average → institutional-scale execution underway
+- Top whale wallets net reducing positions → smart money de-risking
 
 ---
 
@@ -472,5 +508,44 @@ Longer timeframe windows (3m+) can be seeded from CoinGlass historical endpoints
 
 | Yahoo Finance  | 11, 18                                | Free              | None              |
 | CBOE           | 18                                    | Free              | None              |
+| Hydromancer    | 01, 05                                | Free (S3 requester-pays) | None (public S3 bucket) |
 
-**Total data cost: ~$29/mo** (CoinGlass only paid source)
+**Total data cost: ~$29/mo** (CoinGlass only paid source, Hydromancer S3 transfer costs are negligible)
+
+### Hydromancer Reservoir
+
+S3-based data warehouse for Hyperliquid historical data. Not a REST API — data is stored as Parquet files queryable via DuckDB.
+
+**Bucket:** `s3://hydromancer-reservoir` (requester-pays, region `ap-northeast-1`)
+**Data available from:** 2025-07-28 (complete data from this date onward)
+**Update frequency:** Daily
+**Known gap:** Late October to mid-December 2025 snapshot data missing (ABCI state capture gap)
+
+**Datasets used:**
+
+| Dataset | S3 Path | Schema |
+|---|---|---|
+| Perp fills (all trades) | `by_dex/hyperliquid/fills/perp/all/date=YYYY-MM-DD/fills.parquet` | 26 columns: coin, price, size, side, timestamp, direction, address, realized_pnl, fee, crossed, start_position, leverage info, liquidation fields |
+| Liquidations | `by_dex/hyperliquid/fills/perp/liquidations/date=YYYY-MM-DD/fills.parquet` | Same as fills + liquidation_mark_px, liquidation_method |
+| TWAP fills | `by_dex/hyperliquid/fills/perp/twap_fills/date=YYYY-MM-DD/fills.parquet` | Same as fills + twap_id |
+| Builder fills | `by_dex/hyperliquid/fills/perp/builder_fills/date=YYYY-MM-DD/fills.parquet` | Same as fills + builder, builder_fee |
+| 1s candles | `by_dex/hyperliquid/candles/1s/date=YYYY-MM-DD/candles.parquet` | coin, timestamp, OHLCV, volume_quote, trade_count |
+| Perp position snapshots | `by_dex/hyperliquid/snapshots/perp/date=YYYY-MM-DD/*.parquet` | user, market, size, notional, entry_price, liquidation_price, leverage_type, leverage, funding_pnl, account_value, account_mode |
+| Account values | `global/snapshots/account_values/date=YYYY-MM-DD/*.parquet` | user, dex, collateral_token, account_value, total_long_notional, total_short_notional, account_mode |
+| Spot holdings | `global/snapshots/spot/date=YYYY-MM-DD/*.parquet` | user, token, balance, entry_value |
+
+**Integration:** `duckdb` package (npm or Python). Setup:
+
+```sql
+INSTALL httpfs;
+LOAD httpfs;
+SET s3_region = 'ap-northeast-1';
+
+-- Example: top BTC positions by notional
+SELECT user, size, notional, entry_price, leverage, leverage_type
+FROM read_parquet('s3://hydromancer-reservoir/by_dex/hyperliquid/snapshots/perp/date=2026-03-22/*.parquet')
+WHERE market = 'BTC'
+ORDER BY abs(size) DESC LIMIT 20;
+```
+
+**Docs:** [docs.hydromancer.xyz/reservoir/hyperliquid](https://docs.hydromancer.xyz/reservoir/hyperliquid)
