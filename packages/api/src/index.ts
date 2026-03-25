@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 import path from "node:path";
-dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
+}
 
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
@@ -24,6 +26,6 @@ export type AppType = typeof app;
 
 const port = Number(process.env.API_PORT ?? 3001);
 
-serve({ fetch: app.fetch, port }, () => {
+serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`API server running on http://localhost:${port}`);
 });
