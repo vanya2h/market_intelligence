@@ -6,7 +6,8 @@
   "scripts": {
     "derivatives": "tsx src/run.ts",
     "etfs": "tsx src/etfs/run.ts",
-    "htf": "tsx src/htf/run.ts"
+    "htf": "tsx src/htf/run.ts",
+    "sentiment": "tsx src/sentiment/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

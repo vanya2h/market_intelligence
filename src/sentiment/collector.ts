@@ -1,0 +1,168 @@
+/**
+ * Market Sentiment — Collector (Dimension 06)
+ *
+ * Fetches from three source types:
+ *   1. unbias API: accuracy-weighted analyst consensus (BTC, ETH)
+ *   2. Alternative.me: Fear & Greed index (market-wide)
+ *   3. Cross-dimension: pulls cached data from Dim 01, 03, 07
+ *      to compute our own composite Fear & Greed index
+ *
+ * Auth: X-API-Key header for unbias (set UNBIAS_API_KEY in .env)
+ * Alternative.me requires no auth.
+ */
+
+import { SentimentSnapshot, UnbiasConsensusEntry, CrossDimensionInputs } from "./types.js";
+import { getCached } from "../storage/cache.js";
+import { collect as collectDerivatives } from "../derivatives_structure/collector.js";
+import { analyze as analyzeDerivatives } from "../derivatives_structure/analyzer.js";
+import { collect as collectEtfs } from "../etfs/collector.js";
+import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
+import { collect as collectHtf } from "../htf/collector.js";
+import { analyze as analyzeHtf } from "../htf/analyzer.js";
+import type { DerivativesState } from "../types.js";
+import type { EtfState } from "../etfs/types.js";
+import type { HtfState } from "../htf/types.js";
+import fs from "node:fs";
+import path from "node:path";
+
+// Sentiment data updates throughout the day — 2h TTL balances freshness vs rate limits
+const TTL_CONSENSUS = 2 * 60 * 60 * 1000;
+
+// ─── unbias API ──────────────────────────────────────────────────────────────
+
+interface UnbiasConsensusRaw {
+  date: string;
+  consensus_index: number;
+  consensus_index_30d_ma: number;
+  z_score: number;
+  avg_sentiment_score: number;
+  bullish_analysts: number;
+  bearish_analysts: number;
+  total_analysts: number;
+  bullish_opinions: number;
+  bearish_opinions: number;
+  total_opinions: number;
+}
+
+async function fetchConsensus(asset: "BTC" | "ETH"): Promise<UnbiasConsensusEntry[]> {
+  const apiKey = process.env.UNBIAS_API_KEY;
+  if (!apiKey) throw new Error("UNBIAS_API_KEY is not set");
+
+  const url = new URL("https://unbias.fyi/api/v1/consensus");
+  url.searchParams.set("asset", asset);
+  url.searchParams.set("days", "7");
+
+  const data = await getCached(`sentiment-consensus-${asset.toLowerCase()}`, TTL_CONSENSUS, async () => {
+    const res = await fetch(url.toString(), {
+      headers: { "X-API-Key": apiKey },
+    });
+
+    if (!res.ok) {
+      throw new Error(`unbias /api/v1/consensus → HTTP ${res.status}: ${await res.text()}`);
+    }
+
+    const json = await res.json();
+    // Free tier returns a single object; Pro returns an array
+    return Array.isArray(json) ? (json as UnbiasConsensusRaw[]) : [json as UnbiasConsensusRaw];
+  });
+
+  return data.map((d) => ({
+    date: d.date,
+    consensusIndex: d.consensus_index,
+    consensusIndex30dMa: d.consensus_index_30d_ma,
+    zScore: d.z_score,
+    avgSentimentScore: d.avg_sentiment_score ?? 0,
+    bullishAnalysts: d.bullish_analysts,
+    bearishAnalysts: d.bearish_analysts,
+    totalAnalysts: d.total_analysts,
+    bullishOpinions: d.bullish_opinions,
+    bearishOpinions: d.bearish_opinions,
+    totalOpinions: d.total_opinions,
+  }));
+}
+
+// ─── Cross-dimension data ────────────────────────────────────────────────────
+
+function loadDimState<T>(file: string, asset: string): T | null {
+  const fullPath = path.resolve("data", file);
+  if (!fs.existsSync(fullPath)) return null;
+  const all = JSON.parse(fs.readFileSync(fullPath, "utf-8"));
+  // Some state files are keyed by asset, others are a single object
+  return (all[asset] ?? all) as T;
+}
+
+async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensionInputs> {
+  const inputs: CrossDimensionInputs = {
+    derivatives: null,
+    etfs: null,
+    htf: null,
+  };
+
+  // Derivatives — only BTC for now
+  if (asset === "BTC") {
+    try {
+      const snapshot = await collectDerivatives();
+      const prevState = loadDimState<DerivativesState>("derivatives_state.json", asset);
+      const { context } = analyzeDerivatives(snapshot, prevState);
+      inputs.derivatives = {
+        fundingPercentile1m: context.funding.percentile["1m"],
+        oiPercentile1m: context.openInterest.percentile["1m"],
+        longShortRatio: context.longShortRatio.current,
+        regime: context.regime,
+      };
+    } catch (e) {
+      console.log(`      ⚠ Derivatives data unavailable: ${(e as Error).message}`);
+    }
+  }
+
+  // ETFs
+  try {
+    const snapshot = await collectEtfs(asset);
+    const prevState = loadDimState<EtfState>("etfs_state.json", asset);
+    const { context } = analyzeEtfs(snapshot, prevState);
+    inputs.etfs = {
+      consecutiveInflowDays: context.flow.consecutiveInflowDays,
+      consecutiveOutflowDays: context.flow.consecutiveOutflowDays,
+      todaySigma: context.flow.todaySigma,
+      regime: context.regime,
+    };
+  } catch (e) {
+    console.log(`      ⚠ ETF data unavailable: ${(e as Error).message}`);
+  }
+
+  // HTF
+  try {
+    const snapshot = await collectHtf(asset);
+    const prevState = loadDimState<HtfState>("htf_state.json", asset);
+    const { context } = analyzeHtf(snapshot, prevState);
+    inputs.htf = {
+      priceVsSma50Pct: context.ma.priceVsSma50Pct,
+      priceVsSma200Pct: context.ma.priceVsSma200Pct,
+      dailyRsi: context.rsi.daily,
+      structure: context.structure,
+      regime: context.regime,
+    };
+  } catch (e) {
+    console.log(`      ⚠ HTF data unavailable: ${(e as Error).message}`);
+  }
+
+  return inputs;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<SentimentSnapshot> {
+  console.log(`      Fetching sentiment data (${asset})...`);
+
+  const [consensus, crossDimensions] = await Promise.all([
+    fetchConsensus(asset),
+    fetchCrossDimensions(asset),
+  ]);
+
+  return {
+    timestamp: new Date().toISOString(),
+    asset,
+    consensus,
+    crossDimensions,
+  };
+}

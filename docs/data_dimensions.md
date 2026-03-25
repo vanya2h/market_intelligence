@@ -225,20 +225,56 @@ Hydromancer transforms whale tracking from CoinGlass's curated alerts into a sys
 
 ---
 
-## 06 — Market Sentiment
+## 06 — Market Sentiment (Composite Fear & Greed)
 
-**What it watches:** Fear & Greed index, social sentiment aggregates, consensus/bias indicators, crowd positioning
+**What it watches:** Composite Fear & Greed index computed from four components — derivatives positioning (Dim 01), HTF trend (Dim 07), institutional flows (Dim 03), and accuracy-weighted expert consensus (unbias API).
 
-**Why it matters:** Extreme sentiment is contrarian signal. When everyone agrees, the move is usually over. Fear & Greed extremes historically precede reversals.
+**Why it matters:** Traditional Fear & Greed indices (Alternative.me, CNN) use opaque methodology and produce unreliable readings — during testing, Alternative.me showed 14 (Extreme Fear) while actual market conditions (derivatives, trend, expert consensus) all indicated neutral-to-mild-greed territory. Our composite uses crypto-native inputs we control and understand.
+
+**Data model:** State machine driven by composite score (0–100). Collected 3x/day (aligns with brief schedule).
+
+**Component weights:**
+
+| Component | Weight | Source | What it measures |
+|-----------|--------|--------|-----------------|
+| Positioning | 30% | Dim 01 (derivatives) | Funding rates, L/S ratio, OI percentiles, regime |
+| Trend | 25% | Dim 07 (HTF technicals) | Price vs 50/200 SMA, RSI, market structure |
+| Institutional flows | 20% | Dim 03 (ETF flows) | Flow streaks, σ magnitude, regime |
+| Expert consensus | 25% | unbias API | Accuracy-weighted analyst consensus, z-score |
+
+**Regime states:**
+`EXTREME_FEAR` · `FEAR` · `NEUTRAL` · `GREED` · `EXTREME_GREED` · `CONSENSUS_BULLISH` · `CONSENSUS_BEARISH` · `SENTIMENT_DIVERGENCE`
+
+**Transition rules (deterministic):**
+
+- composite < 20 → `EXTREME_FEAR`
+- composite > 80 → `EXTREME_GREED`
+- composite 20–40 → `FEAR`
+- composite 60–80 → `GREED`
+- composite 40–60 → `NEUTRAL`
+- unbias z-score ≥ +0.8 + composite > 70 → `CONSENSUS_BULLISH` (experts and data aligned bullish)
+- unbias z-score ≤ -1.5 + composite < 30 → `CONSENSUS_BEARISH` (experts and data aligned bearish)
+- unbias z-score ≥ +0.8 + composite < 30, or z-score ≤ -1.5 + composite > 70 → `SENTIMENT_DIVERGENCE` (experts vs data disagree — most actionable)
 
 **Key signals:**
 
-- F&G < 20 (extreme fear) → historically good entry zone
-- F&G > 80 (extreme greed) → historically overheated
-- Rapid sentiment shift (>30 points in 48h) → notable event
-- Unanimous bullish/bearish consensus → contrarian warning
+- Composite < 20 → extreme fear across all inputs
+- Composite > 80 → extreme greed across all inputs
+- unbias z-score ≥ +0.8 → analyst consensus bullish
+- unbias z-score ≤ -1.5 → analyst consensus bearish
+- Internal component divergence (one component >70 while another <30) → mixed regime, watch for resolution
+- `SENTIMENT_DIVERGENCE` → experts and composite disagree, historically highest-probability contrarian signal
 
-**Source:** Alternative.me (F&G index — free), CryptoPanic (news sentiment voting)
+**Source:** unbias API (analyst consensus — free tier: 100 req/day, daily granularity), cross-dimension data from Dims 01, 03, 07
+
+**unbias API details:**
+
+| Endpoint | Data | Use |
+|----------|------|-----|
+| `GET /api/v1/consensus` | Consensus index (-100 to +100), 30d MA, 90d z-score, bullish/bearish analyst counts | Expert sentiment per asset (BTC, ETH, ALL) |
+| `GET /api/v1/sentiment` | Per-analyst sentiment scores (0–1), filterable by handle | Drill-down: which analysts are driving consensus shifts |
+
+Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current data only. Pro ($49/mo): 1000 req/min, hourly granularity, full history.
 
 ---
 
@@ -499,18 +535,17 @@ Hydromancer transforms whale tracking from CoinGlass's curated alerts into a sys
 | CoinGlass      | 01, 02, 03, 04, 05, 07, 08, 15, 16   | $29/mo (Hobbyist) | API key           |
 | Glassnode      | 16, 17                                | Free (Standard)   | API key           |
 | CCXT           | 07, 08, 11                            | Free              | Per-exchange keys |
-| Alternative.me | 06                                    | Free              | None              |
-| CryptoPanic    | 06, 10                                | Free tier         | API token         |
+| unbias         | 06                                    | Free (100 req/day) | API key          |
+| CryptoPanic    | 10                                    | Free tier         | API token         |
 | CryptoCompare  | 10                                    | Free tier         | API key           |
 | FRED           | 09, 11, 18                            | Free              | API key           |
 | Polymarket     | 12                                    | Free              | None              |
 | DefiLlama      | 13, 14, 17                            | Free              | None              |
-
 | Yahoo Finance  | 11, 18                                | Free              | None              |
 | CBOE           | 18                                    | Free              | None              |
 | Hydromancer    | 01, 05                                | Free (S3 requester-pays) | None (public S3 bucket) |
 
-**Total data cost: ~$29/mo** (CoinGlass only paid source, Hydromancer S3 transfer costs are negligible)
+**Total data cost: ~$29/mo** (CoinGlass only paid source, Hydromancer S3 transfer costs and unbias free tier are negligible)
 
 ### Hydromancer Reservoir
 
