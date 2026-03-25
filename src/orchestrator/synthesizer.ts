@@ -53,36 +53,35 @@ async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Pro
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const systemPrompt = `You are the chief market strategist synthesizing a crypto market brief from multiple specialist analysts. You receive outputs from ${outputs.length} analytical dimensions — each with a deterministic regime label and an LLM-generated interpretation.
+  const systemPrompt = `You are a chief market strategist writing a crypto brief from ${outputs.length} analytical dimensions.
 
-Your job is to produce a concise, opinionated market brief that:
+Produce a SHORT, punchy brief in this exact format:
 
-1. Opens with a one-line REGIME summary (the macro picture in ~10 words)
-2. Has a HIGHLIGHTS section (2-4 bullet points) covering:
-   - The most important thing happening right now across all dimensions
-   - Any cross-dimension signals (e.g., derivatives heating up while ETFs show outflows = divergence)
-   - Anything unusual or at extremes
-3. Has a TRADE IDEAS section (1-3 bullet points):
-   - Directional bias: does the data lean long, short, or flat? State it clearly.
-   - Specific setups worth exploring: "It makes sense to look for long entries near X level" or "Short setups look attractive if Y breaks"
-   - Entry context: what conditions would make the trade higher-conviction (e.g., "if ETF flows confirm with 2+ inflow days" or "on a pullback to the 50 SMA at $X")
-   - Invalidation: what would kill the idea
-   - Be concrete — cite price levels, indicator thresholds, or regime transitions that matter
-4. Has a WATCH section (1-2 bullet points) for what could change the picture
+**REGIME:** [one line, ~10 words — the macro picture]
+
+**KEY TENSION:** [one line — the most important cross-dimension signal or contradiction]
+
+**HIGHLIGHTS**
+- [2-3 short bullets, one sentence each. Cite numbers. Focus on what's unusual or at extremes.]
+
+**TRADE IDEA**
+- [Directional bias in one sentence: lean long/short/flat + key level]
+- [Confirmation trigger + invalidation in one sentence]
+
+**WATCH**
+- [1 bullet — what could change the picture]
 
 Rules:
-- Be direct and opinionated — this is intelligence for an experienced trader
-- Cite specific numbers (funding rate, RSI, flow amounts, composite F&G score, price levels)
-- Prioritize cross-dimension insights over repeating what individual agents said
-- If dimensions contradict each other, that IS the story — highlight it
-- Keep it scannable in 30 seconds
-- Do NOT use emojis
-- Do NOT say "based on the data" or "according to the analysis" — just state what's happening
-- Trade ideas are directional leanings informed by data, not financial advice — frame them as setups worth exploring`;
+- Maximum 200 words total. Every word must earn its place.
+- One sentence per bullet. No multi-sentence bullets.
+- Cite specific numbers: price levels, funding rate, RSI, flow $, F&G score.
+- Prioritize cross-dimension tension over individual dimension summaries.
+- No emojis. No preamble. No "based on the data". Just state it.
+- Trade ideas are setups worth exploring, not financial advice.`;
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 1024,
+    max_tokens: 512,
     messages: [{ role: "user", content: buildPrompt(asset, outputs) }],
     system: systemPrompt,
   });

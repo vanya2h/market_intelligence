@@ -1,12 +1,15 @@
 /**
  * Orchestrator — Telegram Notifier
  *
- * Runs the full brief pipeline and sends the result to a Telegram channel.
+ * Runs the full brief pipeline and sends the result to a Telegram channel:
+ *   1. Color-coded regime card image (via sendPhoto)
+ *   2. Short synthesized brief text (via sendMessage)
+ *
  * Uses the raw Telegram Bot API via fetch — no extra dependency.
  *
  * Env vars:
  *   TELEGRAM_BOT_TOKEN  — from @BotFather
- *   TELEGRAM_CHAT_ID    — channel or chat ID (e.g. -100xxxxx)
+ *   TELEGRAM_CHAT_ID    — channel or chat ID (e.g. @yourchannel)
  *
  * Usage:
  *   pnpm notify
@@ -17,7 +20,7 @@ import "dotenv/config";
 import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
-import type { DimensionOutput } from "./types.js";
+import { generateCard } from "./card.js";
 
 // ─── Telegram API ────────────────────────────────────────────────────────────
 
@@ -32,34 +35,16 @@ function escapeHtml(text: string): string {
 }
 
 function markdownToTelegramHtml(text: string): string {
-  // Escape HTML entities first
   let html = escapeHtml(text);
-
-  // Convert markdown to HTML tags
   html = html.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
   html = html.replace(/^#{1,3}\s+(.+)$/gm, "<b>$1</b>");
-
   return html;
 }
 
-function buildMessage(asset: string, outputs: DimensionOutput[], brief: string): string {
+function buildTextMessage(asset: string, brief: string): string {
   const date = new Date().toUTCString().replace(/ GMT$/, " UTC");
+  let msg = `<b>${asset} MARKET BRIEF</b>  —  ${date}\n\n` + markdownToTelegramHtml(brief);
 
-  // Header
-  let msg = `<b>MARKET BRIEF</b>  —  ${asset}  —  ${date}\n\n`;
-
-  // Regime table
-  msg += "<b>Dimension Regimes</b>\n";
-  for (const o of outputs) {
-    const label = o.label.padEnd(30);
-    msg += `<code>${escapeHtml(label)}</code> ${escapeHtml(o.regime)}\n`;
-  }
-  msg += "\n———\n\n";
-
-  // Brief body
-  msg += markdownToTelegramHtml(brief);
-
-  // Truncate if needed
   if (msg.length > MAX_MESSAGE_LENGTH) {
     msg = msg.slice(0, MAX_MESSAGE_LENGTH - 20) + "\n\n<i>[truncated]</i>";
   }
@@ -67,10 +52,28 @@ function buildMessage(asset: string, outputs: DimensionOutput[], brief: string):
   return msg;
 }
 
-async function sendTelegram(token: string, chatId: string, html: string): Promise<void> {
-  const url = `${TELEGRAM_API}/bot${token}/sendMessage`;
+async function sendPhoto(token: string, chatId: string, png: Buffer, caption?: string): Promise<void> {
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("photo", new Blob([new Uint8Array(png)], { type: "image/png" }), "brief.png");
+  if (caption) {
+    form.append("caption", caption);
+    form.append("parse_mode", "HTML");
+  }
 
-  const res = await fetch(url, {
+  const res = await fetch(`${TELEGRAM_API}/bot${token}/sendPhoto`, {
+    method: "POST",
+    body: form,
+  });
+
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(`Telegram sendPhoto error ${res.status}: ${JSON.stringify(body)}`);
+  }
+}
+
+async function sendText(token: string, chatId: string, html: string): Promise<void> {
+  const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -82,9 +85,8 @@ async function sendTelegram(token: string, chatId: string, html: string): Promis
   });
 
   const body = await res.json();
-
   if (!res.ok) {
-    throw new Error(`Telegram API error ${res.status}: ${JSON.stringify(body)}`);
+    throw new Error(`Telegram sendMessage error ${res.status}: ${JSON.stringify(body)}`);
   }
 }
 
@@ -99,7 +101,6 @@ function note(text: string): void {
 }
 
 async function main(): Promise<void> {
-  // Validate env vars before running the pipeline
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -117,18 +118,23 @@ async function main(): Promise<void> {
     : ["BTC", "ETH"];
 
   for (const asset of assets) {
-    step(1, 3, `Running all dimension pipelines (${asset})...`);
+    step(1, 4, `Running all dimension pipelines (${asset})...`);
     const outputs = await runAllDimensions(asset);
     note(`${outputs.length} dimensions completed`);
 
-    step(2, 3, "Synthesizing market brief...");
+    step(2, 4, "Synthesizing market brief...");
     const brief = await synthesize(asset, outputs);
 
-    step(3, 3, `Sending ${asset} brief to Telegram...`);
-    const message = buildMessage(asset, outputs, brief);
-    note(`message length: ${message.length} chars`);
+    step(3, 4, "Generating regime card...");
+    const cardPng = await generateCard(asset, outputs);
+    note(`card: ${(cardPng.length / 1024).toFixed(1)} KB`);
 
-    await sendTelegram(token, chatId, message);
+    step(4, 4, `Sending ${asset} to Telegram...`);
+    await sendPhoto(token, chatId, cardPng);
+    const textMsg = buildTextMessage(asset, brief);
+    note(`text: ${textMsg.length} chars`);
+    await sendText(token, chatId, textMsg);
+
     console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent to Telegram`);
   }
 }
