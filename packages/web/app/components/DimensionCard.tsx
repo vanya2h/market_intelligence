@@ -39,7 +39,7 @@ export function DimensionCard({
   if (!isActive) return null;
 
   return (
-    <div className="max-w-2xl">
+    <div className="w-full md:max-w-2xl">
       <div className="mb-4 flex items-center justify-between">
         <span
           className="text-[10px] font-medium uppercase tracking-widest"

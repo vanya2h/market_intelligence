@@ -1,10 +1,4 @@
-export function SentimentGauge({
-  value,
-  label,
-}: {
-  value: number;
-  label: string;
-}) {
+export function SentimentGauge({ value, label }: { value: number; label: string }) {
   const getColor = (v: number) => {
     if (v <= 25) return { color: "var(--red)", bg: "var(--red-dim)", text: "Extreme Fear" };
     if (v <= 40) return { color: "var(--red)", bg: "var(--red-dim)", text: "Fear" };
@@ -16,12 +10,9 @@ export function SentimentGauge({
   const { color, bg } = getColor(value);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 w-full">
       <div className="flex items-baseline gap-2">
-        <span
-          className="text-4xl font-bold tabular-nums"
-          style={{ fontFamily: "'JetBrains Mono', monospace", color }}
-        >
+        <span className="text-4xl font-bold tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace", color }}>
           {Math.round(value)}
         </span>
         <span className="text-xs tracking-wide" style={{ color: "var(--text-muted)" }}>
@@ -32,10 +23,7 @@ export function SentimentGauge({
         {label}
       </div>
       <div className="relative h-1.5 w-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
-        <div
-          className="bar-fill absolute left-0 top-0 h-full"
-          style={{ width: `${value}%`, background: color }}
-        />
+        <div className="bar-fill absolute left-0 top-0 h-full" style={{ width: `${value}%`, background: color }} />
       </div>
       {/* Tick marks */}
       <div className="flex justify-between">

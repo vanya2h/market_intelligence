@@ -381,7 +381,7 @@ function renderRegimeBanner(b: RegimeBannerBlock) {
   const boxStyle = `padding: 14px 16px; background: ${bg}; border-radius: 8px; border: 1px solid ${color}20; margin: 2px 0;`;
   const headerStyle = `display: flex; align-items: center; gap: 8px; margin-bottom: ${b.subtitle ? "4" : "0"}px;`;
   const dotStyle = `width: 8px; height: 8px; border-radius: 50%; background: ${color};`;
-  const titleStyle = `font-size: 15px; font-weight: 700; color: ${C.textPrimary}; letter-spacing: -0.01em;`;
+  const titleStyle = `font-size: 13px; font-weight: 700; color: ${C.textPrimary}; letter-spacing: -0.01em;`;
   const subtitleStyle = `font-size: 12px; color: ${C.textSecondary}; margin: 0; padding-left: 16px;`;
 
   return html`<div style="${boxStyle}">

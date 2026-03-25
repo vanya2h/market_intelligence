@@ -112,7 +112,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         border: "1px solid var(--border-subtle)",
         display: "flex",
         alignItems: "center",
-        gap: "0",
+        gap: "6px",
         flexWrap: "wrap",
       }}
     >
@@ -142,7 +142,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
       {/* Arrow separator */}
       <span
         style={{
-          margin: "0 10px",
+          margin: "0 4px",
           fontSize: "12px",
           color: "var(--text-muted)",
         }}
@@ -177,7 +177,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
       {/* Delta badge */}
       <div
         style={{
-          marginLeft: "12px",
+          marginLeft: "0",
           padding: "3px 8px",
           background: deltaBg,
           borderRadius: "4px",

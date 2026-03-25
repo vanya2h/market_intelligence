@@ -7,3 +7,4 @@ data/
 packages/pipeline/src/generated/prisma
 .react-router
 .turbo
+build

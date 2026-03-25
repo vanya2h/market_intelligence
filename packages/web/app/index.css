@@ -78,3 +78,31 @@ body {
 .bar-fill {
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Hide scrollbar on tab strip */
+.overflow-x-auto {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.overflow-x-auto::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile responsive overrides */
+@media (max-width: 767px) {
+  /* Rich brief grids: stack on mobile */
+  .rich-brief-container div[style*="grid-template-columns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .rich-brief-container div[style*="grid-template-columns: repeat(5"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .rich-brief-container div[style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Tension block: stack vertically on mobile */
+  .rich-brief-container div[style*="grid-template-columns: 1fr auto 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 4px !important;
+  }
+}

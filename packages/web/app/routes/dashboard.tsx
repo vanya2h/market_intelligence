@@ -133,19 +133,19 @@ export default function Dashboard() {
     <div className="min-h-screen">
       {/* Top navigation bar */}
       <nav
-        className="sticky top-0 z-10 flex h-10 items-center justify-between px-4"
+        className="sticky top-0 z-30 flex h-10 items-center justify-between px-3 md:px-4"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           <img src="/asterisk.png" alt="" className="h-5 w-5" />
-          <span className="text-sm font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+          <span className="hidden text-sm font-semibold tracking-tight sm:inline" style={{ color: "var(--text-primary)" }}>
             Vanya2h's Intelligence System
           </span>
-          <div className="h-4" style={{ borderLeft: "1px solid var(--border)" }} />
+          <div className="hidden h-4 md:block" style={{ borderLeft: "1px solid var(--border)" }} />
           <AssetSelector current={asset} />
         </div>
         <div className="flex items-center gap-3">
-          <LiveClock />
+          <span className="hidden sm:inline"><LiveClock /></span>
           <div className="flex items-center gap-1.5">
             <div className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--green)" }} />
             <span className="text-[10px] font-medium" style={{ color: "var(--green)" }}>
@@ -155,11 +155,93 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      {/* Main 3-column layout */}
+      {/* Mobile: sidebar content stacked above main */}
+      <div
+        className="flex flex-col gap-4 p-3 md:hidden"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
+      >
+        {/* Composite Index — compact horizontal layout on mobile */}
+        {brief.compositeIndex != null && brief.compositeLabel && (
+          <div className="flex items-center gap-4">
+            <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
+          </div>
+        )}
+
+        {/* Regime + Overview in a 2-col grid on mobile */}
+        <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+          <div>
+            <div
+              className="mb-2 text-[10px] font-medium uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Regime Overview
+            </div>
+            <div className="space-y-0.5">
+              {DIMENSION_TABS.map((dim) => {
+                const bd = brief.dimensions.find((d) => d.dimension === dim);
+                if (!bd) return null;
+                const { color, arrow } = regimeColor(bd.regime);
+                return (
+                  <div
+                    key={dim}
+                    className="flex items-center justify-between py-1"
+                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
+                  >
+                    <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                      {TAB_LABELS[dim]}
+                    </span>
+                    <span className="text-[11px] font-medium" style={{ color }}>
+                      {bd.regime} {arrow}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <div
+              className="mb-2 text-[10px] font-medium uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Overview
+            </div>
+            <div className="space-y-0.5">
+              {[
+                { label: "Positioning", value: brief.positioning },
+                { label: "Trend", value: brief.trend },
+                { label: "Inst. Flows", value: brief.institutionalFlows },
+                { label: "Expert Cons.", value: brief.expertConsensus },
+              ].map(({ label, value }) => {
+                if (value == null) return null;
+                const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
+                return (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between py-1"
+                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
+                  >
+                    <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      {label}
+                    </span>
+                    <span
+                      className="text-[11px] font-medium tabular-nums"
+                      style={{ fontFamily: "'JetBrains Mono', monospace", color }}
+                    >
+                      {Math.round(value)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop: side-by-side layout */}
       <div className="flex">
-        {/* Left sidebar */}
+        {/* Left sidebar — desktop only */}
         <aside
-          className="sticky top-10 flex w-72 shrink-0 flex-col overflow-y-auto p-5"
+          className="sticky top-10 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
           style={{
             borderRight: "1px solid var(--border)",
             background: "var(--bg-card)",
@@ -253,10 +335,10 @@ export default function Dashboard() {
         </aside>
 
         {/* Main content */}
-        <main className="flex flex-1 flex-col">
+        <main className="flex min-w-0 flex-1 flex-col">
           {/* Price delta strip */}
           {brief.snapshotPrice != null && (
-            <div className="px-5 pt-4">
+            <div className="px-3 pt-3 md:px-5 md:pt-4">
               <PriceDelta
                 asset={asset}
                 snapshotPrice={brief.snapshotPrice}
@@ -267,7 +349,7 @@ export default function Dashboard() {
           )}
 
           {/* Brief section */}
-          <div className="p-5" style={{ borderBottom: "1px solid var(--border)" }}>
+          <div className="p-3 md:p-5" style={{ borderBottom: "1px solid var(--border)" }}>
             {brief.richBrief?.blocks ? (
               <div>
                 <div className="mb-4 flex items-center gap-3">
@@ -302,14 +384,14 @@ export default function Dashboard() {
           </div>
 
           {/* Dimension tabs — only show tabs that have data */}
-          <div className="flex items-center gap-0 px-5" style={{ borderBottom: "1px solid var(--border)" }}>
+          <div className="flex items-center gap-0 overflow-x-auto px-3 md:px-5" style={{ borderBottom: "1px solid var(--border)" }}>
             {availableDims.map((dim) => {
               const isActive = activeTab === dim;
               return (
                 <button
                   key={dim}
                   onClick={() => setActiveTab(dim)}
-                  className={`relative px-4 py-3 text-xs font-medium tracking-wide transition-colors ${isActive ? "tab-active" : ""}`}
+                  className={`relative shrink-0 px-3 py-3 text-xs font-medium tracking-wide transition-colors md:px-4 ${isActive ? "tab-active" : ""}`}
                   style={{
                     color: isActive ? "var(--text-primary)" : "var(--text-muted)",
                   }}
@@ -322,7 +404,7 @@ export default function Dashboard() {
 
           {/* Low-data disclaimer */}
           <div
-            className="mx-5 mt-4 flex items-center gap-2 rounded px-3 py-2 text-xs"
+            className="mx-3 mt-3 flex items-center gap-2 rounded px-3 py-2 text-xs md:mx-5 md:mt-4"
             style={{
               background: "var(--surface-secondary)",
               color: "var(--text-muted)",
@@ -334,7 +416,7 @@ export default function Dashboard() {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 p-5">
+          <div className="flex-1 p-3 md:p-5">
             {availableDims.map((dim) => {
               const bd = brief.dimensions.find((d: BriefDimension) => d.dimension === dim);
               if (!bd) return null;
