@@ -12,7 +12,8 @@
 import { Candle, HtfSnapshot } from "./types.js";
 import { getCached } from "../storage/cache.js";
 
-const BINANCE_BASE = "https://api.binance.com";
+const BINANCE_SPOT    = "https://api.binance.com";
+const BINANCE_FUTURES = "https://fapi.binance.com";
 
 const TTL = {
   H4:    1  * 60 * 60 * 1000,  // 1h — new 4h candle every 4h, refresh hourly
@@ -20,16 +21,19 @@ const TTL = {
 } as const;
 
 // Binance kline tuple indices
-const K_OPEN_TIME = 0;
-const K_OPEN  = 1;
-const K_HIGH  = 2;
-const K_LOW   = 3;
-const K_CLOSE = 4;
-const K_VOL   = 5;
+const K_OPEN_TIME     = 0;
+const K_OPEN          = 1;
+const K_HIGH          = 2;
+const K_LOW           = 3;
+const K_CLOSE         = 4;
+const K_VOL           = 5;
+const K_TAKER_BUY_VOL = 9;
 
 type BinanceKline = [number, string, string, string, string, string, ...unknown[]];
 
 async function fetchKlines(
+  baseUrl: string,
+  apiPath: string,
   symbol: string,
   interval: string,
   limit: number,
@@ -37,7 +41,7 @@ async function fetchKlines(
   ttl: number
 ): Promise<Candle[]> {
   const raw = await getCached(cacheKey, ttl, async () => {
-    const url = new URL(`${BINANCE_BASE}/api/v3/klines`);
+    const url = new URL(`${baseUrl}${apiPath}`);
     url.searchParams.set("symbol", symbol);
     url.searchParams.set("interval", interval);
     url.searchParams.set("limit", String(limit));
@@ -50,12 +54,13 @@ async function fetchKlines(
   });
 
   return raw.map((k) => ({
-    time:   k[K_OPEN_TIME] as number,
-    open:   parseFloat(k[K_OPEN]  as string),
-    high:   parseFloat(k[K_HIGH]  as string),
-    low:    parseFloat(k[K_LOW]   as string),
-    close:  parseFloat(k[K_CLOSE] as string),
-    volume: parseFloat(k[K_VOL]   as string),
+    time:           k[K_OPEN_TIME] as number,
+    open:           parseFloat(k[K_OPEN]  as string),
+    high:           parseFloat(k[K_HIGH]  as string),
+    low:            parseFloat(k[K_LOW]   as string),
+    close:          parseFloat(k[K_CLOSE] as string),
+    volume:         parseFloat(k[K_VOL]   as string),
+    takerBuyVolume: parseFloat(k[K_TAKER_BUY_VOL] as string),
   }));
 }
 
@@ -67,17 +72,19 @@ export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<HtfSnapshot
   console.log(`      Fetching OHLCV from Binance (${asset})...`);
   const symbol = binanceSymbol(asset);
 
-  const [h4Candles, dailyCandles] = await Promise.all([
-    fetchKlines(symbol, "4h",  300, `htf-4h-${asset.toLowerCase()}`,    TTL.H4),
-    fetchKlines(symbol, "1d",  104, `htf-daily-${asset.toLowerCase()}`, TTL.DAILY),
+  const [h4Candles, dailyCandles, futuresH4Candles] = await Promise.all([
+    fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "4h",  300, `htf-4h-${asset.toLowerCase()}`,          TTL.H4),
+    fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "1d",  104, `htf-daily-${asset.toLowerCase()}`,       TTL.DAILY),
+    fetchKlines(BINANCE_FUTURES, "/fapi/v1/klines", symbol, "4h",  300, `htf-futures-4h-${asset.toLowerCase()}`,  TTL.H4),
   ]);
 
-  console.log(`      ${h4Candles.length} × 4h · ${dailyCandles.length} × 1d candles`);
+  console.log(`      ${h4Candles.length} × 4h spot · ${futuresH4Candles.length} × 4h futures · ${dailyCandles.length} × 1d candles`);
 
   return {
     timestamp: new Date().toISOString(),
     asset,
     h4Candles,
     dailyCandles,
+    futuresH4Candles,
   };
 }

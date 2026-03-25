@@ -23,6 +23,12 @@ function contextCacheKey(ctx: HtfContext): string {
     priceVsSma200Bucket: Math.round(ctx.ma.priceVsSma200Pct / 5) * 5,  // 5% buckets
     rsiDailyBucket: Math.round(ctx.rsi.daily / 5) * 5,                 // 5-point buckets
     rsiH4Bucket:    Math.round(ctx.rsi.h4    / 5) * 5,
+    // CVD sign (positive/negative) matters more than magnitude for caching
+    cvdFuturesSign: Math.sign(ctx.cvd.futures),
+    cvdSpotSign:    Math.sign(ctx.cvd.spot),
+    // VWAP position relative to price: above or below
+    priceVsWeeklyVwap: ctx.price > ctx.vwap.weekly ? "above" : "below",
+    priceVsMonthlyVwap: ctx.price > ctx.vwap.monthly ? "above" : "below",
     events: ctx.events.map((e) => e.type).sort(),
   };
   const hash = crypto

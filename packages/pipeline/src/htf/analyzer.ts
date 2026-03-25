@@ -18,6 +18,7 @@
 
 import {
   Candle,
+  CvdContext,
   HtfContext,
   HtfEvent,
   HtfRegime,
@@ -27,6 +28,7 @@ import {
   MaCrossType,
   MarketStructure,
   RsiContext,
+  VwapContext,
 } from "./types.js";
 
 // ─── Technical indicators ─────────────────────────────────────────────────────
@@ -57,6 +59,34 @@ function rsi14(closes: number[]): number {
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
   return parseFloat((100 - 100 / (1 + rs)).toFixed(2));
+}
+
+/**
+ * Cumulative Volume Delta over the last N candles.
+ * delta per candle = takerBuyVolume − (volume − takerBuyVolume) = 2·takerBuyVolume − volume
+ */
+function cvd(candles: Candle[], lookback = 50): number {
+  const window = candles.slice(-lookback);
+  return parseFloat(
+    window.reduce((sum, c) => sum + (2 * c.takerBuyVolume - c.volume), 0).toFixed(2)
+  );
+}
+
+/**
+ * VWAP anchored to the start of a calendar period.
+ * Scans candles whose open time falls within the current week/month.
+ */
+function anchoredVwap(candles: Candle[], periodStart: number): number {
+  let sumPV = 0;
+  let sumV = 0;
+  for (const c of candles) {
+    if (c.time < periodStart) continue;
+    const typical = (c.high + c.low + c.close) / 3;
+    sumPV += typical * c.volume;
+    sumV += c.volume;
+  }
+  if (sumV === 0) return 0;
+  return parseFloat((sumPV / sumV).toFixed(2));
 }
 
 // ─── Market structure ─────────────────────────────────────────────────────────
@@ -257,6 +287,21 @@ export function analyze(
   const rsiH4    = rsi14(h4Closes);
   const rsiDaily = rsi14(dailyCloses);
 
+  // CVD — last 50 4h candles (~8 days)
+  const cvdData: CvdContext = {
+    futures: cvd(snapshot.futuresH4Candles, 50),
+    spot:    cvd(h4, 50),
+  };
+
+  // Anchored VWAPs — weekly (Monday 00:00 UTC) and monthly (1st 00:00 UTC)
+  const now = new Date(snapshot.timestamp);
+  const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const vwapData: VwapContext = {
+    weekly:  anchoredVwap(h4, weekStart.getTime()),
+    monthly: anchoredVwap(h4, monthStart.getTime()),
+  };
+
   // Structure from daily candles — cleaner pivots than 4h
   const structure = detectStructure(daily);
   const cross = detectCross(h4);
@@ -295,6 +340,8 @@ export function analyze(
     price: parseFloat(price.toFixed(2)),
     ma,
     rsi,
+    cvd: cvdData,
+    vwap: vwapData,
     structure,
     events,
   };

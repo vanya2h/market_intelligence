@@ -24,6 +24,7 @@ export interface Candle {
   low: number;
   close: number;
   volume: number;
+  takerBuyVolume: number; // taker buy base-asset volume (for CVD)
 }
 
 // Raw data from collector
@@ -32,6 +33,7 @@ export interface HtfSnapshot {
   asset: "BTC" | "ETH";
   h4Candles:    Candle[]; // last ~300 4h candles → SMA 50/200 on 4h, 4h RSI
   dailyCandles: Candle[]; // last ~104 daily candles → daily RSI, market structure
+  futuresH4Candles: Candle[]; // last ~300 4h candles from futures → futures CVD
 }
 
 export interface MaContext {
@@ -46,6 +48,16 @@ export interface MaContext {
 export interface RsiContext {
   daily: number; // RSI-14 on daily closes — trend bias
   h4: number;    // RSI-14 on 4h closes — momentum / entry context
+}
+
+export interface CvdContext {
+  futures: number;  // cumulative volume delta on futures 4h (last 50 candles)
+  spot: number;     // cumulative volume delta on spot 4h (last 50 candles)
+}
+
+export interface VwapContext {
+  weekly: number;   // volume-weighted average price for current week
+  monthly: number;  // volume-weighted average price for current month
 }
 
 export interface HtfEvent {
@@ -72,6 +84,8 @@ export interface HtfContext {
   price: number;
   ma: MaContext;
   rsi: RsiContext;
+  cvd: CvdContext;
+  vwap: VwapContext;
   structure: MarketStructure;
   events: HtfEvent[];
 }
