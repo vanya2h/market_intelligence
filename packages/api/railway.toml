@@ -1,0 +1,4 @@
+[build]
+dockerfilePath = "packages/api/Dockerfile"
+watchPatterns = ["packages/api/**", "packages/pipeline/**"]
+
