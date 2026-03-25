@@ -7,7 +7,8 @@ export default function Root() {
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Market Intel</title>
+        <title>Vanya2h's Intelligence System</title>
+        <link rel="icon" type="image/png" href="/favicon.png" />
         <Meta />
         <Links />
         <link

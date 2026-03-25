@@ -137,8 +137,9 @@ export default function Dashboard() {
         style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
       >
         <div className="flex items-center gap-4">
+          <img src="/asterisk.png" alt="" className="h-5 w-5" />
           <span className="text-sm font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            MARKET INTEL
+            Vanya2h's Intelligence System
           </span>
           <div className="h-4" style={{ borderLeft: "1px solid var(--border)" }} />
           <AssetSelector current={asset} />
@@ -159,7 +160,11 @@ export default function Dashboard() {
         {/* Left sidebar */}
         <aside
           className="sticky top-10 flex w-72 shrink-0 flex-col overflow-y-auto p-5"
-          style={{ borderRight: "1px solid var(--border)", background: "var(--bg-card)", height: "calc(100vh - 2.5rem)" }}
+          style={{
+            borderRight: "1px solid var(--border)",
+            background: "var(--bg-card)",
+            height: "calc(100vh - 2.5rem)",
+          }}
         >
           {/* Composite Index */}
           {brief.compositeIndex != null && brief.compositeLabel && (
@@ -313,6 +318,19 @@ export default function Dashboard() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Low-data disclaimer */}
+          <div
+            className="mx-5 mt-4 flex items-center gap-2 rounded px-3 py-2 text-xs"
+            style={{
+              background: "var(--surface-secondary)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <span>⚠</span>
+            <span>Limited data available — charts may not be fully representative yet.</span>
           </div>
 
           {/* Tab content */}
