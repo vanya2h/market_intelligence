@@ -13,6 +13,7 @@ import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
+import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
 import type { DimensionOutput } from "./types.js";
 
@@ -128,10 +129,14 @@ async function main(): Promise<void> {
     printDimensionSummary(outputs);
 
     step(2, totalSteps, "Synthesizing market brief...");
-    const brief = await synthesize(asset, outputs);
+    const [brief, richBrief] = await Promise.all([
+      synthesize(asset, outputs),
+      synthesizeRich(asset, outputs),
+    ]);
+    if (richBrief) note("rich brief generated");
 
     step(3, totalSteps, "Saving to database...");
-    await saveBrief(asset, brief, outputs);
+    await saveBrief(asset, brief, outputs, richBrief);
 
     printBrief(asset, outputs, brief);
   }

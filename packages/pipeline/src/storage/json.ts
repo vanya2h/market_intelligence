@@ -12,18 +12,18 @@ const MAX_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ─── History ────────────────────────────────────────────────────────────────
 
-export async function loadHistory(): Promise<DerivativesSnapshot[]> {
+export async function loadHistory(asset: "BTC" | "ETH"): Promise<DerivativesSnapshot[]> {
   const rows = await prisma.dimensionSnapshot.findMany({
-    where: { asset: "BTC", dimension: "DERIVATIVES" },
+    where: { asset, dimension: "DERIVATIVES" },
     orderBy: { timestamp: "asc" },
   });
   return rows.map((r) => r.data as unknown as DerivativesSnapshot);
 }
 
-export async function appendSnapshot(snapshot: DerivativesSnapshot): Promise<DerivativesSnapshot[]> {
+export async function appendSnapshot(asset: "BTC" | "ETH", snapshot: DerivativesSnapshot): Promise<DerivativesSnapshot[]> {
   await prisma.dimensionSnapshot.create({
     data: {
-      asset: "BTC",
+      asset,
       dimension: "DERIVATIVES",
       timestamp: new Date(snapshot.timestamp),
       data: snapshot as any,
@@ -34,20 +34,20 @@ export async function appendSnapshot(snapshot: DerivativesSnapshot): Promise<Der
   const cutoff = new Date(Date.now() - MAX_HISTORY_MS);
   await prisma.dimensionSnapshot.deleteMany({
     where: {
-      asset: "BTC",
+      asset,
       dimension: "DERIVATIVES",
       timestamp: { lt: cutoff },
     },
   });
 
-  return loadHistory();
+  return loadHistory(asset);
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-export async function loadState(): Promise<DerivativesState | null> {
+export async function loadState(asset: "BTC" | "ETH"): Promise<DerivativesState | null> {
   const row = await prisma.dimensionState.findUnique({
-    where: { asset_dimension: { asset: "BTC", dimension: "DERIVATIVES" } },
+    where: { asset_dimension: { asset, dimension: "DERIVATIVES" } },
   });
   if (!row) return null;
   return {
@@ -59,16 +59,16 @@ export async function loadState(): Promise<DerivativesState | null> {
   };
 }
 
-export async function saveState(state: DerivativesState): Promise<void> {
+export async function saveState(asset: "BTC" | "ETH", state: DerivativesState): Promise<void> {
   await prisma.dimensionState.upsert({
-    where: { asset_dimension: { asset: "BTC", dimension: "DERIVATIVES" } },
+    where: { asset_dimension: { asset, dimension: "DERIVATIVES" } },
     update: {
       regime: state.regime,
       since: new Date(state.since),
       previousRegime: state.previousRegime,
     },
     create: {
-      asset: "BTC",
+      asset,
       dimension: "DERIVATIVES",
       regime: state.regime,
       since: new Date(state.since),

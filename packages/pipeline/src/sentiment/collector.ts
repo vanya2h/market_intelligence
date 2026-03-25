@@ -98,21 +98,19 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
     htf: null,
   };
 
-  // Derivatives — only BTC for now
-  if (asset === "BTC") {
-    try {
-      const snapshot = await collectDerivatives();
-      const prevState = loadDimState<DerivativesState>("derivatives_state.json", asset);
-      const { context } = analyzeDerivatives(snapshot, prevState);
-      inputs.derivatives = {
-        fundingPercentile1m: context.funding.percentile["1m"],
-        oiPercentile1m: context.openInterest.percentile["1m"],
-        longShortRatio: context.longShortRatio.current,
-        regime: context.regime,
-      };
-    } catch (e) {
-      console.log(`      ⚠ Derivatives data unavailable: ${(e as Error).message}`);
-    }
+  // Derivatives
+  try {
+    const snapshot = await collectDerivatives(asset);
+    const prevState = loadDimState<DerivativesState>("derivatives_state.json", asset);
+    const { context } = analyzeDerivatives(snapshot, prevState);
+    inputs.derivatives = {
+      fundingPercentile1m: context.funding.percentile["1m"],
+      oiPercentile1m: context.openInterest.percentile["1m"],
+      longShortRatio: context.longShortRatio.current,
+      regime: context.regime,
+    };
+  } catch (e) {
+    console.log(`      ⚠ Derivatives data unavailable: ${(e as Error).message}`);
   }
 
   // ETFs

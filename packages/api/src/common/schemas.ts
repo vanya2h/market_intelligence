@@ -30,6 +30,8 @@ export const BriefSchema = z.object({
   asset: z.string(),
   timestamp: z.string(),
   brief: z.string(),
+  richBrief: z.any().nullable().optional(),
+  snapshotPrice: z.number().nullable().optional(),
   compositeIndex: z.number().nullable(),
   compositeLabel: z.string().nullable(),
   positioning: z.number().nullable(),

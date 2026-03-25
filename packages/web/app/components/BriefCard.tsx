@@ -1,3 +1,5 @@
+import { formatDistanceToNowStrict } from "date-fns";
+
 interface ComponentScores {
   positioning: number | null;
   trend: number | null;
@@ -106,13 +108,8 @@ export function BriefCard({
           Market Brief
         </span>
         <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-          {asset} &middot;{" "}
-          {new Date(timestamp).toLocaleString("en-US", {
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          {asset} &middot; Generated{" "}
+          {formatDistanceToNowStrict(new Date(timestamp), { addSuffix: true })}
         </span>
       </div>
 

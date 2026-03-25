@@ -1,6 +1,9 @@
 // Database
 export { prisma } from "./storage/db.js";
 
+// Cache
+export { getCached } from "./storage/cache.js";
+
 // Prisma-generated types
 export type {
   Asset,
@@ -41,3 +44,4 @@ export type {
 
 // Orchestrator
 export type { DimensionOutput, AssetBrief } from "./orchestrator/types.js";
+export type { RichBlock, RichBrief } from "./orchestrator/rich-synthesizer.js";

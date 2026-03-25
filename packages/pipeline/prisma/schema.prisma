@@ -58,6 +58,10 @@ model Brief {
     asset     Asset
     timestamp DateTime @default(now())
     brief     String
+    richBrief Json?
+
+    // Asset price at brief generation time
+    snapshotPrice Float?
 
     // Sentiment composite gauge
     compositeIndex Float?

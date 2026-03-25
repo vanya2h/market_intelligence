@@ -134,15 +134,17 @@ function printBrief(ctx: DerivativesContext, interpretation: string): void {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  step(1, 5, "Collecting snapshot...");
-  const snapshot = await collect();
+  const asset = (process.argv.find((a) => a === "ETH") ? "ETH" : "BTC") as "BTC" | "ETH";
+
+  step(1, 5, `Collecting ${asset} snapshot...`);
+  const snapshot = await collect(asset);
 
   step(2, 5, "Storing to history...");
-  const history = await appendSnapshot(snapshot);
+  const history = await appendSnapshot(asset, snapshot);
   note(`${history.length} snapshots in rolling window`);
 
   step(3, 5, "Loading previous state...");
-  const prevState = await loadState();
+  const prevState = await loadState(asset);
   if (prevState) {
     note(`Previous regime: ${regimeColor(prevState.regime)(prevState.regime)} since ${prevState.since}`);
   } else {
@@ -155,7 +157,7 @@ async function main(): Promise<void> {
     `${regimeColor(context.regime)(context.regime)}  ` +
     chalk.dim(`funding pct1m=${context.funding.percentile["1m"]}  L/S=${context.longShortRatio.current.toFixed(2)}`)
   );
-  saveState(nextState);
+  saveState(asset, nextState);
 
   step(5, 5, "Running agent...");
   const interpretation = await runAgent(context);

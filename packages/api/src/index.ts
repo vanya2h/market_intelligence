@@ -7,6 +7,7 @@ import { serve } from "@hono/node-server";
 import { HealthController } from "./routes/health.js";
 import { BriefsController } from "./routes/briefs.js";
 import { DimensionsController } from "./routes/dimensions.js";
+import { PriceController } from "./routes/price.js";
 import type { IFactory } from "./common/controller.js";
 
 const factory: IFactory = {
@@ -16,7 +17,8 @@ const factory: IFactory = {
 const app = new Hono()
   .route("/api", HealthController.build(factory))
   .route("/api/briefs", BriefsController.build(factory))
-  .route("/api/dimensions", DimensionsController.build(factory));
+  .route("/api/dimensions", DimensionsController.build(factory))
+  .route("/api/price", PriceController.build(factory));
 
 export type AppType = typeof app;
 

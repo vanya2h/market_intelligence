@@ -7,7 +7,7 @@
 
 import chalk from "chalk";
 import { formatDistanceToNowStrict } from "date-fns";
-import { redis } from "./redis.js";
+import { getRedis } from "./redis.js";
 
 interface CacheEntry<T> {
   fetchedAt: number; // epoch ms
@@ -26,6 +26,7 @@ export async function getCached<T>(
   fetch: () => Promise<T>
 ): Promise<T> {
   const redisKey = `${KEY_PREFIX}${key}`;
+  const redis = getRedis();
   const existing = await redis.get<CacheEntry<T>>(redisKey);
 
   if (existing) {

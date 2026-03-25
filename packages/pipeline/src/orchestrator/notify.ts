@@ -20,6 +20,7 @@ import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
+import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
 import { generateCard } from "./card.js";
 
@@ -124,10 +125,14 @@ async function main(): Promise<void> {
     note(`${outputs.length} dimensions completed`);
 
     step(2, 4, "Synthesizing market brief...");
-    const brief = await synthesize(asset, outputs);
+    const [brief, richBrief] = await Promise.all([
+      synthesize(asset, outputs),
+      synthesizeRich(asset, outputs),
+    ]);
+    if (richBrief) note("rich brief generated");
 
     step(3, 5, "Saving to database...");
-    await saveBrief(asset, brief, outputs);
+    await saveBrief(asset, brief, outputs, richBrief);
 
     step(4, 5, "Generating regime card...");
     const cardPng = await generateCard(asset, outputs);

@@ -54,15 +54,13 @@ function saveJsonState<T>(file: string, key: string, state: T): void {
 // ─── Dimension runners ───────────────────────────────────────────────────────
 
 async function runDerivatives(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
-  if (asset !== "BTC") return null; // derivatives collector is BTC-only for now
-
   try {
-    console.log(`      ${chalk.cyan("▸")} derivatives...`);
-    const snapshot = await collectDerivatives();
-    const history = await appendSnapshot(snapshot);
-    const prevState = await loadDerivativesState();
+    console.log(`      ${chalk.cyan("▸")} derivatives (${asset})...`);
+    const snapshot = await collectDerivatives(asset);
+    const history = await appendSnapshot(asset, snapshot);
+    const prevState = await loadDerivativesState(asset);
     const { context, nextState } = analyzeDerivatives(snapshot, prevState);
-    saveDerivativesState(nextState);
+    saveDerivativesState(asset, nextState);
     const interpretation = await runDerivativesAgent(context);
     return {
       dimension: "derivatives",
