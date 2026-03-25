@@ -1,9 +1,9 @@
 /**
- * ETF Flows runner — Dimension 03
+ * HTF Technical Structure runner — Dimension 07
  *
  * Usage:
- *   pnpm etfs
- *   pnpm etfs --asset ETH
+ *   pnpm htf
+ *   pnpm htf --asset ETH
  */
 
 import "dotenv/config";
@@ -13,22 +13,22 @@ import chalk, { type ChalkInstance } from "chalk";
 import { collect } from "./collector.js";
 import { analyze } from "./analyzer.js";
 import { runAgent } from "./agent.js";
-import type { EtfContext, EtfRegime, EtfState } from "./types.js";
+import type { HtfContext, HtfRegime, HtfState, MarketStructure, MaCrossType } from "./types.js";
 
-const STATE_FILE = path.resolve("data", "etfs_state.json");
+const STATE_FILE = path.resolve("data", "htf_state.json");
 
 // ─── State persistence ────────────────────────────────────────────────────────
 
-function loadState(asset: string): EtfState | null {
+function loadState(asset: string): HtfState | null {
   if (!fs.existsSync(STATE_FILE)) return null;
-  const all = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8")) as Record<string, EtfState>;
+  const all = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8")) as Record<string, HtfState>;
   return all[asset] ?? null;
 }
 
-function saveState(state: EtfState): void {
+function saveState(state: HtfState): void {
   fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   const all = fs.existsSync(STATE_FILE)
-    ? (JSON.parse(fs.readFileSync(STATE_FILE, "utf-8")) as Record<string, EtfState>)
+    ? (JSON.parse(fs.readFileSync(STATE_FILE, "utf-8")) as Record<string, HtfState>)
     : {};
   all[state.asset] = state;
   fs.writeFileSync(STATE_FILE, JSON.stringify(all, null, 2));
@@ -36,27 +36,52 @@ function saveState(state: EtfState): void {
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
-function formatUsd(v: number): string {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "+";
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
-  return `${sign}$${abs.toFixed(0)}`;
-}
-
-function regimeColor(regime: EtfRegime): ChalkInstance {
+function regimeColor(regime: HtfRegime): ChalkInstance {
   switch (regime) {
-    case "STRONG_INFLOW":      return chalk.green.bold;
-    case "REVERSAL_TO_INFLOW": return chalk.green;
-    case "STRONG_OUTFLOW":     return chalk.red.bold;
-    case "REVERSAL_TO_OUTFLOW":return chalk.red;
-    case "NEUTRAL":            return chalk.white;
-    case "MIXED":              return chalk.yellow;
+    case "MACRO_BULLISH":
+      return chalk.green.bold;
+    case "BULL_EXTENDED":
+      return chalk.yellow.bold;
+    case "MACRO_BEARISH":
+      return chalk.red.bold;
+    case "BEAR_EXTENDED":
+      return chalk.red;
+    case "RECLAIMING":
+      return chalk.cyan;
+    case "RANGING":
+      return chalk.white;
   }
 }
 
-function flowColor(v: number): ChalkInstance {
-  return v > 0 ? chalk.green : v < 0 ? chalk.red : chalk.dim;
+function structureColor(s: MarketStructure): ChalkInstance {
+  switch (s) {
+    case "HH_HL":
+      return chalk.green;
+    case "LH_LL":
+      return chalk.red;
+    default:
+      return chalk.yellow;
+  }
+}
+
+function crossColor(c: MaCrossType): ChalkInstance {
+  return c === "GOLDEN" ? chalk.green : c === "DEATH" ? chalk.red : chalk.dim;
+}
+
+function pctFmt(pct: number): string {
+  const sign = pct >= 0 ? "+" : "";
+  const color = pct >= 0 ? chalk.green : chalk.red;
+  return color(`${sign}${pct.toFixed(1)}%`);
+}
+
+function rsiColor(v: number): ChalkInstance {
+  if (v > 70) return chalk.yellow.bold;
+  if (v < 30) return chalk.cyan.bold;
+  return chalk.white;
+}
+
+function formatPrice(v: number): string {
+  return `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
 /** Strip markdown and render **bold** with chalk */
@@ -78,14 +103,12 @@ function note(text: string): void {
 
 // ─── Brief printer ────────────────────────────────────────────────────────────
 
-function printBrief(ctx: EtfContext, interpretation: string, latestDay: string): void {
+function printBrief(ctx: HtfContext, interpretation: string): void {
   const sep = chalk.dim("─".repeat(62));
   const label = (s: string) => chalk.dim(s.padEnd(11));
 
   console.log(`\n${sep}`);
-  console.log(
-    `  ${chalk.bold("ETF FLOWS")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`
-  );
+  console.log(`  ${chalk.bold("HTF STRUCTURE")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(sep);
 
   const regimeFmt = regimeColor(ctx.regime)(ctx.regime);
@@ -96,30 +119,20 @@ function printBrief(ctx: EtfContext, interpretation: string, latestDay: string):
   console.log(`  ${label("Since")} ${chalk.dim(ctx.since)}`);
   console.log(`  ${label("Duration")} ${chalk.white(ctx.durationDays + "d")}`);
 
-  console.log(`\n  ${chalk.dim("── Flows ────────────────────────────────────────────")}`);
+  console.log(`\n  ${chalk.dim("── Price & MAs ──────────────────────────────────────")}`);
+  console.log(`  ${label("Price")}     ${chalk.white.bold(formatPrice(ctx.price))}`);
+  console.log(`  ${label("50 DMA")}    ${chalk.white(formatPrice(ctx.ma.sma50))}  ${pctFmt(ctx.ma.priceVsSma50Pct)}`);
+  console.log(`  ${label("200 DMA")}   ${chalk.white(formatPrice(ctx.ma.sma200))}  ${pctFmt(ctx.ma.priceVsSma200Pct)}`);
 
-  const f = ctx.flow;
-  const sigmaFmt =
-    Math.abs(f.todaySigma) >= 2
-      ? chalk.yellow.bold(`${f.todaySigma > 0 ? "+" : ""}${f.todaySigma.toFixed(1)}σ`)
-      : chalk.dim(`${f.todaySigma > 0 ? "+" : ""}${f.todaySigma.toFixed(1)}σ`);
+  const crossFmt = crossColor(ctx.ma.crossType)(ctx.ma.crossType);
+  const recentCrossFmt =
+    ctx.ma.recentCross !== "NONE" ? chalk.yellow.bold(` ← ${ctx.ma.recentCross} CROSS (recent)`) : "";
+  console.log(`  ${label("MA Cross")}  ${crossFmt}${recentCrossFmt}`);
 
-  console.log(`  ${label("Latest")} ${flowColor(f.today)(formatUsd(f.today))}  ${sigmaFmt}  ${chalk.dim(latestDay)}`);
-  console.log(`  ${label("3d Net")} ${flowColor(f.d3Sum)(formatUsd(f.d3Sum))}`);
-  console.log(`  ${label("7d Net")} ${flowColor(f.d7Sum)(formatUsd(f.d7Sum))}`);
-  console.log(`  ${label("30d Net")} ${flowColor(f.d30Sum)(formatUsd(f.d30Sum))}`);
-  console.log(`  ${label("Total AUM")} ${chalk.white.bold(formatUsd(ctx.totalAumUsd).replace(/^[+-]/, "$"))}`);
-
-  if (ctx.gbtcPremiumRate !== undefined) {
-    const sign = ctx.gbtcPremiumRate >= 0 ? "+" : "";
-    const pFmt =
-      ctx.gbtcPremiumRate < -1
-        ? chalk.red(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`)
-        : ctx.gbtcPremiumRate > 1
-        ? chalk.green(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`)
-        : chalk.dim(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`);
-    console.log(`  ${label("GBTC Prem")} ${pFmt}`);
-  }
+  console.log(`\n  ${chalk.dim("── Indicators ───────────────────────────────────────")}`);
+  console.log(`  ${label("Daily RSI")} ${rsiColor(ctx.rsi.daily)(ctx.rsi.daily.toFixed(1))}`);
+  console.log(`  ${label("4h RSI")}    ${rsiColor(ctx.rsi.h4)(ctx.rsi.h4.toFixed(1))}`);
+  console.log(`  ${label("Structure")} ${structureColor(ctx.structure)(ctx.structure.replace("_", "/"))}`);
 
   if (ctx.events.length > 0) {
     console.log(`\n  ${chalk.dim("── Events ───────────────────────────────────────────")}`);
@@ -153,13 +166,8 @@ async function main(): Promise<void> {
     ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
     : "BTC";
 
-  step(1, 4, `Collecting ETF data (${asset})...`);
+  step(1, 4, `Collecting HTF candles (${asset})...`);
   const snapshot = await collect(asset);
-  const latestDay = snapshot.flowHistory
-    .filter((d) => d.flowUsd !== 0)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .at(0)?.date ?? "unknown";
-  note(`${snapshot.flowHistory.length} days of flow history · latest: ${latestDay}`);
 
   step(2, 4, "Loading previous state...");
   const prevState = loadState(asset);
@@ -169,23 +177,22 @@ async function main(): Promise<void> {
     note("No previous state — first run");
   }
 
-  step(3, 4, "Analyzing regime...");
+  step(3, 4, "Analyzing structure...");
   const { context, nextState } = analyze(snapshot, prevState);
   note(
     `${regimeColor(context.regime)(context.regime)}  ` +
-    chalk.dim(
-      `today=${context.flow.today >= 0 ? "+" : ""}$${(context.flow.today / 1e6).toFixed(0)}M  ` +
-      `streak=${context.flow.consecutiveOutflowDays > 0
-        ? `-${context.flow.consecutiveOutflowDays}d`
-        : `+${context.flow.consecutiveInflowDays}d`}`
-    )
+      chalk.dim(
+        `structure=${context.structure}  ` +
+          `dailyRSI=${context.rsi.daily.toFixed(1)}  4hRSI=${context.rsi.h4.toFixed(1)}  ` +
+          `200MA=${context.ma.priceVsSma200Pct > 0 ? "+" : ""}${context.ma.priceVsSma200Pct}%`,
+      ),
   );
   saveState(nextState);
 
   step(4, 4, "Running agent...");
   const interpretation = await runAgent(context);
 
-  printBrief(context, interpretation, latestDay);
+  printBrief(context, interpretation);
 }
 
 main().catch((err) => {

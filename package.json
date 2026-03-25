@@ -5,7 +5,8 @@
   "packageManager": "pnpm@10.29.3",
   "scripts": {
     "derivatives": "tsx src/run.ts",
-    "etfs": "tsx src/etfs/run.ts"
+    "etfs": "tsx src/etfs/run.ts",
+    "htf": "tsx src/htf/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
