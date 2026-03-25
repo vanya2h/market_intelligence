@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { api } from "../server/api.server";
@@ -5,6 +6,8 @@ import { DIMENSIONS } from "../lib/dimension-config";
 import { BriefCard } from "../components/BriefCard";
 import { DimensionCard } from "../components/DimensionCard";
 import { AssetSelector } from "../components/AssetSelector";
+import { SentimentGauge } from "../components/SentimentGauge";
+import { regimeColor } from "../lib/regime-colors";
 
 interface BriefDimension {
   dimension: string;
@@ -44,7 +47,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? ((await historyRes.json()) as BriefData[])
     : [];
 
-  // Build chart data per dimension from history
   const chartData: Record<string, { timestamp: string; value: number }[]> = {};
 
   for (const dim of Object.keys(DIMENSIONS)) {
@@ -71,69 +73,267 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
+const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
+
+const TAB_LABELS: Record<string, string> = {
+  DERIVATIVES: "Derivatives",
+  ETFS: "ETFs",
+  SENTIMENT: "Sentiment",
+  HTF: "HTF Structure",
+};
+
 export default function Dashboard() {
   const { asset, brief, chartData } = useLoaderData<LoaderData>();
+
+  const availableDims = brief
+    ? DIMENSION_TABS.filter((dim) =>
+        brief.dimensions.some((d) => d.dimension === dim)
+      )
+    : [];
+
+  const [activeTab, setActiveTab] = useState<string>(
+    availableDims[0] ?? "DERIVATIVES"
+  );
 
   if (!brief) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <AssetSelector current={asset} />
-        <p className="text-zinc-500">
-          No brief data available for {asset}. Run{" "}
-          <code className="rounded bg-zinc-800 px-2 py-0.5 text-sm">
+        <p style={{ color: "var(--text-muted)" }}>
+          No data for {asset}.{" "}
+          <code
+            className="px-2 py-0.5 text-sm"
+            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
+          >
             pnpm brief
-          </code>{" "}
-          first.
+          </code>
         </p>
       </div>
     );
   }
 
-  const dimensionOrder = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
-
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
-      <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-zinc-100">Market Intel</h1>
-        <AssetSelector current={asset} />
-      </header>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Brief card spans full width */}
-        <div className="lg:col-span-2">
-          <BriefCard
-            brief={brief.brief}
-            compositeIndex={brief.compositeIndex}
-            compositeLabel={brief.compositeLabel}
-            components={{
-              positioning: brief.positioning,
-              trend: brief.trend,
-              institutionalFlows: brief.institutionalFlows,
-              expertConsensus: brief.expertConsensus,
-            }}
-            timestamp={brief.timestamp}
-            asset={asset}
+    <div className="flex min-h-screen flex-col">
+      {/* Top navigation bar */}
+      <nav
+        className="flex h-10 items-center justify-between px-4"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
+      >
+        <div className="flex items-center gap-4">
+          <span
+            className="text-sm font-semibold tracking-tight"
+            style={{ color: "var(--text-primary)" }}
+          >
+            MARKET INTEL
+          </span>
+          <div
+            className="h-4"
+            style={{ borderLeft: "1px solid var(--border)" }}
           />
+          <AssetSelector current={asset} />
         </div>
-
-        {/* Dimension cards in 2x2 grid */}
-        {dimensionOrder.map((dim) => {
-          const bd = brief.dimensions.find(
-            (d: BriefDimension) => d.dimension === dim
-          );
-          if (!bd) return null;
-
-          return (
-            <DimensionCard
-              key={dim}
-              dimension={dim}
-              regime={bd.regime}
-              context={bd.context}
-              interpretation={bd.interpretation}
-              chartData={chartData[dim] ?? []}
+        <div className="flex items-center gap-3">
+          <span
+            className="text-[10px] uppercase tracking-wider"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {new Date(brief.timestamp).toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <div
+              className="live-dot h-1.5 w-1.5 rounded-full"
+              style={{ background: "var(--green)" }}
             />
-          );
-        })}
+            <span className="text-[10px] font-medium" style={{ color: "var(--green)" }}>
+              LIVE
+            </span>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main 3-column layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar */}
+        <aside
+          className="flex w-72 shrink-0 flex-col overflow-y-auto p-5"
+          style={{ borderRight: "1px solid var(--border)", background: "var(--bg-card)" }}
+        >
+          {/* Composite Index */}
+          {brief.compositeIndex != null && brief.compositeLabel && (
+            <div className="mb-6">
+              <div
+                className="mb-3 text-[10px] font-medium uppercase tracking-widest"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Composite Index
+              </div>
+              <SentimentGauge
+                value={brief.compositeIndex}
+                label={brief.compositeLabel}
+              />
+            </div>
+          )}
+
+          {/* Dimension Regimes */}
+          <div className="mb-6">
+            <div
+              className="mb-3 text-[10px] font-medium uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Regime Overview
+            </div>
+            <div className="space-y-1">
+              {DIMENSION_TABS.map((dim) => {
+                const bd = brief.dimensions.find((d) => d.dimension === dim);
+                if (!bd) return null;
+                const { color, arrow } = regimeColor(bd.regime);
+                return (
+                  <div
+                    key={dim}
+                    className="flex items-center justify-between py-1.5"
+                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
+                  >
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      {TAB_LABELS[dim]}
+                    </span>
+                    <span
+                      className="text-xs font-medium"
+                      style={{ color }}
+                    >
+                      {bd.regime} {arrow}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Overview Stats */}
+          <div>
+            <div
+              className="mb-3 text-[10px] font-medium uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Overview
+            </div>
+            <div className="space-y-1">
+              {[
+                { label: "Positioning", value: brief.positioning },
+                { label: "Trend", value: brief.trend },
+                { label: "Inst. Flows", value: brief.institutionalFlows },
+                { label: "Expert Cons.", value: brief.expertConsensus },
+              ].map(({ label, value }) => {
+                if (value == null) return null;
+                const color =
+                  value < 30
+                    ? "var(--red)"
+                    : value > 70
+                      ? "var(--green)"
+                      : "var(--amber)";
+                return (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between py-1.5"
+                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
+                  >
+                    <span
+                      className="text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {label}
+                    </span>
+                    <span
+                      className="text-xs font-medium tabular-nums"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        color,
+                      }}
+                    >
+                      {Math.round(value)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex flex-1 flex-col overflow-y-auto">
+          {/* Brief section */}
+          <div
+            className="p-5"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            <BriefCard
+              brief={brief.brief}
+              compositeIndex={brief.compositeIndex}
+              compositeLabel={brief.compositeLabel}
+              components={{
+                positioning: brief.positioning,
+                trend: brief.trend,
+                institutionalFlows: brief.institutionalFlows,
+                expertConsensus: brief.expertConsensus,
+              }}
+              timestamp={brief.timestamp}
+              asset={asset}
+            />
+          </div>
+
+          {/* Dimension tabs — only show tabs that have data */}
+          <div
+            className="flex items-center gap-0 px-5"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            {availableDims.map((dim) => {
+              const isActive = activeTab === dim;
+              return (
+                <button
+                  key={dim}
+                  onClick={() => setActiveTab(dim)}
+                  className={`relative px-4 py-3 text-xs font-medium tracking-wide transition-colors ${isActive ? "tab-active" : ""}`}
+                  style={{
+                    color: isActive
+                      ? "var(--text-primary)"
+                      : "var(--text-muted)",
+                  }}
+                >
+                  {TAB_LABELS[dim]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 p-5">
+            {availableDims.map((dim) => {
+              const bd = brief.dimensions.find(
+                (d: BriefDimension) => d.dimension === dim
+              );
+              if (!bd) return null;
+
+              return (
+                <DimensionCard
+                  key={dim}
+                  dimension={dim}
+                  regime={bd.regime}
+                  context={bd.context}
+                  interpretation={bd.interpretation}
+                  chartData={chartData[dim] ?? []}
+                  isActive={activeTab === dim}
+                />
+              );
+            })}
+          </div>
+        </main>
       </div>
     </div>
   );

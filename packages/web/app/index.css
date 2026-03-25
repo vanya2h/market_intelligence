@@ -1,9 +1,80 @@
 @import "tailwindcss";
 
+:root {
+  --bg-primary: #07080a;
+  --bg-card: #0d0e12;
+  --bg-surface: #12131a;
+  --bg-hover: #1a1b24;
+  --border: #1e1f2a;
+  --border-subtle: #15161e;
+  --text-primary: #f4f4f6;
+  --text-secondary: #b0b2be;
+  --text-muted: #787a8a;
+  --green: #00dc82;
+  --green-dim: rgba(0, 220, 130, 0.15);
+  --red: #ff4a6e;
+  --red-dim: rgba(255, 74, 110, 0.15);
+  --amber: #f0b232;
+  --amber-dim: rgba(240, 178, 50, 0.15);
+}
+
 html {
   color-scheme: dark;
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-200 antialiased;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2b36;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3b46;
+}
+
+/* Custom tab underline */
+.tab-active {
+  position: relative;
+}
+.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--text-primary);
+  border-radius: 1px;
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.live-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Gradient line for charts */
+.chart-gradient {
+  background: linear-gradient(90deg, var(--green) 0%, var(--red) 100%);
+}
+
+/* Bar animation */
+.bar-fill {
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }

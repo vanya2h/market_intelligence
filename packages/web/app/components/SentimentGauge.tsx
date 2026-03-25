@@ -1,5 +1,3 @@
-import { sentimentBg, sentimentColor } from "../lib/regime-colors";
-
 export function SentimentGauge({
   value,
   label,
@@ -7,22 +5,52 @@ export function SentimentGauge({
   value: number;
   label: string;
 }) {
-  const color = sentimentColor(value);
-  const bg = sentimentBg(value);
+  const getColor = (v: number) => {
+    if (v <= 25) return { color: "var(--red)", bg: "var(--red-dim)", text: "Extreme Fear" };
+    if (v <= 40) return { color: "var(--red)", bg: "var(--red-dim)", text: "Fear" };
+    if (v <= 60) return { color: "var(--amber)", bg: "var(--amber-dim)", text: "Neutral" };
+    if (v <= 75) return { color: "var(--green)", bg: "var(--green-dim)", text: "Greed" };
+    return { color: "var(--green)", bg: "var(--green-dim)", text: "Extreme Greed" };
+  };
+
+  const { color, bg } = getColor(value);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <span className={`text-3xl font-bold font-mono ${color}`}>
-          {value.toFixed(1)}
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline gap-2">
+        <span
+          className="text-4xl font-bold tabular-nums"
+          style={{ fontFamily: "'JetBrains Mono', monospace", color }}
+        >
+          {Math.round(value)}
         </span>
-        <span className="text-sm text-zinc-400">{label}</span>
+        <span className="text-xs tracking-wide" style={{ color: "var(--text-muted)" }}>
+          /100
+        </span>
       </div>
-      <div className="h-2 w-full rounded-full bg-zinc-800">
+      <div className="text-xs font-medium uppercase tracking-wider" style={{ color }}>
+        {label}
+      </div>
+      <div className="relative h-1.5 w-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
         <div
-          className={`h-full rounded-full ${bg} transition-all`}
-          style={{ width: `${value}%` }}
+          className="bar-fill absolute left-0 top-0 h-full"
+          style={{ width: `${value}%`, background: color }}
         />
+      </div>
+      {/* Tick marks */}
+      <div className="flex justify-between">
+        {[0, 25, 50, 75, 100].map((tick) => (
+          <span
+            key={tick}
+            className="text-[9px] tabular-nums"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              color: "var(--text-muted)",
+            }}
+          >
+            {tick}
+          </span>
+        ))}
       </div>
     </div>
   );

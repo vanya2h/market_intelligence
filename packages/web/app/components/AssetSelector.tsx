@@ -4,15 +4,15 @@ export function AssetSelector({ current }: { current: string }) {
   const assets = ["BTC", "ETH"];
 
   return (
-    <div className="flex gap-1 rounded-lg bg-zinc-900 p-1">
+    <div className="flex items-center gap-0.5">
       {assets.map((a) => (
         <Link
           key={a}
           to={`/?asset=${a}`}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+          className={`px-3 py-1 text-xs font-medium tracking-wide transition-colors ${
             current === a
-              ? "bg-zinc-700 text-zinc-100"
-              : "text-zinc-500 hover:text-zinc-300"
+              ? "bg-[var(--bg-hover)] text-[var(--text-primary)]"
+              : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
           }`}
         >
           {a}

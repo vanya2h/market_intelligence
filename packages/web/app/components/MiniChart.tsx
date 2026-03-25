@@ -1,4 +1,4 @@
-import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
+import { ResponsiveContainer, AreaChart, Area, Tooltip, YAxis } from "recharts";
 
 interface DataPoint {
   timestamp: string;
@@ -8,7 +8,7 @@ interface DataPoint {
 export function MiniChart({
   data,
   label,
-  color = "#6366f1",
+  color = "var(--green)",
 }: {
   data: DataPoint[];
   label: string;
@@ -16,34 +16,37 @@ export function MiniChart({
 }) {
   if (data.length < 2) {
     return (
-      <div className="flex h-24 items-center justify-center text-xs text-zinc-600">
-        Not enough data for chart
+      <div
+        className="flex h-20 items-center justify-center text-[10px] uppercase tracking-wider"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Insufficient data
       </div>
     );
   }
 
   return (
-    <div className="mt-3">
-      <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">
-        {label}
-      </div>
-      <ResponsiveContainer width="100%" height={96}>
+    <div className="mt-2">
+      <ResponsiveContainer width="100%" height={80}>
         <AreaChart data={data}>
           <defs>
             <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+              <stop offset="0%" stopColor={color} stopOpacity={0.2} />
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
+          <YAxis domain={["dataMin", "dataMax"]} hide />
           <Tooltip
             contentStyle={{
-              background: "#18181b",
-              border: "1px solid #27272a",
-              borderRadius: 8,
-              fontSize: 12,
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              fontSize: 11,
+              fontFamily: "'JetBrains Mono', monospace",
+              padding: "6px 10px",
             }}
-            labelStyle={{ color: "#a1a1aa" }}
-            itemStyle={{ color: "#e4e4e7" }}
+            labelStyle={{ color: "var(--text-muted)", fontSize: 10 }}
+            itemStyle={{ color: "var(--text-primary)" }}
             formatter={(v: number) => [v.toFixed(4), label]}
             labelFormatter={(l: string) =>
               new Date(l).toLocaleDateString("en-US", {

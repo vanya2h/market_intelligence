@@ -1,5 +1,3 @@
-import { SentimentGauge } from "./SentimentGauge";
-
 interface ComponentScores {
   positioning: number | null;
   trend: number | null;
@@ -9,19 +7,39 @@ interface ComponentScores {
 
 function ComponentBar({ label, value }: { label: string; value: number | null }) {
   if (value == null) return null;
-  const color =
-    value < 30 ? "bg-red-500" : value > 70 ? "bg-emerald-500" : "bg-amber-500";
+
+  const getColor = (v: number) => {
+    if (v < 30) return "var(--red)";
+    if (v > 70) return "var(--green)";
+    return "var(--amber)";
+  };
+
+  const color = getColor(value);
 
   return (
     <div className="flex items-center gap-3">
-      <span className="w-28 shrink-0 text-xs text-zinc-500">{label}</span>
-      <div className="h-2 flex-1 rounded-full bg-zinc-800">
+      <span
+        className="w-24 shrink-0 text-[11px]"
+        style={{ color: "var(--text-muted)" }}
+      >
+        {label}
+      </span>
+      <div
+        className="h-1 flex-1"
+        style={{ background: "var(--bg-hover)" }}
+      >
         <div
-          className={`h-full rounded-full ${color} transition-all`}
-          style={{ width: `${value}%` }}
+          className="bar-fill h-full"
+          style={{ width: `${value}%`, background: color }}
         />
       </div>
-      <span className="w-8 text-right font-mono text-xs text-zinc-400">
+      <span
+        className="w-6 text-right text-[11px] tabular-nums"
+        style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          color,
+        }}
+      >
         {Math.round(value)}
       </span>
     </div>
@@ -34,7 +52,7 @@ function renderBriefText(text: string) {
 
     const rendered = line.replace(
       /\*\*(.+?)\*\*/g,
-      '<strong class="text-zinc-100">$1</strong>'
+      '<strong style="color: var(--text-primary)">$1</strong>'
     );
 
     const isBullet = line.trimStart().startsWith("- ");
@@ -43,8 +61,11 @@ function renderBriefText(text: string) {
       return (
         <li
           key={i}
-          className="ml-4 list-disc text-sm leading-relaxed text-zinc-300"
-          dangerouslySetInnerHTML={{ __html: rendered.replace(/^-\s*/, "") }}
+          className="ml-3 text-[13px] leading-relaxed"
+          style={{ color: "var(--text-secondary)", listStyleType: "none" }}
+          dangerouslySetInnerHTML={{
+            __html: `<span style="color: var(--text-muted); margin-right: 6px">&#8250;</span>${rendered.replace(/^-\s*/, "")}`,
+          }}
         />
       );
     }
@@ -52,7 +73,8 @@ function renderBriefText(text: string) {
     return (
       <p
         key={i}
-        className="text-sm leading-relaxed text-zinc-300"
+        className="text-[13px] leading-relaxed"
+        style={{ color: "var(--text-secondary)" }}
         dangerouslySetInnerHTML={{ __html: rendered }}
       />
     );
@@ -75,35 +97,42 @@ export function BriefCard({
   asset: string;
 }) {
   return (
-    <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-6">
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-indigo-400">
-            Market Brief
-          </h2>
-          <p className="text-xs text-zinc-500">
-            {asset} &middot;{" "}
-            {new Date(timestamp).toLocaleString("en-US", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-          </p>
-        </div>
-        {compositeIndex != null && compositeLabel && (
-          <div className="w-48">
-            <SentimentGauge value={compositeIndex} label={compositeLabel} />
-          </div>
-        )}
+    <div>
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className="text-[10px] font-medium uppercase tracking-widest"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Market Brief
+        </span>
+        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          {asset} &middot;{" "}
+          {new Date(timestamp).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
       </div>
 
-      <div className="mb-4 space-y-1">{renderBriefText(brief)}</div>
+      <div className="space-y-1.5">{renderBriefText(brief)}</div>
 
       {(components.positioning != null ||
         components.trend != null ||
         components.institutionalFlows != null ||
         components.expertConsensus != null) && (
-        <div className="space-y-2 rounded-lg bg-zinc-900/50 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600">
+        <div
+          className="mt-5 space-y-2 p-3"
+          style={{
+            background: "var(--bg-surface)",
+            borderLeft: "2px solid var(--border)",
+          }}
+        >
+          <div
+            className="text-[9px] font-medium uppercase tracking-widest"
+            style={{ color: "var(--text-muted)" }}
+          >
             Fear &amp; Greed Components
           </div>
           <ComponentBar label="Positioning" value={components.positioning} />
