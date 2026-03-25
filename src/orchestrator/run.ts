@@ -111,25 +111,27 @@ function printBrief(asset: string, outputs: DimensionOutput[], brief: string): v
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const asset = process.argv.includes("--asset")
-    ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
-    : "BTC";
+  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
+    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
+    : ["BTC", "ETH"];
 
-  const totalSteps = 3;
+  for (const asset of assets) {
+    const totalSteps = 3;
 
-  step(1, totalSteps, `Running all dimension pipelines (${asset})...`);
-  const startTime = Date.now();
-  const outputs = await runAllDimensions(asset);
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  note(`${outputs.length} dimensions completed in ${elapsed}s`);
-  console.log("");
-  printDimensionSummary(outputs);
+    step(1, totalSteps, `Running all dimension pipelines (${asset})...`);
+    const startTime = Date.now();
+    const outputs = await runAllDimensions(asset);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    note(`${outputs.length} dimensions completed in ${elapsed}s`);
+    console.log("");
+    printDimensionSummary(outputs);
 
-  step(2, totalSteps, "Synthesizing market brief...");
-  const brief = await synthesize(asset, outputs);
+    step(2, totalSteps, "Synthesizing market brief...");
+    const brief = await synthesize(asset, outputs);
 
-  step(3, totalSteps, "Done.");
-  printBrief(asset, outputs, brief);
+    step(3, totalSteps, "Done.");
+    printBrief(asset, outputs, brief);
+  }
 }
 
 main().catch((err) => {

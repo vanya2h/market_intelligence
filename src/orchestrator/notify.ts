@@ -112,23 +112,25 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const asset = process.argv.includes("--asset")
-    ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
-    : "BTC";
+  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
+    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
+    : ["BTC", "ETH"];
 
-  step(1, 3, `Running all dimension pipelines (${asset})...`);
-  const outputs = await runAllDimensions(asset);
-  note(`${outputs.length} dimensions completed`);
+  for (const asset of assets) {
+    step(1, 3, `Running all dimension pipelines (${asset})...`);
+    const outputs = await runAllDimensions(asset);
+    note(`${outputs.length} dimensions completed`);
 
-  step(2, 3, "Synthesizing market brief...");
-  const brief = await synthesize(asset, outputs);
+    step(2, 3, "Synthesizing market brief...");
+    const brief = await synthesize(asset, outputs);
 
-  step(3, 3, "Sending to Telegram...");
-  const message = buildMessage(asset, outputs, brief);
-  note(`message length: ${message.length} chars`);
+    step(3, 3, `Sending ${asset} brief to Telegram...`);
+    const message = buildMessage(asset, outputs, brief);
+    note(`message length: ${message.length} chars`);
 
-  await sendTelegram(token, chatId, message);
-  console.log(`\n      ${chalk.green.bold("✓")} Brief sent to Telegram`);
+    await sendTelegram(token, chatId, message);
+    console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent to Telegram`);
+  }
 }
 
 main().catch((err) => {
