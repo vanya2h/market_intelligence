@@ -1,7 +1,10 @@
 {
   "extends": "@vanya2h/typescript-config/base",
   "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
     "declaration": true,
     "declarationMap": true
-  }
+  },
+  "include": ["src"]
 }

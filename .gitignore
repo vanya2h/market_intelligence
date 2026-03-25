@@ -4,4 +4,6 @@ dist/
 data/
 .env
 
-/src/generated/prisma
+packages/pipeline/src/generated/prisma
+.react-router
+.turbo

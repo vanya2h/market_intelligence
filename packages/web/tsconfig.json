@@ -1,0 +1,12 @@
+{
+  "extends": "@vanya2h/typescript-config/base",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["app", "react-router.config.ts"]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@market-intel/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "start": "react-router-serve build/server/index.js",
+    "typecheck": "react-router typegen && tsc"
+  },
+  "dependencies": {
+    "@market-intel/api": "workspace:*",
+    "hono": "^4.7.0",
+    "@react-router/node": "^7.13.1",
+    "@react-router/serve": "^7.13.1",
+    "isbot": "^5",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router": "^7.13.1",
+    "recharts": "^2.15.3"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^7.13.1",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0"
+  }
+}
