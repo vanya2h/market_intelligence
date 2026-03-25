@@ -237,6 +237,11 @@ export function analyze(
     [],
     nowMs
   );
+  const cbPremiumCtx = buildMetricContext(
+    snapshot.coinbasePremium.current,
+    snapshot.coinbasePremium.history1m,
+    nowMs
+  );
 
   const fundingPct1m = fundingCtx.percentile["1m"];
   const liqPct1m = liqCtx.percentile["1m"];
@@ -287,6 +292,7 @@ export function analyze(
     openInterest: oiCtx,
     liquidations: liqCtx,
     longShortRatio: lsCtx,
+    coinbasePremium: cbPremiumCtx,
     events,
   };
 

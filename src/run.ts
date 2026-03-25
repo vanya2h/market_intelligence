@@ -94,6 +94,10 @@ function printBrief(ctx: DerivativesContext, interpretation: string): void {
   console.log(
     `  ${label("L/S Ratio")} ${chalk.white.bold(ctx.longShortRatio.current.toFixed(2))}`
   );
+  const cbSign = ctx.coinbasePremium.current >= 0 ? "+" : "";
+  console.log(
+    `  ${label("CB Premium")} ${chalk.white.bold(cbSign + ctx.coinbasePremium.current.toFixed(4) + "%")}  ${pct(ctx.coinbasePremium.percentile["1m"])}`
+  );
   console.log(
     `  ${label("Liq 8h")} ${chalk.white.bold(formatUsd(ctx.liquidations.current8h))}  ${chalk.dim(ctx.liquidations.bias)}  ${pct(ctx.liquidations.percentile["1m"])}`
   );

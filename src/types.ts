@@ -30,6 +30,10 @@ export interface DerivativesSnapshot {
     bias: string; // e.g. "75% long"
     history1m: TimestampedValue[]; // 8h aggregates for last 30 days
   };
+  coinbasePremium: {
+    current: number; // premium_rate as % (e.g. 0.026 = 2.6bps above Binance)
+    history1m: TimestampedValue[]; // 1h resolution for last 30 days
+  };
 }
 
 export interface TimestampedValue {
@@ -88,6 +92,7 @@ export interface DerivativesContext {
   openInterest: MetricContext;
   liquidations: LiquidationContext;
   longShortRatio: MetricContext;
+  coinbasePremium: MetricContext; // % rate; positive = US demand > offshore
   events: RegimeEvent[];
 }
 

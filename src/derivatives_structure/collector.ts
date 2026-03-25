@@ -78,6 +78,12 @@ interface LiqAggEntry {
   aggregated_short_liquidation_usd: number;
 }
 
+interface CoinbasePremiumEntry {
+  time: number;        // Unix seconds
+  premium: number;     // USD price difference
+  premium_rate: number; // decimal (e.g. 0.000261)
+}
+
 // ─── Fetch helpers ────────────────────────────────────────────────────────────
 
 /** Current funding rate: median of stablecoin-margined rates across major exchanges */
@@ -150,6 +156,22 @@ async function fetchCurrentLS(): Promise<number> {
   return 1.0;
 }
 
+/** 30-day Coinbase premium history at 1h resolution + current value */
+async function fetchCoinbasePremium(): Promise<{ current: number; history1m: TimestampedValue[] }> {
+  const raw = await getCached("coinbase-premium-index-4h", TTL.HISTORY_4H, () =>
+    cgGet<CoinbasePremiumEntry[]>("/api/coinbase-premium-index", {
+      interval: "4h", limit: "180",
+    })
+  );
+  const data = Array.isArray(raw) ? raw : [];
+  const history: TimestampedValue[] = data.map((d) => ({
+    timestamp: new Date(d.time * 1000).toISOString(),
+    value: d.premium_rate * 100, // store as %, e.g. 0.000261 → 0.0261
+  }));
+  const current = history.at(-1)?.value ?? 0;
+  return { current, history1m: history };
+}
+
 /** 30-day liquidation history at 8h resolution + bias from the most recent window */
 async function fetchLiquidations(): Promise<{
   current8h: number;
@@ -187,12 +209,13 @@ async function fetchLiquidations(): Promise<{
 export async function collect(): Promise<DerivativesSnapshot> {
   console.log("      Fetching from CoinGlass v4...");
 
-  const [currentFunding, fundingHistory, oi, currentLS, liqData] = await Promise.all([
+  const [currentFunding, fundingHistory, oi, currentLS, liqData, cbPremium] = await Promise.all([
     fetchCurrentFunding(),
     fetchFundingHistory(),
     fetchOIWithHistory(),
     fetchCurrentLS(),
     fetchLiquidations(),
+    fetchCoinbasePremium(),
   ]);
 
   return {
@@ -214,5 +237,6 @@ export async function collect(): Promise<DerivativesSnapshot> {
       bias: liqData.bias,
       history1m: liqData.history,
     },
+    coinbasePremium: cbPremium,
   };
 }
