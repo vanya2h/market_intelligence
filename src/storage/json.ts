@@ -1,53 +1,78 @@
-import fs from "node:fs";
-import path from "node:path";
-import { DerivativesSnapshot, DerivativesState } from "../types.js";
+/**
+ * Postgres-backed state and snapshot storage (via Prisma).
+ *
+ * Drop-in replacement for the previous file-based json.ts.
+ * Used by the derivatives dimension (Dimension 01).
+ */
 
-const DATA_DIR = path.resolve("data");
-const HISTORY_FILE = path.join(DATA_DIR, "derivatives_history.json");
-const STATE_FILE = path.join(DATA_DIR, "derivatives_state.json");
+import { prisma } from "./db.js";
+import type { DerivativesSnapshot, DerivativesState } from "../types.js";
 
-// 30 days of hourly snapshots
 const MAX_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
-
-function ensureDataDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
 
 // ─── History ────────────────────────────────────────────────────────────────
 
-export function loadHistory(): DerivativesSnapshot[] {
-  ensureDataDir();
-  if (!fs.existsSync(HISTORY_FILE)) return [];
-  const raw = fs.readFileSync(HISTORY_FILE, "utf-8");
-  return JSON.parse(raw) as DerivativesSnapshot[];
+export async function loadHistory(): Promise<DerivativesSnapshot[]> {
+  const rows = await prisma.dimensionSnapshot.findMany({
+    where: { asset: "BTC", dimension: "DERIVATIVES" },
+    orderBy: { timestamp: "asc" },
+  });
+  return rows.map((r) => r.data as unknown as DerivativesSnapshot);
 }
 
-export function appendSnapshot(snapshot: DerivativesSnapshot): DerivativesSnapshot[] {
-  const history = loadHistory();
-  history.push(snapshot);
+export async function appendSnapshot(snapshot: DerivativesSnapshot): Promise<DerivativesSnapshot[]> {
+  await prisma.dimensionSnapshot.create({
+    data: {
+      asset: "BTC",
+      dimension: "DERIVATIVES",
+      timestamp: new Date(snapshot.timestamp),
+      data: snapshot as any,
+    },
+  });
 
   // Prune entries older than 30 days
-  const cutoff = Date.now() - MAX_HISTORY_MS;
-  const pruned = history.filter(
-    (s) => new Date(s.timestamp).getTime() >= cutoff
-  );
+  const cutoff = new Date(Date.now() - MAX_HISTORY_MS);
+  await prisma.dimensionSnapshot.deleteMany({
+    where: {
+      asset: "BTC",
+      dimension: "DERIVATIVES",
+      timestamp: { lt: cutoff },
+    },
+  });
 
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(pruned, null, 2));
-  return pruned;
+  return loadHistory();
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-export function loadState(): DerivativesState | null {
-  ensureDataDir();
-  if (!fs.existsSync(STATE_FILE)) return null;
-  const raw = fs.readFileSync(STATE_FILE, "utf-8");
-  return JSON.parse(raw) as DerivativesState;
+export async function loadState(): Promise<DerivativesState | null> {
+  const row = await prisma.dimensionState.findUnique({
+    where: { asset_dimension: { asset: "BTC", dimension: "DERIVATIVES" } },
+  });
+  if (!row) return null;
+  return {
+    asset: row.asset,
+    regime: row.regime as DerivativesState["regime"],
+    since: row.since.toISOString(),
+    previousRegime: row.previousRegime as DerivativesState["previousRegime"],
+    lastUpdated: row.lastUpdated.toISOString(),
+  };
 }
 
-export function saveState(state: DerivativesState): void {
-  ensureDataDir();
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+export async function saveState(state: DerivativesState): Promise<void> {
+  await prisma.dimensionState.upsert({
+    where: { asset_dimension: { asset: "BTC", dimension: "DERIVATIVES" } },
+    update: {
+      regime: state.regime,
+      since: new Date(state.since),
+      previousRegime: state.previousRegime,
+    },
+    create: {
+      asset: "BTC",
+      dimension: "DERIVATIVES",
+      regime: state.regime,
+      since: new Date(state.since),
+      previousRegime: state.previousRegime,
+    },
+  });
 }

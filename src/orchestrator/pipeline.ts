@@ -59,8 +59,8 @@ async function runDerivatives(asset: "BTC" | "ETH"): Promise<DimensionOutput | n
   try {
     console.log(`      ${chalk.cyan("▸")} derivatives...`);
     const snapshot = await collectDerivatives();
-    const history = appendSnapshot(snapshot);
-    const prevState = loadDerivativesState();
+    const history = await appendSnapshot(snapshot);
+    const prevState = await loadDerivativesState();
     const { context, nextState } = analyzeDerivatives(snapshot, prevState);
     saveDerivativesState(nextState);
     const interpretation = await runDerivativesAgent(context);

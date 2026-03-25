@@ -1,0 +1,90 @@
+generator client {
+    provider = "prisma-client"
+    output   = "../src/generated/prisma"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Asset {
+    BTC
+    ETH
+}
+
+enum Dimension {
+    DERIVATIVES
+    ETFS
+    HTF
+    SENTIMENT
+}
+
+// ─── Dimension Regime State (replaces *_state.json) ─────────────────────────
+
+model DimensionState {
+    id             String    @id @default(cuid())
+    asset          Asset
+    dimension      Dimension
+    regime         String
+    since          DateTime
+    previousRegime String?
+    lastUpdated    DateTime  @updatedAt
+    metadata       Json?
+
+    @@unique([asset, dimension])
+    @@index([asset])
+    @@map("dimension_states")
+}
+
+// ─── Dimension Snapshots (replaces derivatives_history.json) ────────────────
+
+model DimensionSnapshot {
+    id        String    @id @default(cuid())
+    asset     Asset
+    dimension Dimension
+    timestamp DateTime
+    data      Json
+
+    @@index([asset, dimension, timestamp])
+    @@map("dimension_snapshots")
+}
+
+// ─── Orchestrator Briefs (brief history for dashboard) ──────────────────────
+
+model Brief {
+    id        String   @id @default(cuid())
+    asset     Asset
+    timestamp DateTime @default(now())
+    brief     String
+
+    // Sentiment composite gauge
+    compositeIndex Float?
+    compositeLabel String?
+
+    // Sentiment component scores (0–100)
+    positioning        Float?
+    trend              Float?
+    institutionalFlows Float?
+    expertConsensus    Float?
+
+    dimensions BriefDimension[]
+
+    @@index([asset, timestamp])
+    @@map("briefs")
+}
+
+model BriefDimension {
+    id             String    @id @default(cuid())
+    briefId        String
+    brief          Brief     @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    dimension      Dimension
+    label          String
+    regime         String
+    context        Json
+    interpretation String
+
+    @@unique([briefId, dimension])
+    @@map("brief_dimensions")
+}

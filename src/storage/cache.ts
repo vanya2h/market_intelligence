@@ -1,60 +1,51 @@
 /**
- * File-based API response cache.
+ * Redis-backed API response cache (via Upstash).
  *
- * Each cached entry is stored as data/cache/<key>.json:
- *   { fetchedAt: ISO string, data: <raw API response> }
+ * Drop-in replacement for the previous Prisma-based cache.
+ * Each entry stored as JSON with a TTL set via Redis expiry.
  */
 
-import fs from "node:fs";
-import path from "node:path";
 import chalk from "chalk";
 import { formatDistanceToNowStrict } from "date-fns";
-
-const CACHE_DIR = path.resolve("data", "cache");
+import { redis } from "./redis.js";
 
 interface CacheEntry<T> {
-  fetchedAt: string;
+  fetchedAt: number; // epoch ms
   data: T;
 }
 
-function ensureCacheDir(): void {
-  if (!fs.existsSync(CACHE_DIR)) {
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
-  }
-}
-
-function cacheFile(key: string): string {
-  return path.join(CACHE_DIR, `${key}.json`);
-}
-
-function formatAge(fetchedAt: string): string {
+function formatAge(fetchedAt: number): string {
   return formatDistanceToNowStrict(new Date(fetchedAt), { addSuffix: true });
 }
+
+const KEY_PREFIX = "cache:";
 
 export async function getCached<T>(
   key: string,
   ttlMs: number,
   fetch: () => Promise<T>
 ): Promise<T> {
-  ensureCacheDir();
-  const file = cacheFile(key);
+  const redisKey = `${KEY_PREFIX}${key}`;
+  const existing = await redis.get<CacheEntry<T>>(redisKey);
 
-  if (fs.existsSync(file)) {
-    const entry = JSON.parse(fs.readFileSync(file, "utf-8")) as CacheEntry<T>;
-    const age = Date.now() - new Date(entry.fetchedAt).getTime();
+  if (existing) {
+    const age = Date.now() - existing.fetchedAt;
     if (age < ttlMs) {
       console.log(
-        `      ${chalk.green("▸ cache hit")}  ${chalk.cyan(key)} ${chalk.dim(`${formatAge(entry.fetchedAt)} old`)}`
+        `      ${chalk.green("▸ cache hit")}  ${chalk.cyan(key)} ${chalk.dim(`${formatAge(existing.fetchedAt)} old`)}`
       );
-      return entry.data;
+      return existing.data;
     }
     console.log(
-      `      ${chalk.yellow("▸ cache miss")} ${chalk.cyan(key)} ${chalk.dim(`${formatAge(entry.fetchedAt)} old, expired`)}`
+      `      ${chalk.yellow("▸ cache miss")} ${chalk.cyan(key)} ${chalk.dim(`${formatAge(existing.fetchedAt)} old, expired`)}`
     );
   }
 
   const data = await fetch();
-  const entry: CacheEntry<T> = { fetchedAt: new Date().toISOString(), data };
-  fs.writeFileSync(file, JSON.stringify(entry));
+
+  const entry: CacheEntry<T> = { fetchedAt: Date.now(), data };
+  // Set with TTL in seconds (rounded up)
+  await redis.set(redisKey, entry, { ex: Math.ceil(ttlMs / 1000) });
+
   return data;
 }

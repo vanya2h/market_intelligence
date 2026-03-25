@@ -138,11 +138,11 @@ async function main(): Promise<void> {
   const snapshot = await collect();
 
   step(2, 5, "Storing to history...");
-  const history = appendSnapshot(snapshot);
+  const history = await appendSnapshot(snapshot);
   note(`${history.length} snapshots in rolling window`);
 
   step(3, 5, "Loading previous state...");
-  const prevState = loadState();
+  const prevState = await loadState();
   if (prevState) {
     note(`Previous regime: ${regimeColor(prevState.regime)(prevState.regime)} since ${prevState.since}`);
   } else {
