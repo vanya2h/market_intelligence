@@ -1,1 +1,5 @@
 .playwright-mcp
+node_modules/
+dist/
+data/
+.env
