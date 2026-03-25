@@ -3,21 +3,17 @@
  *
  * Usage:
  *   npm run analyze
- *
- * Steps:
- *   1. Collect: fetch (mock) snapshot from CoinGlass
- *   2. Store: append to rolling 30-day history, prune old entries
- *   3. Analyze: run deterministic state machine → DerivativesContext
- *   4. Persist: save new regime state
- *   5. Agent: LLM interpretation of the regime (mock)
- *   6. Print brief
  */
 
 import "dotenv/config";
+import chalk, { type ChalkInstance } from "chalk";
 import { collect } from "./derivatives_structure/collector.js";
 import { analyze } from "./derivatives_structure/analyzer.js";
 import { runAgent } from "./derivatives_structure/agent.js";
 import { appendSnapshot, loadState, saveState } from "./storage/json.js";
+import type { DerivativesContext, DerivativesRegime, OiSignal } from "./types.js";
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
 
 function formatUsd(value: number): string {
   if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
@@ -25,63 +21,101 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
+function regimeColor(regime: DerivativesRegime): ChalkInstance {
+  switch (regime) {
+    case "CROWDED_LONG":
+    case "CAPITULATION":   return chalk.red.bold;
+    case "CROWDED_SHORT":  return chalk.red.bold;
+    case "SHORT_SQUEEZE":  return chalk.magenta.bold;
+    case "HEATING_UP":     return chalk.yellow;
+    case "UNWINDING":
+    case "DELEVERAGING":   return chalk.yellow;
+    case "NEUTRAL":        return chalk.green;
+  }
+}
 
-function printBrief(
-  regime: string,
-  since: string,
-  durationHours: number,
-  previousRegime: string | null,
-  ctx: object,
-  interpretation: string
-): void {
-  const sep = "─".repeat(60);
+function oiSignalColor(signal: OiSignal): ChalkInstance {
+  switch (signal) {
+    case "EXTREME":   return chalk.red.bold;
+    case "ELEVATED":  return chalk.yellow;
+    case "NORMAL":    return chalk.green;
+    case "DEPRESSED": return chalk.dim;
+  }
+}
+
+/** Strip markdown from Claude's output and render **bold** inline with chalk */
+function renderMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,3}\s+/gm, "")               // remove ## headings
+    .replace(/\*\*(.+?)\*\*/g, (_, t) => chalk.bold(t))  // **bold**
+    .replace(/\*(.+?)\*/g, "$1")                // *italic* → plain
+    .trim();
+}
+
+function step(n: number, total: number, label: string): void {
+  console.log(`\n${chalk.cyan.bold(`[${n}/${total}]`)} ${chalk.white(label)}`);
+}
+
+function note(text: string): void {
+  console.log(`      ${chalk.dim(text)}`);
+}
+
+// ─── Brief printer ────────────────────────────────────────────────────────────
+
+function printBrief(ctx: DerivativesContext, interpretation: string): void {
+  const sep = chalk.dim("─".repeat(62));
+  const label = (s: string) => chalk.dim(s.padEnd(11));
 
   console.log(`\n${sep}`);
-  console.log(`  DERIVATIVES STRUCTURE — BTC`);
-  console.log(`  ${new Date().toUTCString()}`);
+  console.log(`  ${chalk.bold("DERIVATIVES STRUCTURE")}  ${chalk.dim("BTC")}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(sep);
 
-  const typedCtx = ctx as import("./types.js").DerivativesContext;
-
-  console.log(`\n  Regime:    ${regime}  [OI: ${typedCtx.oiSignal}]`);
-  if (previousRegime) {
-    console.log(`  Previous:  ${previousRegime}`);
+  // Regime + OI signal
+  const regimeFmt = regimeColor(ctx.regime)(ctx.regime);
+  const oiFmt = oiSignalColor(ctx.oiSignal)(`OI:${ctx.oiSignal}`);
+  console.log(`\n  ${label("Regime")} ${regimeFmt}  ${chalk.dim("[")}${oiFmt}${chalk.dim("]")}`);
+  if (ctx.previousRegime) {
+    console.log(`  ${label("Previous")} ${chalk.dim(ctx.previousRegime)}`);
   }
-  console.log(`  Since:     ${since}`);
-  console.log(`  Duration:  ${durationHours}h`);
+  console.log(`  ${label("Since")} ${chalk.dim(ctx.since)}`);
+  console.log(`  ${label("Duration")} ${chalk.white(ctx.durationHours + "h")}`);
 
-  console.log(`\n  ─ Metrics ─`);
+  // Metrics
+  console.log(`\n  ${chalk.dim("── Metrics ─────────────────────────────────────────")}`);
+
+  const pct = (v: number) => chalk.dim(`(${v}th pct / 1 month)`);
 
   console.log(
-    `  Funding:   ${typedCtx.funding.current.toFixed(4)}%  ` +
-    `(${typedCtx.funding.percentile["1m"]}th pct / 1 month)`
+    `  ${label("Funding")} ${chalk.white.bold(ctx.funding.current.toFixed(4) + "%")}  ${pct(ctx.funding.percentile["1m"])}`
   );
   console.log(
-    `  OI:        ${formatUsd(typedCtx.openInterest.current)}  ` +
-    `(${typedCtx.openInterest.percentile["1m"]}th pct / 1 month)`
+    `  ${label("OI")} ${chalk.white.bold(formatUsd(ctx.openInterest.current))}  ${pct(ctx.openInterest.percentile["1m"])}`
   );
   console.log(
-    `  L/S Ratio: ${typedCtx.longShortRatio.current.toFixed(2)}`
+    `  ${label("L/S Ratio")} ${chalk.white.bold(ctx.longShortRatio.current.toFixed(2))}`
   );
   console.log(
-    `  Liq 8h:    ${formatUsd(typedCtx.liquidations.current8h)}  ` +
-    `${typedCtx.liquidations.bias}  ` +
-    `(${typedCtx.liquidations.percentile["1m"]}th pct / 1 month)`
+    `  ${label("Liq 8h")} ${chalk.white.bold(formatUsd(ctx.liquidations.current8h))}  ${chalk.dim(ctx.liquidations.bias)}  ${pct(ctx.liquidations.percentile["1m"])}`
   );
 
-  if (typedCtx.events.length > 0) {
-    console.log(`\n  ─ Events ─`);
-    for (const e of typedCtx.events) {
-      console.log(`  [${e.type}] ${e.detail}`);
+  // Events
+  if (ctx.events.length > 0) {
+    console.log(`\n  ${chalk.dim("── Events ───────────────────────────────────────────")}`);
+    for (const e of ctx.events) {
+      console.log(`  ${chalk.yellow.bold(`[${e.type}]`)} ${chalk.yellow(e.detail)}`);
     }
   }
 
-  console.log(`\n  ─ Interpretation ─`);
-  // Word-wrap at 58 chars
-  const words = interpretation.split(" ");
+  // Interpretation
+  console.log(`\n  ${chalk.dim("── Interpretation ───────────────────────────────────")}`);
+  const rendered = renderMarkdown(interpretation);
+  // Word-wrap at 60 chars
+  const words = rendered.split(" ");
   let line = "  ";
   for (const word of words) {
-    if (line.length + word.length > 60) {
+    // chalk sequences add invisible chars — measure visible length roughly
+    const visibleLen = line.replace(/\x1b\[[0-9;]*m/g, "").length;
+    if (visibleLen + word.replace(/\x1b\[[0-9;]*m/g, "").length > 62) {
       console.log(line);
       line = "  " + word + " ";
     } else {
@@ -93,41 +127,39 @@ function printBrief(
   console.log(`\n${sep}\n`);
 }
 
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
 async function main(): Promise<void> {
-  console.log("[1/5] Collecting snapshot...");
+  step(1, 5, "Collecting snapshot...");
   const snapshot = await collect();
 
-  console.log("[2/5] Storing to history...");
+  step(2, 5, "Storing to history...");
   const history = appendSnapshot(snapshot);
-  console.log(`      History: ${history.length} snapshots`);
+  note(`${history.length} snapshots in rolling window`);
 
-  console.log("[3/5] Loading previous state...");
+  step(3, 5, "Loading previous state...");
   const prevState = loadState();
   if (prevState) {
-    console.log(`      Previous regime: ${prevState.regime} (since ${prevState.since})`);
+    note(`Previous regime: ${regimeColor(prevState.regime)(prevState.regime)} since ${prevState.since}`);
   } else {
-    console.log("      No previous state — first run");
+    note("No previous state — first run");
   }
 
-  console.log("[4/5] Analyzing regime...");
+  step(4, 5, "Analyzing regime...");
   const { context, nextState } = analyze(snapshot, prevState);
-  console.log(`      Regime: ${context.regime}  (funding pct1m=${context.funding.percentile["1m"]}, L/S=${context.longShortRatio.current.toFixed(2)})`);
+  note(
+    `${regimeColor(context.regime)(context.regime)}  ` +
+    chalk.dim(`funding pct1m=${context.funding.percentile["1m"]}  L/S=${context.longShortRatio.current.toFixed(2)}`)
+  );
   saveState(nextState);
 
-  console.log("[5/5] Running agent...");
+  step(5, 5, "Running agent...");
   const interpretation = await runAgent(context);
 
-  printBrief(
-    context.regime,
-    context.since,
-    context.durationHours,
-    context.previousRegime,
-    context,
-    interpretation
-  );
+  printBrief(context, interpretation);
 }
 
 main().catch((err) => {
-  console.error("Fatal error:", err);
+  console.error(chalk.red.bold("Fatal error:"), err);
   process.exit(1);
 });
