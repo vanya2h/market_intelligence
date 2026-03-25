@@ -13,6 +13,7 @@ import "dotenv/config";
 import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
+import { saveBrief } from "./persist.js";
 import type { DimensionOutput } from "./types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -129,7 +130,9 @@ async function main(): Promise<void> {
     step(2, totalSteps, "Synthesizing market brief...");
     const brief = await synthesize(asset, outputs);
 
-    step(3, totalSteps, "Done.");
+    step(3, totalSteps, "Saving to database...");
+    await saveBrief(asset, brief, outputs);
+
     printBrief(asset, outputs, brief);
   }
 }

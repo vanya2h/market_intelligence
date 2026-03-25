@@ -20,6 +20,7 @@ import "dotenv/config";
 import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
+import { saveBrief } from "./persist.js";
 import { generateCard } from "./card.js";
 
 // ─── Telegram API ────────────────────────────────────────────────────────────
@@ -125,11 +126,14 @@ async function main(): Promise<void> {
     step(2, 4, "Synthesizing market brief...");
     const brief = await synthesize(asset, outputs);
 
-    step(3, 4, "Generating regime card...");
+    step(3, 5, "Saving to database...");
+    await saveBrief(asset, brief, outputs);
+
+    step(4, 5, "Generating regime card...");
     const cardPng = await generateCard(asset, outputs);
     note(`card: ${(cardPng.length / 1024).toFixed(1)} KB`);
 
-    step(4, 4, `Sending ${asset} to Telegram...`);
+    step(5, 5, `Sending ${asset} to Telegram...`);
     await sendPhoto(token, chatId, cardPng);
     const textMsg = buildTextMessage(asset, brief);
     note(`text: ${textMsg.length} chars`);
