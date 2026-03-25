@@ -11,8 +11,11 @@ import chalk from "chalk";
 import { collect as collectDerivatives } from "../derivatives_structure/collector.js";
 import { analyze as analyzeDerivatives } from "../derivatives_structure/analyzer.js";
 import { runAgent as runDerivativesAgent } from "../derivatives_structure/agent.js";
-import { appendSnapshot, loadState as loadDerivativesState, saveState as saveDerivativesState } from "../storage/json.js";
-import type { DerivativesState } from "../types.js";
+import {
+  appendSnapshot,
+  loadState as loadDerivativesState,
+  saveState as saveDerivativesState,
+} from "../storage/json.js";
 
 import { collect as collectEtfs } from "../etfs/collector.js";
 import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
@@ -43,9 +46,7 @@ function loadJsonState<T>(file: string, key?: string): T | null {
 function saveJsonState<T>(file: string, key: string, state: T): void {
   const fullPath = path.resolve("data", file);
   fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-  const all = fs.existsSync(fullPath)
-    ? JSON.parse(fs.readFileSync(fullPath, "utf-8"))
-    : {};
+  const all = fs.existsSync(fullPath) ? JSON.parse(fs.readFileSync(fullPath, "utf-8")) : {};
   all[key] = state;
   fs.writeFileSync(fullPath, JSON.stringify(all, null, 2));
 }
@@ -146,12 +147,7 @@ async function runSentimentDim(asset: "BTC" | "ETH"): Promise<DimensionOutput | 
  * Returns only successful outputs (failed dimensions are logged and skipped).
  */
 export async function runAllDimensions(asset: "BTC" | "ETH"): Promise<DimensionOutput[]> {
-  const results = await Promise.all([
-    runDerivatives(asset),
-    runEtfs(asset),
-    runHtf(asset),
-    runSentimentDim(asset),
-  ]);
+  const results = await Promise.all([runDerivatives(asset), runEtfs(asset), runHtf(asset), runSentimentDim(asset)]);
 
   return results.filter((r): r is DimensionOutput => r !== null);
 }

@@ -8,7 +8,8 @@
     "etfs": "tsx src/etfs/run.ts",
     "htf": "tsx src/htf/run.ts",
     "sentiment": "tsx src/sentiment/run.ts",
-    "brief": "tsx src/orchestrator/run.ts"
+    "brief": "tsx src/orchestrator/run.ts",
+    "notify": "tsx src/orchestrator/notify.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
