@@ -33,9 +33,44 @@ graph LR
 | 08 | LTF Technical Structure | 17 | ETH Staking & Network (ETH only) |
 | 09 | Macro Environment | 18 | Equities Market Structure |
 
+## Setup
+
+```bash
+pnpm install
+cp .env.example .env  # fill in your keys
+pnpm db:client        # generate Prisma client
+```
+
+### Environment variables
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST endpoint (API response cache) |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis auth token |
+| `ANTHROPIC_API_KEY` | Anthropic API key (agent interpretations & synthesis) |
+| `COINGLASS_API_KEY` | Coinglass API key (derivatives data) |
+| `UNBIAS_API_KEY` | Unbias API key (sentiment data) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token (notifications) |
+| `TELEGRAM_CHAT_ID` | Telegram chat/channel ID (notifications) |
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `pnpm derivatives` | Run derivatives structure analysis (BTC) |
+| `pnpm etfs` | Run ETF institutional flows analysis |
+| `pnpm htf` | Run high-timeframe technical analysis |
+| `pnpm sentiment` | Run market sentiment analysis |
+| `pnpm brief` | Run all dimensions and synthesize a market brief |
+| `pnpm notify` | Run full brief pipeline and send to Telegram |
+| `pnpm db:client` | Regenerate Prisma client after schema changes |
+
+Most scripts accept `--asset BTC` or `--asset ETH` to target a specific asset (default: both).
+
 ## Stack
 
-React Router v7 · Hono.js · Prisma · PostgreSQL (PGlite) · Claude API · node-cron · grammy
+Prisma · PostgreSQL · Upstash Redis · Claude API · sharp · Telegram Bot API
 
 ## Docs
 
