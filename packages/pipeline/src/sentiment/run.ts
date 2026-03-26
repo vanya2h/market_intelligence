@@ -126,6 +126,10 @@ function printBrief(ctx: SentimentContext, interpretation: string): void {
   console.log(`\n  ${chalk.dim("── Expert Consensus (unbias) ─────────────────────")}`);
   console.log(`  ${label("Consensus")} ${chalk.white.bold(m.consensusIndex.toFixed(1))}  ${chalk.dim("(-100 to +100)")}`);
   console.log(`  ${label("30d MA")} ${chalk.dim(m.consensusIndex30dMa.toFixed(1))}`);
+  const deltaFmt = m.consensusDelta7d >= 0
+    ? chalk.green(`+${m.consensusDelta7d.toFixed(1)}`)
+    : chalk.red(m.consensusDelta7d.toFixed(1));
+  console.log(`  ${label("7d Delta")} ${deltaFmt}  ${chalk.dim("pts")}`);
   console.log(`  ${label("Z-Score")} ${zScoreColor(m.zScore)(`${m.zScore >= 0 ? "+" : ""}${m.zScore.toFixed(2)}`)}`);
   console.log(`  ${label("Bullish")} ${chalk.green(`${Math.round(m.bullishRatio * 100)}%`)} ${chalk.dim(`of ${m.totalAnalysts} analysts`)}`);
 
@@ -197,7 +201,7 @@ async function main(): Promise<void> {
     `${regimeColor(context.regime)(context.regime)}  ` +
     chalk.dim(
       `composite=${context.metrics.compositeIndex.toFixed(1)}  ` +
-      `z=${context.metrics.zScore.toFixed(2)}`
+      `Δ7d=${context.metrics.consensusDelta7d >= 0 ? "+" : ""}${context.metrics.consensusDelta7d.toFixed(1)}`
     )
   );
   saveState(nextState);

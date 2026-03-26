@@ -168,10 +168,7 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
       const pos = get(ctx, "metrics.components.positioning") as number;
       const trend = get(ctx, "metrics.components.trend") as number;
       const flows = get(ctx, "metrics.components.institutionalFlows") as number;
-      const expert = get(ctx, "metrics.components.expertConsensus") as number;
-      const zScore = get(ctx, "metrics.zScore") as number;
-      const bullishRatio = get(ctx, "metrics.bullishRatio") as number;
-      const divergence = get(ctx, "metrics.divergenceType") as string | null;
+      // Expert consensus hidden while collecting delta-based data (re-enable ~2026-04-02)
       return [
         {
           label: "Composite Index", group: "Composite",
@@ -197,26 +194,6 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           value: safe(() => formatNumber(flows, 0)),
           signal: numSignal(flows, 60, 40),
         },
-        {
-          label: "Expert Consensus", group: "Components",
-          value: safe(() => formatNumber(expert, 0)),
-          signal: numSignal(expert, 60, 40),
-        },
-        {
-          label: "Z-Score", group: "Expert Consensus",
-          value: safe(() => formatNumber(zScore, 2)),
-          signal: zScore >= 0.8 ? "bullish" : zScore <= -1.5 ? "bearish" : "neutral",
-        },
-        {
-          label: "Bullish Analysts", group: "Expert Consensus",
-          value: safe(() => formatPercent(bullishRatio * 100, 0)),
-          signal: numSignal(bullishRatio, 0.6, 0.4),
-        },
-        ...(divergence ? [{
-          label: "Divergence", group: "Expert Consensus",
-          value: divergence === "experts_bullish_crowd_fearful" ? "Experts↑ Crowd↓" : "Experts↓ Crowd↑",
-          signal: "neutral" as MetricSignal,
-        }] : []),
       ];
     },
     extractChartValue: (ctx) => (get(ctx, "metrics.compositeIndex") as number) ?? null,

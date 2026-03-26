@@ -106,6 +106,9 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
     inputs.derivatives = {
       fundingPercentile1m: context.funding.percentile["1m"],
       oiPercentile1m: context.openInterest.percentile["1m"],
+      cbPremiumPercentile1m: context.coinbasePremium.percentile["1m"],
+      liqPercentile1m: context.liquidations.percentile["1m"],
+      liqLongPct: parseInt(context.liquidations.bias, 10) || 50,
       regime: `${context.positioning.state}|${context.stress.state}`,
     };
   } catch (e) {

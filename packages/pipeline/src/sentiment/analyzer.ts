@@ -1,16 +1,16 @@
 /**
  * Market Sentiment — Deterministic Analyzer (Dimension 06)
  *
- * Computes a composite Fear & Greed index (0–100) from five components:
+ * Computes a composite Fear & Greed index (0–100) from three active components
+ * (expert consensus temporarily disabled while collecting delta-based data):
  *
  *   Component           | Weight | Source
  *   ─────────────────────────────────────────────────
- *   Positioning          25%      Dim 01 (derivatives)
- *   Trend                20%      Dim 07 (HTF technicals)
- *   Institutional flows  15%      Dim 03 (ETF flows)
- *   Expert consensus     20%      unbias API
- *   Retail sentiment     10%      Alternative.me F&G
- *   (unimplemented)      10%      reserved for Dim 02/18
+ *   Positioning          40%      Dim 01 (derivatives: funding, OI,
+ *                                   coinbase premium, bias-adjusted liqs)
+ *   Trend                30%      Dim 07 (HTF technicals)
+ *   Institutional flows  30%      Dim 03 (ETF flows)
+ *   Expert consensus      0%      unbias API 7d delta (collecting data, re-enable ~2026-04-02)
  *
  * Regime is determined from the composite score, with divergence overrides.
  */
@@ -24,6 +24,7 @@ import {
   SentimentEvent,
   FearGreedComponents,
   CrossDimensionInputs,
+  UnbiasConsensusEntry,
 } from "./types.js";
 
 // ─── Component scoring (each returns 0–100) ─────────────────────────────────
@@ -35,25 +36,41 @@ function clamp(v: number): number {
 
 /**
  * Positioning score from derivatives data.
- * High funding + high L/S = greedy (high score). Low/negative = fearful.
+ *
+ * Weights:
+ *   Funding          35%  — leverage cost, directional bias
+ *   Coinbase premium 25%  — real spot demand vs derivatives-only rally
+ *   OI               25%  — leverage buildup
+ *   Liquidations     15%  — bias-adjusted: long-dominant liqs reduce score,
+ *                           short-dominant liqs increase it
  */
 function scorePositioning(d: CrossDimensionInputs["derivatives"]): number {
   if (!d) return 50; // neutral fallback
 
-  // Funding percentile directly maps to positioning sentiment
-  const fundingScore = d.fundingPercentile1m;
+  // Liquidation score adjusted by bias direction:
+  // liqLongPct=100 (all longs liquidated) → invert percentile (bearish)
+  // liqLongPct=0   (all shorts liquidated) → keep percentile (bullish/squeeze)
+  // liqLongPct=50  (balanced) → neutral (50)
+  // Formula: interpolate between inverted and raw percentile based on bias
+  const longBias = d.liqLongPct / 100; // 0–1
+  const liqBearish = 100 - d.liqPercentile1m; // high liqs + longs = fearful
+  const liqBullish = d.liqPercentile1m;        // high liqs + shorts = greedy
+  const liqScore = liqBullish * (1 - longBias) + liqBearish * longBias;
 
-  // OI percentile — high OI = more leverage = more greed
-  const oiScore = d.oiPercentile1m;
+  const raw =
+    d.fundingPercentile1m * 0.35 +
+    d.cbPremiumPercentile1m * 0.25 +
+    d.oiPercentile1m * 0.25 +
+    liqScore * 0.15;
 
   // Regime adjustments
   let regimeBonus = 0;
-  if (d.regime === "CROWDED_LONG") regimeBonus = 15;
-  else if (d.regime === "CROWDED_SHORT" || d.regime === "CAPITULATION") regimeBonus = -20;
-  else if (d.regime === "SHORT_SQUEEZE") regimeBonus = 10;
-  else if (d.regime === "DELEVERAGING" || d.regime === "UNWINDING") regimeBonus = -10;
+  if (d.regime === "CROWDED_LONG") regimeBonus = 10;
+  else if (d.regime === "CROWDED_SHORT" || d.regime === "CAPITULATION") regimeBonus = -15;
+  else if (d.regime === "SHORT_SQUEEZE") regimeBonus = 8;
+  else if (d.regime === "DELEVERAGING" || d.regime === "UNWINDING") regimeBonus = -8;
 
-  return clamp(fundingScore * 0.5 + oiScore * 0.4 + 50 * 0.1 + regimeBonus);
+  return clamp(raw + regimeBonus);
 }
 
 /**
@@ -112,29 +129,45 @@ function scoreInstitutionalFlows(e: CrossDimensionInputs["etfs"]): number {
 }
 
 /**
- * Expert consensus score from unbias.
- * Consensus index -100 to +100 → map to 0–100.
- * Z-score adds conviction weighting.
+ * Expert consensus score from unbias — delta-based.
+ *
+ * The absolute consensus level is a lagging, long-timeframe indicator
+ * (analysts' votes persist up to 30 days, z-score is 90-day rolling).
+ * Instead we score the week-over-week *change* in consensus index,
+ * which captures when sentiment is actively shifting.
+ *
+ * Delta mapping (absolute points on the -100/+100 scale):
+ *   -20 pts/week → 0 (strong fear shift)
+ *     0 pts/week → 50 (neutral / unchanged)
+ *   +20 pts/week → 100 (strong greed shift)
  */
-function scoreExpertConsensus(consensusIndex: number, zScore: number): number {
-  // Base: linear map from [-100,+100] to [0,100]
-  const baseScore = (consensusIndex + 100) / 2;
+function scoreExpertConsensus(consensus: UnbiasConsensusEntry[]): {
+  score: number;
+  delta: number;
+} {
+  if (consensus.length < 2) {
+    return { score: 50, delta: 0 };
+  }
 
-  // Z-score conviction: extreme z-scores push the score further
-  let zBonus = 0;
-  if (zScore >= 0.8) zBonus = Math.min(10, (zScore - 0.8) * 15);
-  else if (zScore <= -1.5) zBonus = Math.max(-10, (zScore + 1.5) * 10);
+  // consensus is sorted newest-first; oldest entry is the baseline
+  const latest = consensus[0]!;
+  const oldest = consensus[consensus.length - 1]!;
+  const delta = latest.consensusIndex - oldest.consensusIndex;
 
-  return clamp(baseScore + zBonus);
+  // Map delta [-20, +20] → [0, 100], clamped
+  const score = clamp(50 + delta * 2.5);
+
+  return { score, delta };
 }
 
 // ─── Composite F&G ───────────────────────────────────────────────────────────
 
+// Expert consensus temporarily excluded while we collect delta-based data (re-enable ~2026-04-02)
 const WEIGHTS = {
-  positioning: 0.30,
-  trend: 0.25,
-  institutionalFlows: 0.20,
-  expertConsensus: 0.25,
+  positioning: 0.40,
+  trend: 0.30,
+  institutionalFlows: 0.30,
+  expertConsensus: 0,
 };
 
 function computeComposite(components: FearGreedComponents): number {
@@ -169,29 +202,30 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
 
   // Compute component scores
   const cd = snapshot.crossDimensions;
+  const expert = scoreExpertConsensus(snapshot.consensus);
   const components: FearGreedComponents = {
     positioning: scorePositioning(cd.derivatives),
     trend: scoreTrend(cd.htf),
     institutionalFlows: scoreInstitutionalFlows(cd.etfs),
-    expertConsensus: scoreExpertConsensus(consensusIndex, zScore),
+    expertConsensus: expert.score,
   };
 
   const compositeIndex = computeComposite(components);
 
-  // Divergence: experts vs composite
-  // If experts are bullish but composite is in fear territory (or vice versa)
-  const expertsBullish = zScore >= 0.8;
-  const expertsBearish = zScore <= -1.5;
+  // Divergence: expert consensus momentum vs composite level
+  // Uses delta (momentum) rather than absolute z-score to avoid stale signals
+  const expertsShiftingBullish = expert.delta >= 10;
+  const expertsShiftingBearish = expert.delta <= -10;
   const compositeFearful = compositeIndex < 30;
   const compositeGreedy = compositeIndex > 70;
 
   let divergence = false;
   let divergenceType: SentimentMetrics["divergenceType"] = null;
 
-  if (expertsBullish && compositeFearful) {
+  if (expertsShiftingBullish && compositeFearful) {
     divergence = true;
     divergenceType = "experts_bullish_crowd_fearful";
-  } else if (expertsBearish && compositeGreedy) {
+  } else if (expertsShiftingBearish && compositeGreedy) {
     divergence = true;
     divergenceType = "experts_bearish_crowd_greedy";
   }
@@ -205,6 +239,7 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
     zScore,
     bullishRatio,
     totalAnalysts,
+    consensusDelta7d: expert.delta,
     divergence,
     divergenceType,
   };
@@ -213,14 +248,14 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
 // ─── State machine ────────────────────────────────────────────────────────────
 
 function determineRegime(metrics: SentimentMetrics): SentimentRegime {
-  const { zScore, divergence, compositeIndex } = metrics;
+  const { consensusDelta7d: delta, divergence, compositeIndex } = metrics;
 
   // Divergence overrides everything — most actionable signal
   if (divergence) return "SENTIMENT_DIVERGENCE";
 
-  // Consensus + composite aligned at extremes
-  if (zScore >= 0.8 && compositeIndex > 70) return "CONSENSUS_BULLISH";
-  if (zScore <= -1.5 && compositeIndex < 30) return "CONSENSUS_BEARISH";
+  // Consensus momentum + composite aligned at extremes
+  if (delta >= 10 && compositeIndex > 70) return "CONSENSUS_BULLISH";
+  if (delta <= -10 && compositeIndex < 30) return "CONSENSUS_BEARISH";
 
   // Composite-driven regimes
   if (compositeIndex < 20) return "EXTREME_FEAR";
@@ -252,26 +287,33 @@ function detectEvents(metrics: SentimentMetrics, timestamp: string): SentimentEv
     });
   }
 
-  if (metrics.zScore >= 0.8) {
+  // Delta-based consensus events (week-over-week change in consensus index)
+  const delta = metrics.consensusDelta7d;
+  if (delta >= 10) {
     events.push({
       type: "consensus_bullish",
-      detail: `Analyst consensus z-score at ${metrics.zScore.toFixed(2)} — bullish (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
+      detail: `Expert consensus rising: +${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
       at: timestamp,
     });
-  }
-
-  if (metrics.zScore <= -1.5) {
+  } else if (delta <= -20) {
     events.push({
-      type: "consensus_bearish",
-      detail: `Analyst consensus z-score at ${metrics.zScore.toFixed(2)} — bearish (${metrics.totalAnalysts} analysts, ${Math.round((1 - metrics.bullishRatio) * 100)}% bearish)`,
+      type: "consensus_deteriorating_severe",
+      detail: `Expert consensus collapsing: ${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
+      at: timestamp,
+    });
+  } else if (delta <= -10) {
+    events.push({
+      type: "consensus_deteriorating",
+      detail: `Expert consensus dropping: ${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
       at: timestamp,
     });
   }
 
   if (metrics.divergence) {
+    const d = metrics.consensusDelta7d;
     const desc = metrics.divergenceType === "experts_bullish_crowd_fearful"
-      ? `Experts bullish (z=${metrics.zScore.toFixed(2)}) while composite fearful (${metrics.compositeIndex.toFixed(1)})`
-      : `Experts bearish (z=${metrics.zScore.toFixed(2)}) while composite greedy (${metrics.compositeIndex.toFixed(1)})`;
+      ? `Experts shifting bullish (Δ${d > 0 ? "+" : ""}${d.toFixed(1)} pts/7d) while composite fearful (${metrics.compositeIndex.toFixed(1)})`
+      : `Experts shifting bearish (Δ${d.toFixed(1)} pts/7d) while composite greedy (${metrics.compositeIndex.toFixed(1)})`;
     events.push({
       type: "sentiment_divergence",
       detail: desc,

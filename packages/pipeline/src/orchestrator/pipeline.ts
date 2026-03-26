@@ -143,7 +143,7 @@ async function runSentimentDim(asset: "BTC" | "ETH"): Promise<SentimentOutput | 
       positioning: context.metrics.components.positioning,
       trend: context.metrics.components.trend,
       institutionalFlows: context.metrics.components.institutionalFlows,
-      expertConsensus: context.metrics.components.expertConsensus,
+      expertConsensus: null, // hidden while collecting delta-based data (re-enable ~2026-04-02)
       context,
       interpretation,
     };

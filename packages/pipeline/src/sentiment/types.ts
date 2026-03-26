@@ -34,6 +34,9 @@ export interface CrossDimensionInputs {
   derivatives: {
     fundingPercentile1m: number;   // 0–100
     oiPercentile1m: number;        // 0–100
+    cbPremiumPercentile1m: number; // 0–100
+    liqPercentile1m: number;       // 0–100
+    liqLongPct: number;            // 0–100, % of liquidations that are longs
     regime: string;
   } | null;
   etfs: {
@@ -73,6 +76,7 @@ export interface SentimentMetrics {
   zScore: number;
   bullishRatio: number;             // bullish / total analysts (0–1)
   totalAnalysts: number;
+  consensusDelta7d: number;         // week-over-week change in consensus index (absolute points)
 
   // Divergence
   divergence: boolean;              // experts and crowd disagree
@@ -87,6 +91,8 @@ export interface SentimentEvent {
     | "extreme_greed"
     | "consensus_bullish"
     | "consensus_bearish"
+    | "consensus_deteriorating"
+    | "consensus_deteriorating_severe"
     | "sentiment_divergence";
   detail: string;
   at: string;
