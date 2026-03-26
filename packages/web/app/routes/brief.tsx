@@ -7,7 +7,10 @@ import { DIMENSIONS } from "../lib/dimension-config";
 import { BriefCard } from "../components/BriefCard";
 import { RichBriefRenderer } from "../components/RichBrief";
 import { DimensionCard } from "../components/DimensionCard";
+import { AppHeader } from "../components/AppHeader";
+import { BriefSidebar, DIMENSION_TABS, TAB_LABELS } from "../components/BriefSidebar";
 import { SentimentGauge } from "../components/SentimentGauge";
+import { SectionBlock } from "../components/SectionBlock";
 import { regimeColor } from "../lib/regime-colors";
 import { UsdValue } from "../components/UsdValue";
 import { Tooltip } from "../components/Tooltip";
@@ -55,14 +58,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
-const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
-
-const TAB_LABELS: Record<string, string> = {
-  DERIVATIVES: "Derivatives",
-  ETFS: "ETFs",
-  SENTIMENT: "Sentiment",
-  HTF: "HTF Structure",
-};
 
 export default function BriefPage() {
   const { brief } = useLoaderData<LoaderData>();
@@ -75,91 +70,68 @@ export default function BriefPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Top navigation bar */}
-      <nav
-        className="sticky top-0 z-30 flex h-10 items-center justify-between px-3 md:px-4"
-        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
-      >
-        <div className="flex items-center gap-2 md:gap-4">
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/asterisk.png" alt="" className="h-5 w-5" />
-            <span
-              className="hidden text-sm font-semibold tracking-tight sm:inline"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Vanya2h's Intelligence System
+      <AppHeader currentBriefId={brief.id}>
+        <div className="flex items-center justify-between gap-4 w-full">
+          <div className="flex items-center gap-3">
+            <Tooltip side="bottom" content="The date when report was generated">
+              <span
+                className="font-mono-jb text-[11px] font-medium tabular-nums inline-flex items-center gap-1.5"
+                style={{ color: "var(--text-primary)" }}
+              >
+                {format(briefDate, "MMM d, yyyy · HH:mm")}
+                <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
+              </span>
+            </Tooltip>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {formatDistanceToNowStrict(briefDate, { addSuffix: true })}
             </span>
-          </Link>
-          <div className="hidden h-4 md:block" style={{ borderLeft: "1px solid var(--border)" }} />
-          <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-            {brief.asset} Brief
-          </span>
-        </div>
-
-        {/* Prev / Next navigation */}
-        <div className="flex items-center gap-1">
-          {brief.prevId ? (
-            <Link
-              to={`/brief/${brief.prevId}`}
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
-              style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              ← Older
-            </Link>
-          ) : (
-            <span className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-              ← Older
-            </span>
+          </div>
+          <div className="grow" />
+          <div className="flex items-center gap-1">
+            {brief.prevId ? (
+              <Link
+                to={`/brief/${brief.prevId}`}
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                ← Older
+              </Link>
+            ) : (
+              <span className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+                ← Older
+              </span>
+            )}
+            <div className="h-3" style={{ borderLeft: "1px solid var(--border)" }} />
+            {brief.nextId ? (
+              <Link
+                to={`/brief/${brief.nextId}`}
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
+                style={{ color: "var(--text-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                Newer →
+              </Link>
+            ) : (
+              <span className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+                Newer →
+              </span>
+            )}
+          </div>
+          {brief.snapshotPrice != null && (
+            <Tooltip side="bottom" content="Price at the moment when report is generated">
+              <span className="inline-flex items-center gap-1.5 text-[11px]">
+                <UsdValue value={brief.snapshotPrice} />
+                <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
+              </span>
+            </Tooltip>
           )}
-          <div className="h-3" style={{ borderLeft: "1px solid var(--border)" }} />
-          {brief.nextId ? (
-            <Link
-              to={`/brief/${brief.nextId}`}
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
-              style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            >
-              Newer →
-            </Link>
-          ) : (
-            <span className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-              Newer →
-            </span>
-          )}
         </div>
-      </nav>
+      </AppHeader>
 
       {/* Timestamp header */}
-      <div
-        className="flex items-center justify-between px-3 py-3 md:px-5"
-        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
-      >
-        <div className="flex items-center gap-3">
-          <Tooltip side="bottom" content="The date when report was generated">
-            <span
-              className="font-mono-jb text-sm font-medium tabular-nums inline-flex items-center gap-1.5"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {format(briefDate, "MMM d, yyyy · HH:mm")}
-              <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
-            </span>
-          </Tooltip>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {formatDistanceToNowStrict(briefDate, { addSuffix: true })}
-          </span>
-        </div>
-        {brief.snapshotPrice != null && (
-          <Tooltip side="bottom" content="Price at the moment when report is generated">
-            <span className="inline-flex items-center gap-1.5">
-              <UsdValue value={brief.snapshotPrice} className="text-sm" />
-              <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
-            </span>
-          </Tooltip>
-        )}
-      </div>
 
       {/* Mobile: sidebar content stacked above main */}
       <div
@@ -173,13 +145,7 @@ export default function BriefPage() {
         )}
 
         <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-          <div>
-            <div
-              className="mb-2 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Regime Overview
-            </div>
+          <SectionBlock title="Regime Overview">
             <div className="space-y-0.5">
               {DIMENSION_TABS.map((dim) => {
                 const bd = brief.dimensions.find((d) => d.dimension === dim);
@@ -201,14 +167,8 @@ export default function BriefPage() {
                 );
               })}
             </div>
-          </div>
-          <div>
-            <div
-              className="mb-2 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Overview
-            </div>
+          </SectionBlock>
+          <SectionBlock title="Overview">
             <div className="space-y-0.5">
               {[
                 { label: "Positioning", value: brief.positioning },
@@ -227,113 +187,21 @@ export default function BriefPage() {
                     <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                       {label}
                     </span>
-                    <span
-                      className="font-mono-jb text-[11px] font-medium tabular-nums"
-                      style={{ color }}
-                    >
+                    <span className="font-mono-jb text-[11px] font-medium tabular-nums" style={{ color }}>
                       {Math.round(value)}
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </SectionBlock>
         </div>
       </div>
 
       {/* Desktop: side-by-side layout */}
       <div className="flex">
         {/* Left sidebar — desktop only */}
-        <aside
-          className="sticky top-10 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
-          style={{
-            borderRight: "1px solid var(--border)",
-            background: "var(--bg-card)",
-            height: "calc(100vh - 2.5rem)",
-          }}
-        >
-          {/* Composite Index */}
-          {brief.compositeIndex != null && brief.compositeLabel && (
-            <div className="mb-6">
-              <div
-                className="mb-3 text-[10px] font-medium uppercase tracking-widest"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Composite Index
-              </div>
-              <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
-            </div>
-          )}
-
-          {/* Dimension Regimes */}
-          <div className="mb-6">
-            <div
-              className="mb-3 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Regime Overview
-            </div>
-            <div className="space-y-1">
-              {DIMENSION_TABS.map((dim) => {
-                const bd = brief.dimensions.find((d) => d.dimension === dim);
-                if (!bd) return null;
-                const { color, arrow } = regimeColor(bd.regime);
-                return (
-                  <div
-                    key={dim}
-                    className="flex items-center justify-between py-1.5"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {TAB_LABELS[dim]}
-                    </span>
-                    <span className="text-xs font-medium" style={{ color }}>
-                      {bd.regime} {arrow}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Overview Stats */}
-          <div>
-            <div
-              className="mb-3 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Overview
-            </div>
-            <div className="space-y-1">
-              {[
-                { label: "Positioning", value: brief.positioning },
-                { label: "Trend", value: brief.trend },
-                { label: "Inst. Flows", value: brief.institutionalFlows },
-                { label: "Expert Cons.", value: brief.expertConsensus },
-              ].map(({ label, value }) => {
-                if (value == null) return null;
-                const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
-                return (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between py-1.5"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {label}
-                    </span>
-                    <span
-                      className="font-mono-jb text-xs font-medium tabular-nums"
-                      style={{ color }}
-                    >
-                      {Math.round(value)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
+        <BriefSidebar brief={brief} />
 
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col">

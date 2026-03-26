@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -9,7 +9,10 @@ import { RichBriefRenderer } from "../components/RichBrief";
 import { PriceDelta } from "../components/PriceDelta";
 import { DimensionCard } from "../components/DimensionCard";
 import { AssetSelector } from "../components/AssetSelector";
+import { AppHeader } from "../components/AppHeader";
+import { BriefSidebar, DIMENSION_TABS, TAB_LABELS } from "../components/BriefSidebar";
 import { SentimentGauge } from "../components/SentimentGauge";
+import { SectionBlock } from "../components/SectionBlock";
 import { regimeColor } from "../lib/regime-colors";
 
 interface BriefDimension {
@@ -79,29 +82,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
-const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
-
-const TAB_LABELS: Record<string, string> = {
-  DERIVATIVES: "Derivatives",
-  ETFS: "ETFs",
-  SENTIMENT: "Sentiment",
-  HTF: "HTF Structure",
-};
-
-function LiveClock() {
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <span className="font-mono-jb text-[11px] tabular-nums">
-      {now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-    </span>
-  );
-}
 
 export default function Dashboard() {
   const { asset, brief, chartData, apiUrl } = useLoaderData<LoaderData>();
@@ -112,51 +92,30 @@ export default function Dashboard() {
 
   if (!brief) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <AssetSelector current={asset} />
-        <p style={{ color: "var(--text-muted)" }}>
-          No data for {asset}.{" "}
-          <code
-            className="px-2 py-0.5 text-sm"
-            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
-          >
-            pnpm brief
-          </code>
-        </p>
+      <div className="min-h-screen">
+        <AppHeader>
+          <AssetSelector current={asset} />
+        </AppHeader>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 pt-32">
+          <p style={{ color: "var(--text-muted)" }}>
+            No data for {asset}.{" "}
+            <code
+              className="px-2 py-0.5 text-sm"
+              style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
+            >
+              pnpm brief
+            </code>
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen">
-      {/* Top navigation bar */}
-      <nav
-        className="sticky top-0 z-30 flex h-10 items-center justify-between px-3 md:px-4"
-        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
-      >
-        <div className="flex items-center gap-2 md:gap-4">
-          <img src="/asterisk.png" alt="" className="h-5 w-5" />
-          <span
-            className="hidden text-sm font-semibold tracking-tight sm:inline"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Vanya2h's Intelligence System
-          </span>
-          <div className="hidden h-4 md:block" style={{ borderLeft: "1px solid var(--border)" }} />
-          <AssetSelector current={asset} />
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:inline-flex items-center">
-            <LiveClock />
-          </span>
-          <div className="flex items-center gap-1.5">
-            <div className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--green)" }} />
-            <span className="text-[11px] font-medium font-mono-jb" style={{ color: "var(--green)" }}>
-              LIVE
-            </span>
-          </div>
-        </div>
-      </nav>
+      <AppHeader>
+        <AssetSelector current={asset} />
+      </AppHeader>
 
       {/* Mobile: sidebar content stacked above main */}
       <div
@@ -172,13 +131,7 @@ export default function Dashboard() {
 
         {/* Regime + Overview in a 2-col grid on mobile */}
         <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-          <div>
-            <div
-              className="mb-2 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Regime Overview
-            </div>
+          <SectionBlock title="Regime Overview">
             <div className="space-y-0.5">
               {DIMENSION_TABS.map((dim) => {
                 const bd = brief.dimensions.find((d) => d.dimension === dim);
@@ -200,14 +153,8 @@ export default function Dashboard() {
                 );
               })}
             </div>
-          </div>
-          <div>
-            <div
-              className="mb-2 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Overview
-            </div>
+          </SectionBlock>
+          <SectionBlock title="Overview">
             <div className="space-y-0.5">
               {[
                 { label: "Positioning", value: brief.positioning },
@@ -226,113 +173,21 @@ export default function Dashboard() {
                     <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                       {label}
                     </span>
-                    <span
-                      className="font-mono-jb text-[11px] font-medium tabular-nums"
-                      style={{ color }}
-                    >
+                    <span className="font-mono-jb text-[11px] font-medium tabular-nums" style={{ color }}>
                       {Math.round(value)}
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </SectionBlock>
         </div>
       </div>
 
       {/* Desktop: side-by-side layout */}
       <div className="flex">
         {/* Left sidebar — desktop only */}
-        <aside
-          className="sticky top-10 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
-          style={{
-            borderRight: "1px solid var(--border)",
-            background: "var(--bg-card)",
-            height: "calc(100vh - 2.5rem)",
-          }}
-        >
-          {/* Composite Index */}
-          {brief.compositeIndex != null && brief.compositeLabel && (
-            <div className="mb-6">
-              <div
-                className="mb-3 text-[10px] font-medium uppercase tracking-widest"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Composite Index
-              </div>
-              <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
-            </div>
-          )}
-
-          {/* Dimension Regimes */}
-          <div className="mb-6">
-            <div
-              className="mb-3 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Regime Overview
-            </div>
-            <div className="space-y-1">
-              {DIMENSION_TABS.map((dim) => {
-                const bd = brief.dimensions.find((d) => d.dimension === dim);
-                if (!bd) return null;
-                const { color, arrow } = regimeColor(bd.regime);
-                return (
-                  <div
-                    key={dim}
-                    className="flex items-center justify-between py-1.5"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {TAB_LABELS[dim]}
-                    </span>
-                    <span className="text-xs font-medium" style={{ color }}>
-                      {bd.regime} {arrow}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Overview Stats */}
-          <div>
-            <div
-              className="mb-3 text-[10px] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Overview
-            </div>
-            <div className="space-y-1">
-              {[
-                { label: "Positioning", value: brief.positioning },
-                { label: "Trend", value: brief.trend },
-                { label: "Inst. Flows", value: brief.institutionalFlows },
-                { label: "Expert Cons.", value: brief.expertConsensus },
-              ].map(({ label, value }) => {
-                if (value == null) return null;
-                const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
-                return (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between py-1.5"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {label}
-                    </span>
-                    <span
-                      className="font-mono-jb text-xs font-medium tabular-nums"
-                      style={{ color }}
-                    >
-                      {Math.round(value)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
+        <BriefSidebar brief={brief} />
 
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col">
