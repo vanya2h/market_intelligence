@@ -50,7 +50,7 @@ function regimeColor(regime: EtfRegime): ChalkInstance {
     case "REVERSAL_TO_INFLOW": return chalk.green;
     case "STRONG_OUTFLOW":     return chalk.red.bold;
     case "REVERSAL_TO_OUTFLOW":return chalk.red;
-    case "NEUTRAL":            return chalk.white;
+    case "ETF_NEUTRAL":        return chalk.white;
     case "MIXED":              return chalk.yellow;
   }
 }

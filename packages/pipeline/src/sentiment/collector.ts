@@ -106,8 +106,7 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
     inputs.derivatives = {
       fundingPercentile1m: context.funding.percentile["1m"],
       oiPercentile1m: context.openInterest.percentile["1m"],
-      longShortRatio: context.longShortRatio.current,
-      regime: context.regime,
+      regime: `${context.positioning.state}|${context.stress.state}`,
     };
   } catch (e) {
     console.log(`      ⚠ Derivatives data unavailable: ${(e as Error).message}`);

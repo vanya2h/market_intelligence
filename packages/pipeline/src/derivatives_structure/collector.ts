@@ -4,7 +4,6 @@
  * Fetches derivatives data from CoinGlass API v4 for BTC or ETH:
  *   - Funding rates (current per-exchange + 30d history via Binance)
  *   - Open interest (current all-exchange sum + 30d hourly history via Binance)
- *   - Long/short ratio (current via Binance)
  *   - Liquidations (aggregated 8h history, all exchanges)
  *
  * Auth: CG-API-KEY header (set COINGLASS_API_KEY in .env)
@@ -152,11 +151,6 @@ async function fetchOIWithHistory(asset: "BTC" | "ETH"): Promise<{ current: numb
   return { current, history };
 }
 
-/** Current L/S ratio — not available on Hobbyist plan, returns 1.0 as neutral default */
-async function fetchCurrentLS(): Promise<number> {
-  return 1.0;
-}
-
 /** 30-day Coinbase premium history at 1h resolution + current value */
 async function fetchCoinbasePremium(asset: "BTC" | "ETH"): Promise<{ current: number; history1m: TimestampedValue[] }> {
   const raw = await getCached(`coinbase-premium-index-4h:${asset}`, TTL.HISTORY_4H, () =>
@@ -173,15 +167,42 @@ async function fetchCoinbasePremium(asset: "BTC" | "ETH"): Promise<{ current: nu
   return { current, history1m: history };
 }
 
-/** 30-day liquidation history at 8h resolution + bias from the most recent window */
+/**
+ * Futures close-price history at 4h resolution (180 pts = 30d).
+ * Used to compute priceReturn24h / priceReturn7d for positioning logic.
+ * Returns null if the endpoint is unavailable — analyzer degrades gracefully.
+ */
+async function fetchPriceHistory(asset: "BTC" | "ETH"): Promise<TimestampedValue[] | null> {
+  try {
+    const symbol = `${asset}USDT`;
+    const raw = await getCached(`price-candle-4h:${asset}`, TTL.HISTORY_4H, () =>
+      cgGet<unknown>("/api/futures/candle", {
+        exchange: "Binance", symbol, interval: "4h", limit: "180",
+      })
+    );
+    const data: OhlcEntry[] = Array.isArray(raw)
+      ? (raw as OhlcEntry[])
+      : ((raw as { list?: OhlcEntry[] }).list ?? []);
+    if (data.length === 0) return null;
+    return data.map((d) => ({
+      timestamp: new Date(d.time).toISOString(),
+      value: parseFloat(d.close),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/** 90-day liquidation history at 8h resolution (270 pts) + bias from most recent window.
+ *  The extended window is required for liqPct3m (percentile vs 90d history). */
 async function fetchLiquidations(asset: "BTC" | "ETH"): Promise<{
   current8h: number;
   bias: string;
   history: TimestampedValue[];
 }> {
-  const raw = await getCached(`liquidation-aggregated-history-8h:${asset}`, TTL.HISTORY_8H, () =>
+  const raw = await getCached(`liquidation-aggregated-history-8h-270:${asset}`, TTL.HISTORY_8H, () =>
     cgGet<unknown>("/api/futures/liquidation/aggregated-history", {
-      symbol: asset, interval: "8h", exchange_list: "Binance,OKX,Bybit,dYdX",
+      symbol: asset, interval: "8h", exchange_list: "Binance,OKX,Bybit,dYdX", limit: "270",
     })
   );
   const data: LiqAggEntry[] = Array.isArray(raw)
@@ -210,13 +231,13 @@ async function fetchLiquidations(asset: "BTC" | "ETH"): Promise<{
 export async function collect(asset: "BTC" | "ETH"): Promise<DerivativesSnapshot> {
   console.log(`      Fetching ${asset} from CoinGlass v4...`);
 
-  const [currentFunding, fundingHistory, oi, currentLS, liqData, cbPremium] = await Promise.all([
+  const [currentFunding, fundingHistory, oi, liqData, cbPremium, priceHistory] = await Promise.all([
     fetchCurrentFunding(asset),
     fetchFundingHistory(asset),
     fetchOIWithHistory(asset),
-    fetchCurrentLS(),
     fetchLiquidations(asset),
     fetchCoinbasePremium(asset),
+    fetchPriceHistory(asset),
   ]);
 
   return {
@@ -230,14 +251,12 @@ export async function collect(asset: "BTC" | "ETH"): Promise<DerivativesSnapshot
       current: oi.current,
       history1m: oi.history,
     },
-    longShortRatio: {
-      current: currentLS,
-    },
     liquidations: {
       current8h: liqData.current8h,
       bias: liqData.bias,
       history1m: liqData.history,
     },
     coinbasePremium: cbPremium,
+    price: priceHistory ? { history: priceHistory } : null,
   };
 }

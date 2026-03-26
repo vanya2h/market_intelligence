@@ -1,15 +1,11 @@
 // ─── ETF Flows (Dimension 03) ─────────────────────────────────────────────────
 
-export type EtfRegime =
-  | "STRONG_INFLOW"
-  | "STRONG_OUTFLOW"
-  | "REVERSAL_TO_INFLOW"
-  | "REVERSAL_TO_OUTFLOW"
-  | "NEUTRAL"
-  | "MIXED";
+import type { EtfRegime as PrismaEtfRegime } from "../generated/prisma/client.js";
+
+export type EtfRegime = PrismaEtfRegime;
 
 export interface EtfFlowDay {
-  date: string;    // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   flowUsd: number; // positive = inflow, negative = outflow
   priceUsd: number;
   perEtf: { ticker: string; flowUsd: number }[];
@@ -17,7 +13,7 @@ export interface EtfFlowDay {
 
 // Raw data from collector
 export interface EtfSnapshot {
-  timestamp: string;      // ISO 8601
+  timestamp: string; // ISO 8601
   asset: "BTC" | "ETH";
   flowHistory: EtfFlowDay[];
   totalAumUsd: number;
@@ -26,7 +22,7 @@ export interface EtfSnapshot {
 }
 
 export interface EtfFlowMetrics {
-  today: number;                  // USD, latest available day
+  today: number; // USD, latest available day
   d3Sum: number;
   d7Sum: number;
   d30Sum: number;
@@ -34,8 +30,8 @@ export interface EtfFlowMetrics {
   consecutiveInflowDays: number;
   mean30d: number;
   sigma30d: number;
-  todaySigma: number;             // (today - mean) / sigma
-  percentile1m: number;           // today vs 30d distribution
+  todaySigma: number; // (today - mean) / sigma
+  percentile1m: number; // today vs 30d distribution
 }
 
 export interface EtfEvent {

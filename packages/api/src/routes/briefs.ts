@@ -3,6 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi";
 import { prisma } from "@market-intel/pipeline";
 import { createController } from "../common/controller.js";
 import { AssetParamSchema, BriefSchema, PaginationQuerySchema } from "../common/schemas.js";
+import { briefInclude } from "../lib/briefs.js";
 
 const latestRoute = describeRoute({
   summary: "Get latest brief",
@@ -26,9 +27,9 @@ export const GetLatestBriefController = createController({
       const brief = await prisma.brief.findFirst({
         where: { asset },
         orderBy: { timestamp: "desc" },
-        include: { dimensions: true },
+        include: briefInclude,
       });
-      if (!brief) return c.json({ error: "No brief found" }, 404);
+      if (!brief) return c.json({ error: "No brief found" } as const, 404);
       return c.json(brief);
     }),
 });
@@ -65,7 +66,7 @@ export const GetBriefHistoryController = createController({
             where: { asset },
             orderBy: { timestamp: "desc" },
             take,
-            include: { dimensions: true },
+            include: briefInclude,
           });
           return c.json(briefs.reverse());
         },
@@ -92,30 +93,12 @@ export const GetBriefByIdController = createController({
   build: (factory) =>
     factory.createApp().get("/:id", byIdRoute, validator("param", BriefIdParamSchema), async (c) => {
       const { id } = c.req.valid("param");
-      const brief = await prisma.brief.findUnique({
+      const brief = await prisma.brief.findFirstOrThrow({
         where: { id },
-        include: { dimensions: true },
+        include: briefInclude,
       });
-      if (!brief) return c.json({ error: "Brief not found" }, 404);
 
-      const [prev, next] = await Promise.all([
-        prisma.brief.findFirst({
-          where: { asset: brief.asset, timestamp: { lt: brief.timestamp } },
-          orderBy: { timestamp: "desc" },
-          select: { id: true },
-        }),
-        prisma.brief.findFirst({
-          where: { asset: brief.asset, timestamp: { gt: brief.timestamp } },
-          orderBy: { timestamp: "asc" },
-          select: { id: true },
-        }),
-      ]);
-
-      return c.json({
-        ...brief,
-        prevId: prev?.id ?? null,
-        nextId: next?.id ?? null,
-      });
+      return c.json(brief);
     }),
 });
 

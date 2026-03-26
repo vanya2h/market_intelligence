@@ -1,8 +1,9 @@
 /**
- * PoC runner — Dimension 01: Derivatives Structure (BTC)
+ * PoC runner — Dimension 01: Derivatives Structure (BTC / ETH)
  *
  * Usage:
  *   npm run analyze
+ *   npm run analyze ETH
  */
 
 import "./env.js";
@@ -11,7 +12,7 @@ import { collect } from "./derivatives_structure/collector.js";
 import { analyze } from "./derivatives_structure/analyzer.js";
 import { runAgent } from "./derivatives_structure/agent.js";
 import { appendSnapshot, loadState, saveState } from "./storage/json.js";
-import type { DerivativesContext, DerivativesRegime, OiSignal } from "./types.js";
+import type { DerivativesContext, OiSignal, PositioningState, StressState } from "./types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -21,16 +22,21 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
-function regimeColor(regime: DerivativesRegime): ChalkInstance {
-  switch (regime) {
-    case "CROWDED_LONG":
-    case "CAPITULATION":   return chalk.red.bold;
-    case "CROWDED_SHORT":  return chalk.red.bold;
-    case "SHORT_SQUEEZE":  return chalk.magenta.bold;
-    case "HEATING_UP":     return chalk.yellow;
-    case "UNWINDING":
-    case "DELEVERAGING":   return chalk.yellow;
-    case "NEUTRAL":        return chalk.green;
+function positioningColor(state: PositioningState): ChalkInstance {
+  switch (state) {
+    case "CROWDED_LONG":  return chalk.red.bold;
+    case "CROWDED_SHORT": return chalk.red.bold;
+    case "HEATING_UP":    return chalk.yellow;
+    case "POSITIONING_NEUTRAL": return chalk.green;
+  }
+}
+
+function stressColor(state: StressState): ChalkInstance {
+  switch (state) {
+    case "CAPITULATION": return chalk.red.bold;
+    case "UNWINDING":    return chalk.yellow;
+    case "DELEVERAGING": return chalk.yellow;
+    case "STRESS_NONE":  return chalk.dim;
   }
 }
 
@@ -38,17 +44,17 @@ function oiSignalColor(signal: OiSignal): ChalkInstance {
   switch (signal) {
     case "EXTREME":   return chalk.red.bold;
     case "ELEVATED":  return chalk.yellow;
-    case "NORMAL":    return chalk.green;
+    case "OI_NORMAL": return chalk.green;
     case "DEPRESSED": return chalk.dim;
   }
 }
 
-/** Strip markdown from Claude's output and render **bold** inline with chalk */
+/** Strip markdown and render **bold** inline with chalk */
 function renderMarkdown(text: string): string {
   return text
-    .replace(/^#{1,3}\s+/gm, "")               // remove ## headings
-    .replace(/\*\*(.+?)\*\*/g, (_, t) => chalk.bold(t))  // **bold**
-    .replace(/\*(.+?)\*/g, "$1")                // *italic* → plain
+    .replace(/^#{1,3}\s+/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, (_, t) => chalk.bold(t))
+    .replace(/\*(.+?)\*/g, "$1")
     .trim();
 }
 
@@ -60,49 +66,71 @@ function note(text: string): void {
   console.log(`      ${chalk.dim(text)}`);
 }
 
+function pct(v: number): string {
+  return `${(v * 100).toFixed(1)}%`;
+}
+
 // ─── Brief printer ────────────────────────────────────────────────────────────
 
 function printBrief(ctx: DerivativesContext, interpretation: string): void {
-  const sep = chalk.dim("─".repeat(62));
-  const label = (s: string) => chalk.dim(s.padEnd(11));
+  const sep   = chalk.dim("─".repeat(62));
+  const label = (s: string) => chalk.dim(s.padEnd(14));
 
   console.log(`\n${sep}`);
-  console.log(`  ${chalk.bold("DERIVATIVES STRUCTURE")}  ${chalk.dim("BTC")}  ${chalk.dim(new Date().toUTCString())}`);
+  console.log(`  ${chalk.bold("DERIVATIVES STRUCTURE")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(sep);
 
-  // Regime + OI signal
-  const regimeFmt = regimeColor(ctx.regime)(ctx.regime);
-  const oiFmt = oiSignalColor(ctx.oiSignal)(`OI:${ctx.oiSignal}`);
-  console.log(`\n  ${label("Regime")} ${regimeFmt}  ${chalk.dim("[")}${oiFmt}${chalk.dim("]")}`);
-  if (ctx.previousRegime) {
-    console.log(`  ${label("Previous")} ${chalk.dim(ctx.previousRegime)}`);
+  // ── Two dimensions ────────────────────────────────────────────────────────
+  const posFmt = positioningColor(ctx.positioning.state)(ctx.positioning.state);
+  const strFmt = stressColor(ctx.stress.state)(ctx.stress.state);
+  const oiFmt  = oiSignalColor(ctx.oiSignal)(`OI:${ctx.oiSignal}`);
+
+  console.log(`\n  ${label("Positioning")} ${posFmt}`);
+  if (ctx.positioning.triggers.length > 0)
+    console.log(`  ${label("")} ${chalk.dim(ctx.positioning.triggers.join("  ·  "))}`);
+
+  console.log(`  ${label("Stress")}      ${strFmt}  ${chalk.dim("[")}${oiFmt}${chalk.dim("]")}`);
+  if (ctx.stress.triggers.length > 0)
+    console.log(`  ${label("")} ${chalk.dim(ctx.stress.triggers.join("  ·  "))}`);
+
+  if (ctx.previousPositioning || ctx.previousStress) {
+    const prevPos = ctx.previousPositioning ?? "—";
+    const prevStr = ctx.previousStress ?? "—";
+    console.log(`  ${label("Previous")}    ${chalk.dim(`${prevPos} | ${prevStr}`)}`);
   }
-  console.log(`  ${label("Since")} ${chalk.dim(ctx.since)}`);
-  console.log(`  ${label("Duration")} ${chalk.white(ctx.durationHours + "h")}`);
+  console.log(`  ${label("Since")}       ${chalk.dim(ctx.since)}`);
+  console.log(`  ${label("Duration")}    ${chalk.white(ctx.durationHours + "h")}`);
 
-  // Metrics
+  // ── Metrics ───────────────────────────────────────────────────────────────
   console.log(`\n  ${chalk.dim("── Metrics ─────────────────────────────────────────")}`);
-
-  const pct = (v: number) => chalk.dim(`(${v}th pct / 1 month)`);
+  const pctLabel = (v: number) => chalk.dim(`(${v}th pct / 1m)`);
 
   console.log(
-    `  ${label("Funding")} ${chalk.white.bold(ctx.funding.current.toFixed(4) + "%")}  ${pct(ctx.funding.percentile["1m"])}`
+    `  ${label("Funding")}     ${chalk.white.bold(ctx.funding.current.toFixed(4) + "%")}  ${pctLabel(ctx.signals.fundingPct1m)}`
   );
   console.log(
-    `  ${label("OI")} ${chalk.white.bold(formatUsd(ctx.openInterest.current))}  ${pct(ctx.openInterest.percentile["1m"])}`
+    `  ${label("OI")}          ${chalk.white.bold(formatUsd(ctx.openInterest.current))}  ${pctLabel(ctx.openInterest.percentile["1m"])}  z=${ctx.signals.oiZScore30d.toFixed(2)}`
   );
   console.log(
-    `  ${label("L/S Ratio")} ${chalk.white.bold(ctx.longShortRatio.current.toFixed(2))}`
+    `  ${label("OI change")}   ${chalk.white(pct(ctx.signals.oiChange24h))} 24h  ${chalk.dim("/")}  ${chalk.white(pct(ctx.signals.oiChange7d))} 7d`
   );
   const cbSign = ctx.coinbasePremium.current >= 0 ? "+" : "";
   console.log(
-    `  ${label("CB Premium")} ${chalk.white.bold(cbSign + ctx.coinbasePremium.current.toFixed(4) + "%")}  ${pct(ctx.coinbasePremium.percentile["1m"])}`
+    `  ${label("CB Premium")}  ${chalk.white.bold(cbSign + ctx.coinbasePremium.current.toFixed(4) + "%")}  ${pctLabel(ctx.coinbasePremium.percentile["1m"])}`
   );
   console.log(
-    `  ${label("Liq 8h")} ${chalk.white.bold(formatUsd(ctx.liquidations.current8h))}  ${chalk.dim(ctx.liquidations.bias)}  ${pct(ctx.liquidations.percentile["1m"])}`
+    `  ${label("Liq 8h")}      ${chalk.white.bold(formatUsd(ctx.liquidations.current8h))}  ${chalk.dim(ctx.liquidations.bias)}  ${pctLabel(ctx.signals.liqPct1m)}  3m=${ctx.signals.liqPct3m}th`
+  );
+  if (ctx.signals.priceReturn24h !== null) {
+    console.log(
+      `  ${label("Price")}       ${chalk.white(pct(ctx.signals.priceReturn24h))} 24h  ${chalk.dim("/")}  ${chalk.white(pct(ctx.signals.priceReturn7d!))} 7d`
+    );
+  }
+  console.log(
+    `  ${label("Neg.cycles")}  ${chalk.white(ctx.signals.fundingNegativeCycles.toString())}`
   );
 
-  // Events
+  // ── Events ────────────────────────────────────────────────────────────────
   if (ctx.events.length > 0) {
     console.log(`\n  ${chalk.dim("── Events ───────────────────────────────────────────")}`);
     for (const e of ctx.events) {
@@ -110,14 +138,12 @@ function printBrief(ctx: DerivativesContext, interpretation: string): void {
     }
   }
 
-  // Interpretation
+  // ── Interpretation ────────────────────────────────────────────────────────
   console.log(`\n  ${chalk.dim("── Interpretation ───────────────────────────────────")}`);
   const rendered = renderMarkdown(interpretation);
-  // Word-wrap at 60 chars
-  const words = rendered.split(" ");
+  const words    = rendered.split(" ");
   let line = "  ";
   for (const word of words) {
-    // chalk sequences add invisible chars — measure visible length roughly
     const visibleLen = line.replace(/\x1b\[[0-9;]*m/g, "").length;
     if (visibleLen + word.replace(/\x1b\[[0-9;]*m/g, "").length > 62) {
       console.log(line);
@@ -146,7 +172,8 @@ async function main(): Promise<void> {
   step(3, 5, "Loading previous state...");
   const prevState = await loadState(asset);
   if (prevState) {
-    note(`Previous regime: ${regimeColor(prevState.regime)(prevState.regime)} since ${prevState.since}`);
+    const stressPart = prevState.stress ? stressColor(prevState.stress)(prevState.stress) : chalk.dim("stress:unknown");
+    note(`Previous: ${positioningColor(prevState.positioning)(prevState.positioning)} | ${stressPart} since ${prevState.since}`);
   } else {
     note("No previous state — first run");
   }
@@ -154,8 +181,9 @@ async function main(): Promise<void> {
   step(4, 5, "Analyzing regime...");
   const { context, nextState } = analyze(snapshot, prevState);
   note(
-    `${regimeColor(context.regime)(context.regime)}  ` +
-    chalk.dim(`funding pct1m=${context.funding.percentile["1m"]}  L/S=${context.longShortRatio.current.toFixed(2)}`)
+    `${positioningColor(context.positioning.state)(context.positioning.state)} | ` +
+    `${stressColor(context.stress.state)(context.stress.state)}  ` +
+    chalk.dim(`fundingPct1m=${context.signals.fundingPct1m}`)
   );
   saveState(asset, nextState);
 

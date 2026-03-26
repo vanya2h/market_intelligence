@@ -7,17 +7,18 @@
 
 import { useEffect, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { parseResponse } from "hono/client";
-import { api } from "../lib/api.client";
 import { UsdValue } from "./UsdValue";
+import { getAssetPrice } from "../lib/asset";
+import { AssetType } from "@market-intel/api";
+import { api } from "../lib/api.client";
 
 interface PriceDeltaProps {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   snapshotPrice: number;
-  briefTimestamp: string;
+  timestamp: Date;
 }
 
-export function PriceDelta({ asset, snapshotPrice, briefTimestamp }: PriceDeltaProps) {
+export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps) {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [error, setError] = useState(false);
 
@@ -26,8 +27,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp }: PriceDeltaP
 
     async function fetchPrice() {
       try {
-        const res = api.api.price[":asset"].$get({ param: { asset } });
-        const data = await parseResponse(res);
+        const data = await getAssetPrice(asset)(api);
         if (!cancelled) {
           setLivePrice(data.price);
           setError(false);
@@ -71,7 +71,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp }: PriceDeltaP
         </span>
         <UsdValue value={snapshotPrice} style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }} />
         <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
-          {formatDistanceToNowStrict(new Date(briefTimestamp), { addSuffix: true })}
+          {formatDistanceToNowStrict(new Date(timestamp), { addSuffix: true })}
         </span>
       </div>
     );
@@ -174,7 +174,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp }: PriceDeltaP
           color: "var(--text-muted)",
         }}
       >
-        brief {formatDistanceToNowStrict(new Date(briefTimestamp), { addSuffix: true })}
+        brief {formatDistanceToNowStrict(new Date(timestamp), { addSuffix: true })}
       </span>
     </div>
   );

@@ -40,7 +40,7 @@ function regimeColor(regime: SentimentRegime): ChalkInstance {
   switch (regime) {
     case "EXTREME_FEAR":         return chalk.red.bold;
     case "FEAR":                 return chalk.red;
-    case "NEUTRAL":              return chalk.white;
+    case "SENTIMENT_NEUTRAL":    return chalk.white;
     case "GREED":                return chalk.green;
     case "EXTREME_GREED":        return chalk.green.bold;
     case "CONSENSUS_BULLISH":    return chalk.cyan.bold;

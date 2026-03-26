@@ -1,16 +1,19 @@
 /**
  * Postgres-backed state and snapshot storage (via Prisma).
  *
- * Drop-in replacement for the previous file-based json.ts.
- * Used by the derivatives dimension (Dimension 01).
+ * DimensionState column mapping for the derivatives dimension:
+ *   regime         → PositioningState  (e.g. "CROWDED_LONG")
+ *   stress         → StressState       (e.g. "STRESS_NONE")
+ *   previousRegime → previous PositioningState
+ *   previousStress → previous StressState
  */
 
 import { prisma } from "./db.js";
-import type { DerivativesSnapshot, DerivativesState } from "../types.js";
+import type { DerivativesSnapshot, DerivativesState, PositioningState } from "../types.js";
 
 const MAX_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
 
-// ─── History ────────────────────────────────────────────────────────────────
+// ─── History ─────────────────────────────────────────────────────────────────
 
 export async function loadHistory(asset: "BTC" | "ETH"): Promise<DerivativesSnapshot[]> {
   const rows = await prisma.dimensionSnapshot.findMany({
@@ -20,13 +23,16 @@ export async function loadHistory(asset: "BTC" | "ETH"): Promise<DerivativesSnap
   return rows.map((r) => r.data as unknown as DerivativesSnapshot);
 }
 
-export async function appendSnapshot(asset: "BTC" | "ETH", snapshot: DerivativesSnapshot): Promise<DerivativesSnapshot[]> {
+export async function appendSnapshot(
+  asset: "BTC" | "ETH",
+  snapshot: DerivativesSnapshot,
+): Promise<DerivativesSnapshot[]> {
   await prisma.dimensionSnapshot.create({
     data: {
       asset,
       dimension: "DERIVATIVES",
       timestamp: new Date(snapshot.timestamp),
-      data: snapshot as any,
+      data: JSON.parse(JSON.stringify(snapshot)),
     },
   });
 
@@ -50,11 +56,14 @@ export async function loadState(asset: "BTC" | "ETH"): Promise<DerivativesState 
     where: { asset_dimension: { asset, dimension: "DERIVATIVES" } },
   });
   if (!row) return null;
+
   return {
     asset: row.asset,
-    regime: row.regime as DerivativesState["regime"],
+    positioning: row.regime as PositioningState,
+    stress: (row.stress as DerivativesState["stress"]) ?? null,
     since: row.since.toISOString(),
-    previousRegime: row.previousRegime as DerivativesState["previousRegime"],
+    previousPositioning: (row.previousRegime as PositioningState) ?? null,
+    previousStress: (row.previousStress as DerivativesState["previousStress"]) ?? null,
     lastUpdated: row.lastUpdated.toISOString(),
   };
 }
@@ -63,16 +72,20 @@ export async function saveState(asset: "BTC" | "ETH", state: DerivativesState): 
   await prisma.dimensionState.upsert({
     where: { asset_dimension: { asset, dimension: "DERIVATIVES" } },
     update: {
-      regime: state.regime,
-      since: new Date(state.since),
-      previousRegime: state.previousRegime,
+      regime:         state.positioning,
+      stress:         state.stress,
+      since:          new Date(state.since),
+      previousRegime: state.previousPositioning,
+      previousStress: state.previousStress,
     },
     create: {
       asset,
-      dimension: "DERIVATIVES",
-      regime: state.regime,
-      since: new Date(state.since),
-      previousRegime: state.previousRegime,
+      dimension:      "DERIVATIVES",
+      regime:         state.positioning,
+      stress:         state.stress,
+      since:          new Date(state.since),
+      previousRegime: state.previousPositioning,
+      previousStress: state.previousStress,
     },
   });
 }

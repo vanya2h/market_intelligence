@@ -14,6 +14,45 @@ export const TAB_LABELS: Record<DimensionTab, string> = {
   HTF: "HTF Structure",
 };
 
+const REGIME_DESCRIPTIONS: Record<string, Record<string, string>> = {
+  DERIVATIVES: {
+    CROWDED_LONG: "Persistently elevated funding + elevated OI + non-negative price trend. Longs are dominant and paying a premium; market is susceptible to a flush if sentiment shifts.",
+    CROWDED_SHORT: "Persistently negative funding + elevated OI + non-positive price trend. Shorts are dominant; market is susceptible to a squeeze if price rallies.",
+    HEATING_UP: "Mid-range funding with OI growing over the medium horizon. Positioning is building toward crowded but has not crossed the threshold yet.",
+    NEUTRAL: "No dominant directional crowding detected. Funding is neutral and OI is not meaningfully elevated in either direction.",
+    CAPITULATION: "Extreme liquidation event: liq percentile in the 90th+, paired with severe OI drop (≥10%) and significant price move (≥5%). Forced position unwind at scale.",
+    UNWINDING: "Elevated liquidations driving a meaningful OI drop (≥5% in 24h). Active deleveraging with visible forced exits, but not yet at extreme scale.",
+    DELEVERAGING: "Prolonged negative funding (3+ intervals) with gradual OI decline and no liquidation spike. Organic position reduction — slow bleed, not a flush.",
+    NONE: "No active stress signal detected. Positioning may still be crowded, but there is no measurable event-driven pressure at this time.",
+  },
+  ETFS: {
+    STRONG_INFLOW: "Sustained institutional buying via spot ETFs. Multi-day inflow streak signals strong conviction.",
+    STRONG_OUTFLOW: "Sustained institutional selling via spot ETFs. Multi-day outflow streak signals cooling appetite.",
+    REVERSAL_TO_INFLOW: "ETF flows have flipped from outflows to inflows. Early sign of renewed institutional demand.",
+    REVERSAL_TO_OUTFLOW: "ETF flows have flipped from inflows to outflows. Early sign of institutional pullback.",
+    NEUTRAL: "ETF flows are balanced with no clear directional trend.",
+    MIXED: "Mixed ETF flow signals — no dominant pattern across funds.",
+  },
+  HTF: {
+    MACRO_BULLISH: "Price above 200 DMA with bullish market structure (higher highs / higher lows).",
+    BULL_EXTENDED: "Macro bullish but weekly RSI > 70 — overbought risk. Trend intact but momentum stretched.",
+    MACRO_BEARISH: "Price below 200 DMA with bearish market structure (lower highs / lower lows).",
+    BEAR_EXTENDED: "Macro bearish with weekly RSI < 30 — capitulation zone. Trend down but may be exhausted.",
+    RECLAIMING: "Price between 50 DMA and 200 DMA, recovering. Potential trend reversal forming.",
+    RANGING: "Mixed signals, no clear directional bias. Market is consolidating.",
+  },
+  SENTIMENT: {
+    EXTREME_FEAR: "Composite sentiment deeply negative. Historically a contrarian buy signal.",
+    FEAR: "Sentiment skews negative across inputs. Caution dominates but not at extremes.",
+    NEUTRAL: "Balanced sentiment — no strong directional conviction from crowd or experts.",
+    GREED: "Sentiment skews positive. Optimism rising but not yet at extremes.",
+    EXTREME_GREED: "Composite sentiment deeply positive. Historically a contrarian sell signal.",
+    CONSENSUS_BULLISH: "Expert analysts strongly agree on bullish outlook (z-score ≥ +0.8).",
+    CONSENSUS_BEARISH: "Expert analysts strongly agree on bearish outlook (z-score ≤ −1.5).",
+    SENTIMENT_DIVERGENCE: "Experts and crowd disagree — historically signals a turning point.",
+  },
+};
+
 export interface BriefSidebarData {
   compositeIndex: number | null;
   compositeLabel: string | null;
@@ -60,9 +99,12 @@ export function BriefSidebar({ brief }: { brief: BriefSidebarData }) {
                 <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                   {TAB_LABELS[dim]}
                 </span>
-                <span className="text-xs font-medium" style={{ color }}>
+                <Tooltip content={REGIME_DESCRIPTIONS[dim]?.[bd.regime] ?? bd.regime} side="right">
+                <span className="inline-flex cursor-default items-center gap-1 text-xs font-medium" style={{ color }}>
                   {bd.regime} {arrow}
+                  <InfoCircledIcon width={11} height={11} style={{ color: "var(--text-muted)" }} />
                 </span>
+              </Tooltip>
               </div>
             );
           })}

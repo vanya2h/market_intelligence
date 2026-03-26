@@ -28,7 +28,6 @@ export function BriefHistoryDialog({ currentBriefId }: { currentBriefId?: string
     if (open) {
       fetcher.load(`/brief-history?asset=${asset}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, asset]);
 
   const briefs = fetcher.data?.briefs ?? [];
@@ -48,10 +47,7 @@ export function BriefHistoryDialog({ currentBriefId }: { currentBriefId?: string
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay
-          className="fixed inset-0 z-50"
-          style={{ background: "rgba(0,0,0,0.4)" }}
-        />
+        <Dialog.Overlay className="fixed inset-0 z-50" style={{ background: "rgba(0,0,0,0.4)" }} />
         <Dialog.Content
           className="fixed right-0 top-0 z-50 flex h-full w-72 flex-col focus:outline-none"
           style={{
@@ -142,7 +138,7 @@ export function BriefHistoryDialog({ currentBriefId }: { currentBriefId?: string
                       }}
                     >
                       <span className="font-mono-jb tabular-nums">
-                        {format(new Date(brief.timestamp), "MMM d, yyyy · HH:mm")}
+                        {format(brief.timestamp, "MMM d, yyyy · HH:mm")}
                       </span>
                     </Link>
                   );

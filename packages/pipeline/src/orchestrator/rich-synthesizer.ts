@@ -11,7 +11,7 @@
 
 import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
-import type { DimensionOutput } from "./types.js";
+import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 const RICH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
@@ -115,6 +115,22 @@ export type RichBlock =
       right: { label: string; detail: string; sentiment: "bullish" | "bearish" | "neutral" };
     };
 
+export type HeadingBlock = Extract<RichBlock, { type: "heading" }>;
+export type TextBlock = Extract<RichBlock, { type: "text" }>;
+export type DividerBlock = Extract<RichBlock, { type: "divider" }>;
+export type SpacerBlock = Extract<RichBlock, { type: "spacer" }>;
+export type SpectrumBlock = Extract<RichBlock, { type: "spectrum" }>;
+export type MetricRowBlock = Extract<RichBlock, { type: "metric_row" }>;
+export type BarChartBlock = Extract<RichBlock, { type: "bar_chart" }>;
+export type HeatmapBlock = Extract<RichBlock, { type: "heatmap" }>;
+export type ScorecardBlock = Extract<RichBlock, { type: "scorecard" }>;
+export type ComparisonBlock = Extract<RichBlock, { type: "comparison" }>;
+export type CalloutBlock = Extract<RichBlock, { type: "callout" }>;
+export type SignalBlock = Extract<RichBlock, { type: "signal" }>;
+export type LevelMapBlock = Extract<RichBlock, { type: "level_map" }>;
+export type RegimeBannerBlock = Extract<RichBlock, { type: "regime_banner" }>;
+export type TensionBlock = Extract<RichBlock, { type: "tension" }>;
+
 export interface RichBrief {
   blocks: RichBlock[];
 }
@@ -188,7 +204,7 @@ No markdown fences, no explanation, no preamble. Just the JSON object.`;
 
 function buildUserPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[]): string {
   const sections = outputs.map((o) => {
-    return `### ${o.label}
+    return `### ${DIMENSION_LABELS[o.dimension]}
 **Regime:** ${o.regime}
 
 **Agent interpretation:**

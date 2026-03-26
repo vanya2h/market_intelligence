@@ -1,23 +1,42 @@
 // Database
 export { prisma } from "./storage/db.js";
+export type { Prisma, $Enums } from "./generated/prisma/client.js";
 
 // Cache
 export { getCached } from "./storage/cache.js";
 
-// Prisma-generated types
+// Prisma-generated types (models only as types)
 export type {
   Asset,
   Dimension,
   Brief,
-  BriefDimension,
+  DerivativesDimension,
+  EtfsDimension,
+  HtfDimension,
+  SentimentDimension,
   DimensionState,
   DimensionSnapshot,
+} from "./generated/prisma/client.js";
+
+// Prisma enums (exported as values + types)
+export {
+  PositioningRegime,
+  StressLevel,
+  OiSignal as PrismaOiSignal,
+  EtfRegime as PrismaEtfRegime,
+  HtfRegime as PrismaHtfRegime,
+  MarketStructure as PrismaMarketStructure,
+  SentimentRegime as PrismaSentimentRegime,
 } from "./generated/prisma/client.js";
 
 // Derivatives
 export type {
   DerivativesContext,
-  DerivativesRegime,
+  DerivativesState,
+  PositioningState,
+  StressState,
+  AnalysisSignals,
+  Classified,
   MetricContext,
   OiSignal,
 } from "./types.js";
@@ -26,22 +45,29 @@ export type {
 export type { EtfContext, EtfRegime, EtfFlowMetrics } from "./etfs/types.js";
 
 // HTF
-export type {
-  HtfContext,
-  HtfRegime,
-  MarketStructure,
-  MaContext,
-  RsiContext,
-} from "./htf/types.js";
+export type { HtfContext, HtfRegime, MarketStructure, MaContext, RsiContext } from "./htf/types.js";
 
 // Sentiment
-export type {
-  SentimentContext,
-  SentimentRegime,
-  SentimentMetrics,
-  FearGreedComponents,
-} from "./sentiment/types.js";
+export type { SentimentContext, SentimentRegime, SentimentMetrics, FearGreedComponents } from "./sentiment/types.js";
 
 // Orchestrator
 export type { DimensionOutput, AssetBrief } from "./orchestrator/types.js";
-export type { RichBlock, RichBrief } from "./orchestrator/rich-synthesizer.js";
+export type {
+  RichBlock,
+  RichBrief,
+  HeadingBlock,
+  TextBlock,
+  DividerBlock,
+  SpacerBlock,
+  SpectrumBlock,
+  MetricRowBlock,
+  BarChartBlock,
+  HeatmapBlock,
+  ScorecardBlock,
+  ComparisonBlock,
+  CalloutBlock,
+  SignalBlock,
+  LevelMapBlock,
+  RegimeBannerBlock,
+  TensionBlock,
+} from "./orchestrator/rich-synthesizer.js";

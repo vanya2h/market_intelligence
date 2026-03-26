@@ -6,9 +6,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import type { RichBlock } from "./rich-brief-types";
-
-export type { RichBlock } from "./rich-brief-types";
+import type { RichBlock } from "@market-intel/pipeline";
 
 export function RichBriefRenderer({ blocks }: { blocks: RichBlock[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,7 +32,5 @@ export function RichBriefRenderer({ blocks }: { blocks: RichBlock[] }) {
     };
   }, [blocks]);
 
-  return (
-    <div ref={containerRef} className="rich-brief-container" />
-  );
+  return <div ref={containerRef} className="rich-brief-container" />;
 }

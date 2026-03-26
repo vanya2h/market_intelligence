@@ -102,7 +102,7 @@ function determineRegime(metrics: EtfFlowMetrics, prevRegime: EtfRegime | null):
     return "REVERSAL_TO_OUTFLOW";
   }
 
-  return "NEUTRAL";
+  return "ETF_NEUTRAL";
 }
 
 // ─── Event detection ──────────────────────────────────────────────────────────

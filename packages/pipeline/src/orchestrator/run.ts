@@ -15,7 +15,7 @@ import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
 import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
-import type { DimensionOutput } from "./types.js";
+import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ function printDimensionSummary(outputs: DimensionOutput[]): void {
   const pad = (s: string) => s.padEnd(30);
   for (const o of outputs) {
     console.log(
-      `      ${chalk.dim(pad(o.label))} ${regimeTag(o.regime)}`
+      `      ${chalk.dim(pad(DIMENSION_LABELS[o.dimension]))} ${regimeTag(o.regime)}`
     );
   }
 }
@@ -98,7 +98,7 @@ function printBrief(asset: string, outputs: DimensionOutput[], brief: string): v
   for (const o of outputs) {
     const pad = (s: string) => s.padEnd(28);
     console.log(
-      `  ${chalk.dim(pad(o.label))} ${regimeTag(o.regime)}`
+      `  ${chalk.dim(pad(DIMENSION_LABELS[o.dimension]))} ${regimeTag(o.regime)}`
     );
   }
 

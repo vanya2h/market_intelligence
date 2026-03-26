@@ -1,7 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
-import { api } from "../server/api.server";
-import { DIMENSIONS } from "../lib/dimension-config";
 import { BriefSection } from "../components/BriefSection";
 import { AssetSelector } from "../components/AssetSelector";
 import { AppHeader } from "../components/AppHeader";
@@ -10,31 +8,17 @@ import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { DimensionTabs } from "../components/DimensionTabs";
 import { StickyFooter } from "../components/StickyFooter";
 
-import type { RichBlock } from "../components/RichBrief";
-
-interface BriefData {
-  id: string;
-  brief: string;
-  richBrief?: { blocks: RichBlock[] } | null;
-  snapshotPrice?: number | null;
-  compositeIndex: number | null;
-  compositeLabel: string | null;
-  positioning: number | null;
-  trend: number | null;
-  institutionalFlows: number | null;
-  expertConsensus: number | null;
-  timestamp: string;
-  dimensions: { dimension: string; regime: string; context: Record<string, unknown>; interpretation: string }[];
-}
+import { getLatestBriefByAsset } from "../lib/brief";
+import { api } from "../server/api.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
 
-  const briefRes = await api.api.briefs.latest[":asset"].$get({ param: { asset } });
-  const brief: BriefData | null = briefRes.ok ? ((await briefRes.json()) as BriefData) : null;
-
-  return { asset, brief };
+  return {
+    asset,
+    brief: await getLatestBriefByAsset(asset)(api),
+  };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
@@ -81,7 +65,7 @@ export default function Dashboard() {
         <main className="flex min-w-0 flex-1 flex-col md:max-w-3xl">
           {/* Brief section */}
           <div className="p-4 md:p-6">
-            <BriefSection brief={brief} asset={asset} />
+            <BriefSection brief={brief} />
           </div>
 
           {/* Low-data disclaimer */}

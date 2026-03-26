@@ -7,7 +7,7 @@ datasource db {
     provider = "postgresql"
 }
 
-// ─── Enums ──────────────────────────────────────────────────────────────────
+// ─── Core Enums ──────────────────────────────────────────────────────────────
 
 enum Asset {
     BTC
@@ -21,7 +21,67 @@ enum Dimension {
     SENTIMENT
 }
 
-// ─── Dimension Regime State (replaces *_state.json) ─────────────────────────
+// ─── Per-Dimension Regime Enums ──────────────────────────────────────────────
+
+enum PositioningRegime {
+    CROWDED_LONG
+    CROWDED_SHORT
+    HEATING_UP
+    POSITIONING_NEUTRAL
+}
+
+enum StressLevel {
+    CAPITULATION
+    UNWINDING
+    DELEVERAGING
+    STRESS_NONE
+}
+
+enum EtfRegime {
+    STRONG_INFLOW
+    STRONG_OUTFLOW
+    REVERSAL_TO_INFLOW
+    REVERSAL_TO_OUTFLOW
+    ETF_NEUTRAL
+    MIXED
+}
+
+enum HtfRegime {
+    MACRO_BULLISH
+    BULL_EXTENDED
+    MACRO_BEARISH
+    BEAR_EXTENDED
+    RECLAIMING
+    RANGING
+}
+
+enum MarketStructure {
+    HH_HL
+    LH_LL
+    HH_LL
+    LH_HL
+    STRUCTURE_UNKNOWN
+}
+
+enum OiSignal {
+    EXTREME
+    ELEVATED
+    OI_NORMAL
+    DEPRESSED
+}
+
+enum SentimentRegime {
+    EXTREME_FEAR
+    FEAR
+    SENTIMENT_NEUTRAL
+    GREED
+    EXTREME_GREED
+    CONSENSUS_BULLISH
+    CONSENSUS_BEARISH
+    SENTIMENT_DIVERGENCE
+}
+
+// ─── Dimension Regime State (mutable singleton per asset+dimension) ──────────
 
 model DimensionState {
     id             String    @id @default(cuid())
@@ -31,14 +91,20 @@ model DimensionState {
     since          DateTime
     previousRegime String?
     lastUpdated    DateTime  @updatedAt
-    metadata       Json?
+
+    // Derivatives-specific
+    stress         String?
+    previousStress String?
+
+    // HTF-specific
+    lastStructure  String?
 
     @@unique([asset, dimension])
     @@index([asset])
     @@map("dimension_states")
 }
 
-// ─── Dimension Snapshots (replaces derivatives_history.json) ────────────────
+// ─── Dimension Snapshots (raw time-series data) ──────────────────────────────
 
 model DimensionSnapshot {
     id        String    @id @default(cuid())
@@ -51,44 +117,87 @@ model DimensionSnapshot {
     @@map("dimension_snapshots")
 }
 
-// ─── Orchestrator Briefs (brief history for dashboard) ──────────────────────
+// ─── Briefs ──────────────────────────────────────────────────────────────────
 
 model Brief {
-    id        String   @id @default(cuid())
-    asset     Asset
-    timestamp DateTime @default(now())
-    brief     String
-    richBrief Json?
+    id         String      @id @default(cuid())
+    asset      Asset
+    timestamp  DateTime    @default(now())
+    brief      String
+    richBrief  Json?
+    dimensions Dimension[]
 
-    // Asset price at brief generation time
-    snapshotPrice Float?
-
-    // Sentiment composite gauge
-    compositeIndex Float?
-    compositeLabel String?
-
-    // Sentiment component scores (0–100)
-    positioning        Float?
-    trend              Float?
-    institutionalFlows Float?
-    expertConsensus    Float?
-
-    dimensions BriefDimension[]
+    // Relations to per-dimension models
+    derivatives DerivativesDimension?
+    etfs        EtfsDimension?
+    htf         HtfDimension?
+    sentiment   SentimentDimension?
 
     @@index([asset, timestamp])
     @@map("briefs")
 }
 
-model BriefDimension {
-    id             String    @id @default(cuid())
-    briefId        String
-    brief          Brief     @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    dimension      Dimension
-    label          String
-    regime         String
+// ─── Per-Dimension Brief Models ──────────────────────────────────────────────
+
+model DerivativesDimension {
+    id             String             @id @default(cuid())
+    briefId        String             @unique
+    brief          Brief              @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    regime         PositioningRegime
+    stress         StressLevel?
+    previousRegime PositioningRegime?
+    previousStress StressLevel?
+    oiSignal       OiSignal?
+    since          DateTime
     context        Json
     interpretation String
 
-    @@unique([briefId, dimension])
-    @@map("brief_dimensions")
+    @@map("brief_derivatives")
+}
+
+model EtfsDimension {
+    id             String     @id @default(cuid())
+    briefId        String     @unique
+    brief          Brief      @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    regime         EtfRegime
+    previousRegime EtfRegime?
+    since          DateTime
+    context        Json
+    interpretation String
+
+    @@map("brief_etfs")
+}
+
+model HtfDimension {
+    id             String           @id @default(cuid())
+    briefId        String           @unique
+    brief          Brief            @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    regime         HtfRegime
+    previousRegime HtfRegime?
+    since          DateTime
+    lastStructure  MarketStructure?
+    snapshotPrice  Float?
+    context        Json
+    interpretation String
+
+    @@map("brief_htf")
+}
+
+model SentimentDimension {
+    id                 String          @id @default(cuid())
+    briefId            String          @unique
+    brief              Brief           @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    regime             SentimentRegime
+    previousRegime     SentimentRegime?
+    since              DateTime
+    compositeIndex     Float?
+    compositeLabel     String?
+    positioning        Float?
+    trend              Float?
+    institutionalFlows Float?
+    expertConsensus    Float?
+    context            Json
+    interpretation     String
+
+    @@map("brief_sentiment")
 }

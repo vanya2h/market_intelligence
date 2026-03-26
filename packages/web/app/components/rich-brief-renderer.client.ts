@@ -10,8 +10,8 @@
  */
 
 import { html, reactive } from "@arrow-js/core";
-import type { RichBlock } from "./rich-brief-types";
 import type {
+  RichBlock,
   HeadingBlock,
   TextBlock,
   SpectrumBlock,
@@ -24,7 +24,7 @@ import type {
   LevelMapBlock,
   RegimeBannerBlock,
   TensionBlock,
-} from "./rich-brief-types";
+} from "@market-intel/pipeline";
 
 // ─── Color helpers ──────────────────────────────────────────────────────────
 

@@ -1,14 +1,8 @@
 // ─── Market Sentiment (Dimension 06) ──────────────────────────────────────────
 
-export type SentimentRegime =
-  | "EXTREME_FEAR"
-  | "FEAR"
-  | "NEUTRAL"
-  | "GREED"
-  | "EXTREME_GREED"
-  | "CONSENSUS_BULLISH"
-  | "CONSENSUS_BEARISH"
-  | "SENTIMENT_DIVERGENCE";
+import type { SentimentRegime as PrismaSentimentRegime } from "../generated/prisma/client.js";
+
+export type SentimentRegime = PrismaSentimentRegime;
 
 // ─── Collector types ─────────────────────────────────────────────────────────
 
@@ -40,7 +34,6 @@ export interface CrossDimensionInputs {
   derivatives: {
     fundingPercentile1m: number;   // 0–100
     oiPercentile1m: number;        // 0–100
-    longShortRatio: number;        // e.g. 2.1
     regime: string;
   } | null;
   etfs: {

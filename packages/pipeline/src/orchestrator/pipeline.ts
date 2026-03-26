@@ -32,7 +32,7 @@ import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
 import { runAgent as runSentimentAgent } from "../sentiment/agent.js";
 import type { SentimentState } from "../sentiment/types.js";
 
-import type { DimensionOutput } from "./types.js";
+import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput } from "./types.js";
 
 // ─── State helpers ───────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ function saveJsonState<T>(file: string, key: string, state: T): void {
 
 // ─── Dimension runners ───────────────────────────────────────────────────────
 
-async function runDerivatives(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
+async function runDerivatives(asset: "BTC" | "ETH"): Promise<DerivativesOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} derivatives (${asset})...`);
     const snapshot = await collectDerivatives(asset);
@@ -63,9 +63,13 @@ async function runDerivatives(asset: "BTC" | "ETH"): Promise<DimensionOutput | n
     saveDerivativesState(asset, nextState);
     const interpretation = await runDerivativesAgent(context);
     return {
-      dimension: "derivatives",
-      label: "Derivatives Structure",
-      regime: `${context.regime} [OI:${context.oiSignal}]`,
+      dimension: "DERIVATIVES",
+      regime: context.positioning.state,
+      stress: context.stress.state,
+      previousRegime: context.previousPositioning,
+      previousStress: context.previousStress,
+      oiSignal: context.oiSignal,
+      since: context.since,
       context,
       interpretation,
     };
@@ -75,7 +79,7 @@ async function runDerivatives(asset: "BTC" | "ETH"): Promise<DimensionOutput | n
   }
 }
 
-async function runEtfs(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
+async function runEtfs(asset: "BTC" | "ETH"): Promise<EtfsOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} etfs (${asset})...`);
     const snapshot = await collectEtfs(asset);
@@ -84,9 +88,10 @@ async function runEtfs(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
     saveJsonState("etfs_state.json", asset, nextState);
     const interpretation = await runEtfsAgent(context);
     return {
-      dimension: "etfs",
-      label: "Institutional Flows (ETFs)",
+      dimension: "ETFS",
       regime: context.regime,
+      previousRegime: context.previousRegime,
+      since: context.since,
       context,
       interpretation,
     };
@@ -96,7 +101,7 @@ async function runEtfs(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
   }
 }
 
-async function runHtf(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
+async function runHtf(asset: "BTC" | "ETH"): Promise<HtfOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} htf (${asset})...`);
     const snapshot = await collectHtf(asset);
@@ -105,9 +110,12 @@ async function runHtf(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
     saveJsonState("htf_state.json", asset, nextState);
     const interpretation = await runHtfAgent(context);
     return {
-      dimension: "htf",
-      label: "HTF Technical Structure",
+      dimension: "HTF",
       regime: context.regime,
+      previousRegime: context.previousRegime,
+      since: context.since,
+      lastStructure: context.structure,
+      snapshotPrice: context.price,
       context,
       interpretation,
     };
@@ -117,7 +125,7 @@ async function runHtf(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
   }
 }
 
-async function runSentimentDim(asset: "BTC" | "ETH"): Promise<DimensionOutput | null> {
+async function runSentimentDim(asset: "BTC" | "ETH"): Promise<SentimentOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} sentiment (${asset})...`);
     const snapshot = await collectSentiment(asset);
@@ -126,9 +134,16 @@ async function runSentimentDim(asset: "BTC" | "ETH"): Promise<DimensionOutput | 
     saveJsonState("sentiment_state.json", asset, nextState);
     const interpretation = await runSentimentAgent(context);
     return {
-      dimension: "sentiment",
-      label: "Market Sentiment (Composite F&G)",
+      dimension: "SENTIMENT",
       regime: context.regime,
+      previousRegime: context.previousRegime,
+      since: context.since,
+      compositeIndex: context.metrics.compositeIndex,
+      compositeLabel: context.metrics.compositeLabel,
+      positioning: context.metrics.components.positioning,
+      trend: context.metrics.components.trend,
+      institutionalFlows: context.metrics.components.institutionalFlows,
+      expertConsensus: context.metrics.components.expertConsensus,
       context,
       interpretation,
     };

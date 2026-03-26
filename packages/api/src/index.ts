@@ -29,3 +29,5 @@ const port = Number(process.env.API_PORT ?? 3001);
 serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`API server running on http://localhost:${port}`);
 });
+
+export * from "./lib/exports.js";

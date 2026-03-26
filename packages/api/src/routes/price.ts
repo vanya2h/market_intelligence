@@ -53,11 +53,7 @@ export const PriceController = createController({
       const { asset } = c.req.valid("param");
 
       try {
-        const result = await getCached(
-          `price-${asset.toLowerCase()}`,
-          CACHE_TTL_MS,
-          () => fetchBinancePrice(asset)
-        );
+        const result = await getCached(`price-${asset.toLowerCase()}`, CACHE_TTL_MS, () => fetchBinancePrice(asset));
         return c.json({ asset, ...result });
       } catch {
         return c.json({ error: "Failed to fetch price" }, 502);

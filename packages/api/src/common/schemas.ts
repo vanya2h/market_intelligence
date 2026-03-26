@@ -15,12 +15,12 @@ export const PaginationQuerySchema = z.object({
   take: z.coerce.number().int().min(1).max(100).default(30),
 });
 
-export const BriefDimensionSchema = z.object({
+export const DimensionBaseSchema = z.object({
   id: z.string(),
   briefId: z.string(),
-  dimension: z.string(),
-  label: z.string(),
   regime: z.string(),
+  previousRegime: z.string().nullable(),
+  since: z.string(),
   context: z.any(),
   interpretation: z.string(),
 });
@@ -31,14 +31,24 @@ export const BriefSchema = z.object({
   timestamp: z.string(),
   brief: z.string(),
   richBrief: z.any().nullable().optional(),
-  snapshotPrice: z.number().nullable().optional(),
-  compositeIndex: z.number().nullable(),
-  compositeLabel: z.string().nullable(),
-  positioning: z.number().nullable(),
-  trend: z.number().nullable(),
-  institutionalFlows: z.number().nullable(),
-  expertConsensus: z.number().nullable(),
-  dimensions: z.array(BriefDimensionSchema),
+  dimensions: z.array(z.string()),
+  derivatives: DimensionBaseSchema.extend({
+    stress: z.string().nullable(),
+    previousStress: z.string().nullable(),
+  }).nullable().optional(),
+  etfs: DimensionBaseSchema.nullable().optional(),
+  htf: DimensionBaseSchema.extend({
+    lastStructure: z.string().nullable(),
+    snapshotPrice: z.number().nullable(),
+  }).nullable().optional(),
+  sentiment: DimensionBaseSchema.extend({
+    compositeIndex: z.number().nullable(),
+    compositeLabel: z.string().nullable(),
+    positioning: z.number().nullable(),
+    trend: z.number().nullable(),
+    institutionalFlows: z.number().nullable(),
+    expertConsensus: z.number().nullable(),
+  }).nullable().optional(),
 });
 
 export const DimensionStateSchema = z.object({
@@ -49,7 +59,9 @@ export const DimensionStateSchema = z.object({
   since: z.string(),
   previousRegime: z.string().nullable(),
   lastUpdated: z.string(),
-  metadata: z.any().nullable(),
+  stress: z.string().nullable().optional(),
+  previousStress: z.string().nullable().optional(),
+  lastStructure: z.string().nullable().optional(),
 });
 
 export const DimensionSnapshotSchema = z.object({

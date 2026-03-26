@@ -43,10 +43,6 @@ function scorePositioning(d: CrossDimensionInputs["derivatives"]): number {
   // Funding percentile directly maps to positioning sentiment
   const fundingScore = d.fundingPercentile1m;
 
-  // L/S ratio: 1.0 = neutral, >2 = greedy, <0.5 = fearful
-  // Map to 0–100: ratio 0.3→10, 1.0→50, 2.0→75, 3.0→90
-  const lsScore = clamp(((d.longShortRatio - 0.3) / 2.7) * 100);
-
   // OI percentile — high OI = more leverage = more greed
   const oiScore = d.oiPercentile1m;
 
@@ -57,7 +53,7 @@ function scorePositioning(d: CrossDimensionInputs["derivatives"]): number {
   else if (d.regime === "SHORT_SQUEEZE") regimeBonus = 10;
   else if (d.regime === "DELEVERAGING" || d.regime === "UNWINDING") regimeBonus = -10;
 
-  return clamp(fundingScore * 0.4 + lsScore * 0.25 + oiScore * 0.25 + 50 * 0.1 + regimeBonus);
+  return clamp(fundingScore * 0.5 + oiScore * 0.4 + 50 * 0.1 + regimeBonus);
 }
 
 /**
@@ -232,7 +228,7 @@ function determineRegime(metrics: SentimentMetrics): SentimentRegime {
   if (compositeIndex < 40) return "FEAR";
   if (compositeIndex > 60) return "GREED";
 
-  return "NEUTRAL";
+  return "SENTIMENT_NEUTRAL";
 }
 
 // ─── Event detection ──────────────────────────────────────────────────────────

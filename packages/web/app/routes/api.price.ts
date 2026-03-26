@@ -1,11 +1,16 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { api } from "../server/api.server";
+import { AssetType } from "@market-intel/api";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const asset = params.asset;
   if (!asset) return Response.json({ error: "Missing asset" }, { status: 400 });
 
-  const res = await api.api.price[":asset"].$get({ param: { asset } });
+  const res = await api.api.price[":asset"].$get({
+    param: {
+      asset: asset as AssetType,
+    },
+  });
 
   if (!res.ok) {
     return Response.json({ error: "Upstream price fetch failed" }, { status: 502 });

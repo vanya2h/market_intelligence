@@ -256,7 +256,7 @@ function detectStructure(weeklyCandles: Candle[]): MarketStructure {
   const highs = pivotHighs(window);
   const lows = pivotLows(window);
 
-  if (highs.length < 2 || lows.length < 2) return "UNKNOWN";
+  if (highs.length < 2 || lows.length < 2) return "STRUCTURE_UNKNOWN";
 
   const lastHigh = highs.at(-1)!;
   const prevHigh = highs.at(-2)!;
@@ -346,7 +346,7 @@ function detectEvents(
   }
 
   // Structure shift
-  if (prevState && prevState.lastStructure !== structure && structure !== "UNKNOWN") {
+  if (prevState && prevState.lastStructure !== structure && structure !== "STRUCTURE_UNKNOWN") {
     if (structure === "HH_HL") {
       events.push({ type: "structure_shift_bullish", detail: `Structure shifted to ${structure}`, at });
     } else if (structure === "LH_LL") {

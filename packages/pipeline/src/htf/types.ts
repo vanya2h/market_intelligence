@@ -1,24 +1,17 @@
 // ─── HTF Technical Structure (Dimension 07) ──────────────────────────────────
 
-export type HtfRegime =
-  | "MACRO_BULLISH"   // price > 200 DMA, bullish structure (HH/HL)
-  | "BULL_EXTENDED"   // macro bullish + weekly RSI > 70 (overbought risk)
-  | "MACRO_BEARISH"   // price < 200 DMA, bearish structure (LH/LL)
-  | "BEAR_EXTENDED"   // macro bearish + weekly RSI < 30 (capitulation zone)
-  | "RECLAIMING"      // price between 50 DMA and 200 DMA, recovering
-  | "RANGING";        // mixed signals, no directional bias
+import type {
+  HtfRegime as PrismaHtfRegime,
+  MarketStructure as PrismaMarketStructure,
+} from "../generated/prisma/client.js";
 
-export type MarketStructure =
-  | "HH_HL"   // bullish: higher high + higher low
-  | "LH_LL"   // bearish: lower high + lower low
-  | "HH_LL"   // mixed: expanding / volatile
-  | "LH_HL"   // mixed: contracting / coiling
-  | "UNKNOWN";
+export type HtfRegime = PrismaHtfRegime;
+export type MarketStructure = PrismaMarketStructure;
 
 export type MaCrossType = "GOLDEN" | "DEATH" | "NONE";
 
 export interface Candle {
-  time: number;   // ms
+  time: number; // ms
   open: number;
   high: number;
   low: number;
@@ -29,9 +22,9 @@ export interface Candle {
 
 // Raw data from collector
 export interface HtfSnapshot {
-  timestamp: string;      // ISO 8601
+  timestamp: string; // ISO 8601
   asset: "BTC" | "ETH";
-  h4Candles:    Candle[]; // last ~300 4h candles → SMA 50/200 on 4h, 4h RSI
+  h4Candles: Candle[]; // last ~300 4h candles → SMA 50/200 on 4h, 4h RSI
   dailyCandles: Candle[]; // last ~104 daily candles → daily RSI, market structure
   futuresH4Candles: Candle[]; // last ~300 4h candles from futures → futures CVD
 }
@@ -39,41 +32,41 @@ export interface HtfSnapshot {
 export interface MaContext {
   sma50: number;
   sma200: number;
-  priceVsSma50Pct: number;   // % above/below (negative = below)
+  priceVsSma50Pct: number; // % above/below (negative = below)
   priceVsSma200Pct: number;
-  crossType: MaCrossType;    // current relationship
-  recentCross: MaCrossType;  // if a cross happened within last 10 4h candles
+  crossType: MaCrossType; // current relationship
+  recentCross: MaCrossType; // if a cross happened within last 10 4h candles
 }
 
 export interface RsiContext {
   daily: number; // RSI-14 on daily closes — trend bias
-  h4: number;    // RSI-14 on 4h closes — momentum / entry context
+  h4: number; // RSI-14 on 4h closes — momentum / entry context
 }
 
 export type CvdRegime = "RISING" | "DECLINING" | "FLAT";
 export type CvdDivergence = "BULLISH" | "BEARISH" | "NONE";
 
 export interface CvdWindow {
-  regime: CvdRegime;  // trend direction based on linear regression
-  slope: number;      // normalized slope (delta per candle / avg volume)
-  r2: number;         // R² of the linear fit — confidence in the trend
+  regime: CvdRegime; // trend direction based on linear regression
+  slope: number; // normalized slope (delta per candle / avg volume)
+  r2: number; // R² of the linear fit — confidence in the trend
 }
 
 export interface CvdSeries {
-  value: number;            // cumulative volume delta (long window)
-  short: CvdWindow;         // 20 candles (~3.3d) — catches turns early
-  long: CvdWindow;          // 75 candles (~12.5d) — confirmed swing trend
+  value: number; // cumulative volume delta (long window)
+  short: CvdWindow; // 20 candles (~3.3d) — catches turns early
+  long: CvdWindow; // 75 candles (~12.5d) — confirmed swing trend
   divergence: CvdDivergence; // price vs CVD trend disagreement
 }
 
 export interface CvdContext {
-  futures: CvdSeries;  // CVD analysis on futures 4h
-  spot: CvdSeries;     // CVD analysis on spot 4h
+  futures: CvdSeries; // CVD analysis on futures 4h
+  spot: CvdSeries; // CVD analysis on spot 4h
 }
 
 export interface VwapContext {
-  weekly: number;   // volume-weighted average price for current week
-  monthly: number;  // volume-weighted average price for current month
+  weekly: number; // volume-weighted average price for current week
+  monthly: number; // volume-weighted average price for current month
 }
 
 export interface HtfEvent {

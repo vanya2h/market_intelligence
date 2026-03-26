@@ -12,7 +12,7 @@
 
 import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
-import type { DimensionOutput } from "./types.js";
+import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 const SYNTH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
@@ -33,7 +33,7 @@ function buildCacheKey(asset: string, outputs: DimensionOutput[]): string {
 
 function buildPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[]): string {
   const sections = outputs.map((o) => {
-    return `### ${o.label}
+    return `### ${DIMENSION_LABELS[o.dimension]}
 **Regime:** ${o.regime}
 
 **Agent interpretation:**
