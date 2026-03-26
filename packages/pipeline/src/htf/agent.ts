@@ -23,9 +23,13 @@ function contextCacheKey(ctx: HtfContext): string {
     priceVsSma200Bucket: Math.round(ctx.ma.priceVsSma200Pct / 5) * 5,  // 5% buckets
     rsiDailyBucket: Math.round(ctx.rsi.daily / 5) * 5,                 // 5-point buckets
     rsiH4Bucket:    Math.round(ctx.rsi.h4    / 5) * 5,
-    // CVD sign (positive/negative) matters more than magnitude for caching
-    cvdFuturesSign: Math.sign(ctx.cvd.futures),
-    cvdSpotSign:    Math.sign(ctx.cvd.spot),
+    // CVD dual-window regimes + divergence for caching
+    cvdFutShort:  ctx.cvd.futures.short.regime,
+    cvdFutLong:   ctx.cvd.futures.long.regime,
+    cvdFutDiv:    ctx.cvd.futures.divergence,
+    cvdSpotShort: ctx.cvd.spot.short.regime,
+    cvdSpotLong:  ctx.cvd.spot.long.regime,
+    cvdSpotDiv:   ctx.cvd.spot.divergence,
     // VWAP position relative to price: above or below
     priceVsWeeklyVwap: ctx.price > ctx.vwap.weekly ? "above" : "below",
     priceVsMonthlyVwap: ctx.price > ctx.vwap.monthly ? "above" : "below",

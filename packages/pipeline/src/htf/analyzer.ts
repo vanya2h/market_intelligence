@@ -19,6 +19,10 @@
 import {
   Candle,
   CvdContext,
+  CvdDivergence,
+  CvdRegime,
+  CvdSeries,
+  CvdWindow,
   HtfContext,
   HtfEvent,
   HtfRegime,
@@ -61,15 +65,130 @@ function rsi14(closes: number[]): number {
   return parseFloat((100 - 100 / (1 + rs)).toFixed(2));
 }
 
+// ─── CVD regime detection (dual-window + divergence) ─────────────────────────
+
+const CVD_SHORT_LOOKBACK = 20;  // ~3.3 days — catches regime turns early
+const CVD_LONG_LOOKBACK  = 75;  // ~12.5 days — covers a full swing hold
+const SLOPE_THRESHOLD = 0.02;
+const R2_THRESHOLD    = 0.3;
+
 /**
- * Cumulative Volume Delta over the last N candles.
- * delta per candle = takerBuyVolume − (volume − takerBuyVolume) = 2·takerBuyVolume − volume
+ * Linear regression on a numeric series.
+ * Returns { slope, intercept, r2 }.
  */
-function cvd(candles: Candle[], lookback = 50): number {
-  const window = candles.slice(-lookback);
-  return parseFloat(
-    window.reduce((sum, c) => sum + (2 * c.takerBuyVolume - c.volume), 0).toFixed(2)
-  );
+function linreg(values: number[]): { slope: number; intercept: number; r2: number } {
+  const n = values.length;
+  if (n < 2) return { slope: 0, intercept: 0, r2: 0 };
+
+  const sumX  = (n * (n - 1)) / 2;
+  const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
+  let sumY  = 0;
+  let sumXY = 0;
+  for (let i = 0; i < n; i++) {
+    sumY  += values[i]!;
+    sumXY += i * values[i]!;
+  }
+  const slope     = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  const meanY = sumY / n;
+  let ssTot = 0;
+  let ssRes = 0;
+  for (let i = 0; i < n; i++) {
+    ssTot += (values[i]! - meanY) ** 2;
+    ssRes += (values[i]! - (intercept + slope * i)) ** 2;
+  }
+  const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+
+  return { slope, intercept, r2: parseFloat(r2.toFixed(4)) };
+}
+
+/** Build the cumulative CVD curve from candle deltas. */
+function buildCvdCurve(candles: Candle[]): number[] {
+  const curve: number[] = [];
+  let running = 0;
+  for (const c of candles) {
+    running += 2 * c.takerBuyVolume - c.volume;
+    curve.push(running);
+  }
+  return curve;
+}
+
+/** Classify a CVD window into a regime using slope + R². */
+function classifyWindow(candles: Candle[], cvdCurve: number[]): CvdWindow {
+  const n = candles.length;
+  if (n < 10) return { regime: "FLAT", slope: 0, r2: 0 };
+
+  const { slope, r2 } = linreg(cvdCurve);
+
+  const avgVolume = candles.reduce((s, c) => s + c.volume, 0) / n;
+  const normalizedSlope = avgVolume === 0 ? 0 : parseFloat((slope / avgVolume).toFixed(6));
+
+  let regime: CvdRegime = "FLAT";
+  if (Math.abs(normalizedSlope) >= SLOPE_THRESHOLD && r2 >= R2_THRESHOLD) {
+    regime = normalizedSlope > 0 ? "RISING" : "DECLINING";
+  }
+
+  return { regime, slope: normalizedSlope, r2 };
+}
+
+/**
+ * Detect price–CVD divergence over a window.
+ *
+ * Compares the linear-regression slope of price closes vs CVD curve.
+ * Both must show a confident trend (R² ≥ 0.3) in opposite directions.
+ *   price rising  + CVD declining → BEARISH (distribution)
+ *   price falling + CVD rising    → BULLISH (accumulation)
+ */
+function detectDivergence(
+  candles: Candle[],
+  cvdCurve: number[]
+): CvdDivergence {
+  if (candles.length < 10) return "NONE";
+
+  const priceReg = linreg(candles.map((c) => c.close));
+  const cvdReg   = linreg(cvdCurve);
+
+  // Both trends must be confident
+  if (priceReg.r2 < R2_THRESHOLD || cvdReg.r2 < R2_THRESHOLD) return "NONE";
+
+  // Normalize price slope the same way: per-unit of mean price
+  const meanPrice = candles.reduce((s, c) => s + c.close, 0) / candles.length;
+  const pSlope = meanPrice === 0 ? 0 : priceReg.slope / meanPrice;
+
+  const avgVolume = candles.reduce((s, c) => s + c.volume, 0) / candles.length;
+  const cSlope = avgVolume === 0 ? 0 : cvdReg.slope / avgVolume;
+
+  // Both must have meaningful magnitude and opposite signs
+  if (Math.abs(pSlope) < 0.001 || Math.abs(cSlope) < SLOPE_THRESHOLD) return "NONE";
+
+  if (pSlope > 0 && cSlope < 0) return "BEARISH";
+  if (pSlope < 0 && cSlope > 0) return "BULLISH";
+
+  return "NONE";
+}
+
+/**
+ * Full CVD analysis: dual-window regime + divergence.
+ *
+ * Short window (20 candles ≈ 3.3d): detects early regime shifts for entries.
+ * Long window  (75 candles ≈ 12.5d): confirms the trend across a swing hold.
+ * Divergence checked on the long window — more reliable over larger samples.
+ */
+function cvdAnalysis(candles: Candle[]): CvdSeries {
+  const longSlice  = candles.slice(-CVD_LONG_LOOKBACK);
+  const shortSlice = longSlice.slice(-CVD_SHORT_LOOKBACK);
+
+  const longCurve  = buildCvdCurve(longSlice);
+  const shortCurve = buildCvdCurve(shortSlice);
+
+  const longWindow  = classifyWindow(longSlice, longCurve);
+  const shortWindow = classifyWindow(shortSlice, shortCurve);
+
+  const value = longCurve.length > 0 ? parseFloat(longCurve.at(-1)!.toFixed(2)) : 0;
+  const divergence = detectDivergence(longSlice, longCurve);
+
+  return { value, short: shortWindow, long: longWindow, divergence };
 }
 
 /**
@@ -287,10 +406,10 @@ export function analyze(
   const rsiH4    = rsi14(h4Closes);
   const rsiDaily = rsi14(dailyCloses);
 
-  // CVD — last 50 4h candles (~8 days)
+  // CVD — dual-window regime detection + price divergence
   const cvdData: CvdContext = {
-    futures: cvd(snapshot.futuresH4Candles, 50),
-    spot:    cvd(h4, 50),
+    futures: cvdAnalysis(snapshot.futuresH4Candles),
+    spot:    cvdAnalysis(h4),
   };
 
   // Anchored VWAPs — weekly (Monday 00:00 UTC) and monthly (1st 00:00 UTC)

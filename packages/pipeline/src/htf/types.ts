@@ -50,9 +50,25 @@ export interface RsiContext {
   h4: number;    // RSI-14 on 4h closes — momentum / entry context
 }
 
+export type CvdRegime = "RISING" | "DECLINING" | "FLAT";
+export type CvdDivergence = "BULLISH" | "BEARISH" | "NONE";
+
+export interface CvdWindow {
+  regime: CvdRegime;  // trend direction based on linear regression
+  slope: number;      // normalized slope (delta per candle / avg volume)
+  r2: number;         // R² of the linear fit — confidence in the trend
+}
+
+export interface CvdSeries {
+  value: number;            // cumulative volume delta (long window)
+  short: CvdWindow;         // 20 candles (~3.3d) — catches turns early
+  long: CvdWindow;          // 75 candles (~12.5d) — confirmed swing trend
+  divergence: CvdDivergence; // price vs CVD trend disagreement
+}
+
 export interface CvdContext {
-  futures: number;  // cumulative volume delta on futures 4h (last 50 candles)
-  spot: number;     // cumulative volume delta on spot 4h (last 50 candles)
+  futures: CvdSeries;  // CVD analysis on futures 4h
+  spot: CvdSeries;     // CVD analysis on spot 4h
 }
 
 export interface VwapContext {

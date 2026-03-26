@@ -112,5 +112,4 @@ task = cron.schedule(BRIEF_CRON, () => { tick(); }, { timezone: "UTC" });
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-// Run immediately on startup
-tick();
+console.log(chalk.dim("  Waiting for next scheduled tick…\n"));
