@@ -36,11 +36,8 @@ function ComponentBar({ label, value }: { label: string; value: number | null })
         />
       </div>
       <span
-        className="w-6 text-right text-[11px] tabular-nums"
-        style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          color,
-        }}
+        className="font-mono-jb w-6 text-right text-[11px] tabular-nums"
+        style={{ color }}
       >
         {Math.round(value)}
       </span>

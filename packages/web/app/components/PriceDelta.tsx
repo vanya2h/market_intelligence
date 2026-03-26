@@ -7,21 +7,13 @@
 
 import { useEffect, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
+import { UsdValue } from "./UsdValue";
 
 interface PriceDeltaProps {
   asset: string;
   snapshotPrice: number;
   briefTimestamp: string;
   apiUrl?: string;
-}
-
-function formatPrice(price: number): string {
-  return price.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: price < 10 ? 2 : 0,
-  });
 }
 
 
@@ -79,16 +71,10 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         >
           Brief price
         </span>
-        <span
-          style={{
-            fontSize: "14px",
-            fontWeight: 700,
-            fontFamily: "'JetBrains Mono', monospace",
-            color: "var(--text-primary)",
-          }}
-        >
-          {formatPrice(snapshotPrice)}
-        </span>
+        <UsdValue
+          value={snapshotPrice}
+          style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}
+        />
         <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
           {formatDistanceToNowStrict(new Date(briefTimestamp), { addSuffix: true })}
         </span>
@@ -128,15 +114,10 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         >
           Brief
         </span>
-        <span
-          style={{
-            fontSize: "13px",
-            fontFamily: "'JetBrains Mono', monospace",
-            color: "var(--text-secondary)",
-          }}
-        >
-          {formatPrice(snapshotPrice)}
-        </span>
+        <UsdValue
+          value={snapshotPrice}
+          style={{ fontSize: "13px", color: "var(--text-secondary)" }}
+        />
       </div>
 
       {/* Arrow separator */}
@@ -162,16 +143,10 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         >
           Now
         </span>
-        <span
-          style={{
-            fontSize: "14px",
-            fontWeight: 700,
-            fontFamily: "'JetBrains Mono', monospace",
-            color: "var(--text-primary)",
-          }}
-        >
-          {formatPrice(livePrice)}
-        </span>
+        <UsdValue
+          value={livePrice}
+          style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}
+        />
       </div>
 
       {/* Delta badge */}
@@ -187,21 +162,17 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         }}
       >
         <span style={{ fontSize: "11px", color: deltaColor }}>{arrow}</span>
-        <span
-          style={{
-            fontSize: "12px",
-            fontWeight: 600,
-            fontFamily: "'JetBrains Mono', monospace",
-            color: deltaColor,
-          }}
-        >
-          {isPositive ? "+" : ""}
-          {formatPrice(Math.abs(delta))}
+        <span style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }}>
+          {isPositive ? "+" : "-"}
         </span>
+        <UsdValue
+          value={Math.abs(delta)}
+          style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }}
+        />
         <span
+          className="font-mono-jb"
           style={{
             fontSize: "11px",
-            fontFamily: "'JetBrains Mono', monospace",
             color: deltaColor,
             opacity: 0.8,
           }}

@@ -8,11 +8,8 @@ export function MetricRow({ label, value }: { label: string; value: string }) {
         {label}
       </span>
       <span
-        className="text-xs font-medium tabular-nums"
-        style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          color: "var(--text-secondary)",
-        }}
+        className="font-mono-jb text-xs font-medium tabular-nums"
+        style={{ color: "var(--text-secondary)" }}
       >
         {value}
       </span>

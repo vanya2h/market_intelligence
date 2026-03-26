@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict, format } from "date-fns";
 import { api } from "../server/api.server";
 import { DIMENSIONS } from "../lib/dimension-config";
 import { BriefCard } from "../components/BriefCard";
 import { RichBriefRenderer } from "../components/RichBrief";
-import { PriceDelta } from "../components/PriceDelta";
 import { DimensionCard } from "../components/DimensionCard";
-import { AssetSelector } from "../components/AssetSelector";
 import { SentimentGauge } from "../components/SentimentGauge";
 import { regimeColor } from "../lib/regime-colors";
+import { UsdValue } from "../components/UsdValue";
+import { Tooltip } from "../components/Tooltip";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
+
+import type { RichBlock } from "../components/RichBrief";
 
 interface BriefDimension {
   dimension: string;
@@ -19,10 +22,9 @@ interface BriefDimension {
   interpretation: string;
 }
 
-import type { RichBlock } from "../components/RichBrief";
-
 interface BriefData {
   id: string;
+  asset: string;
   brief: string;
   richBrief?: { blocks: RichBlock[] } | null;
   snapshotPrice?: number | null;
@@ -34,47 +36,21 @@ interface BriefData {
   expertConsensus: number | null;
   timestamp: string;
   dimensions: BriefDimension[];
+  prevId: string | null;
+  nextId: string | null;
 }
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
-  const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
+export async function loader({ params }: LoaderFunctionArgs) {
+  const { id } = params;
+  if (!id) throw new Response("Missing brief ID", { status: 400 });
 
-  const [briefRes, historyRes] = await Promise.all([
-    api.api.briefs.latest[":asset"].$get({ param: { asset } }),
-    api.api.briefs.history[":asset"].$get({
-      param: { asset },
-      query: { take: "30" },
-    }),
-  ]);
+  const res = await api.api.briefs[":id"].$get({ param: { id } });
 
-  const brief: BriefData | null = briefRes.ok ? ((await briefRes.json()) as BriefData) : null;
-  const history: BriefData[] = historyRes.ok ? ((await historyRes.json()) as BriefData[]) : [];
+  if (!res.ok) throw new Response("Brief not found", { status: 404 });
 
-  const chartData: Record<string, { timestamp: string; value: number }[]> = {};
+  const brief = (await res.json()) as BriefData;
 
-  for (const dim of Object.keys(DIMENSIONS)) {
-    chartData[dim] = [];
-  }
-
-  for (const b of history) {
-    for (const bd of b.dimensions) {
-      const config = DIMENSIONS[bd.dimension];
-      if (!config) continue;
-      const ctx = bd.context as Record<string, unknown>;
-      const value = config.extractChartValue(ctx);
-      if (value != null) {
-        chartData[bd.dimension]!.push({
-          timestamp: b.timestamp,
-          value,
-        });
-      }
-    }
-  }
-
-  const apiUrl = process.env.API_URL ?? "http://localhost:3001";
-
-  return { asset, brief, chartData, apiUrl };
+  return { brief };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
@@ -88,44 +64,14 @@ const TAB_LABELS: Record<string, string> = {
   HTF: "HTF Structure",
 };
 
-function LiveClock() {
-  const [now, setNow] = useState(new Date());
+export default function BriefPage() {
+  const { brief } = useLoaderData<LoaderData>();
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <span className="font-mono-jb text-[11px] tabular-nums">
-      {now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-    </span>
-  );
-}
-
-export default function Dashboard() {
-  const { asset, brief, chartData, apiUrl } = useLoaderData<LoaderData>();
-
-  const availableDims = brief ? DIMENSION_TABS.filter((dim) => brief.dimensions.some((d) => d.dimension === dim)) : [];
+  const availableDims = DIMENSION_TABS.filter((dim) => brief.dimensions.some((d) => d.dimension === dim));
 
   const [activeTab, setActiveTab] = useState<string>(availableDims[0] ?? "DERIVATIVES");
 
-  if (!brief) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <AssetSelector current={asset} />
-        <p style={{ color: "var(--text-muted)" }}>
-          No data for {asset}.{" "}
-          <code
-            className="px-2 py-0.5 text-sm"
-            style={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
-          >
-            pnpm brief
-          </code>
-        </p>
-      </div>
-    );
-  }
+  const briefDate = new Date(brief.timestamp);
 
   return (
     <div className="min-h-screen">
@@ -135,42 +81,97 @@ export default function Dashboard() {
         style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
       >
         <div className="flex items-center gap-2 md:gap-4">
-          <img src="/asterisk.png" alt="" className="h-5 w-5" />
-          <span
-            className="hidden text-sm font-semibold tracking-tight sm:inline"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Vanya2h's Intelligence System
-          </span>
-          <div className="hidden h-4 md:block" style={{ borderLeft: "1px solid var(--border)" }} />
-          <AssetSelector current={asset} />
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:inline-flex items-center">
-            <LiveClock />
-          </span>
-          <div className="flex items-center gap-1.5">
-            <div className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--green)" }} />
-            <span className="text-[11px] font-medium font-mono-jb" style={{ color: "var(--green)" }}>
-              LIVE
+          <Link to="/" className="flex items-center gap-2">
+            <img src="/asterisk.png" alt="" className="h-5 w-5" />
+            <span
+              className="hidden text-sm font-semibold tracking-tight sm:inline"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Vanya2h's Intelligence System
             </span>
-          </div>
+          </Link>
+          <div className="hidden h-4 md:block" style={{ borderLeft: "1px solid var(--border)" }} />
+          <span className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            {brief.asset} Brief
+          </span>
+        </div>
+
+        {/* Prev / Next navigation */}
+        <div className="flex items-center gap-1">
+          {brief.prevId ? (
+            <Link
+              to={`/brief/${brief.prevId}`}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              ← Older
+            </Link>
+          ) : (
+            <span className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+              ← Older
+            </span>
+          )}
+          <div className="h-3" style={{ borderLeft: "1px solid var(--border)" }} />
+          {brief.nextId ? (
+            <Link
+              to={`/brief/${brief.nextId}`}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              Newer →
+            </Link>
+          ) : (
+            <span className="px-2 py-1 text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+              Newer →
+            </span>
+          )}
         </div>
       </nav>
+
+      {/* Timestamp header */}
+      <div
+        className="flex items-center justify-between px-3 py-3 md:px-5"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
+      >
+        <div className="flex items-center gap-3">
+          <Tooltip side="bottom" content="The date when report was generated">
+            <span
+              className="font-mono-jb text-sm font-medium tabular-nums inline-flex items-center gap-1.5"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {format(briefDate, "MMM d, yyyy · HH:mm")}
+              <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
+            </span>
+          </Tooltip>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {formatDistanceToNowStrict(briefDate, { addSuffix: true })}
+          </span>
+        </div>
+        {brief.snapshotPrice != null && (
+          <Tooltip side="bottom" content="Price at the moment when report is generated">
+            <span className="inline-flex items-center gap-1.5">
+              <UsdValue value={brief.snapshotPrice} className="text-sm" />
+              <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
+            </span>
+          </Tooltip>
+        )}
+      </div>
 
       {/* Mobile: sidebar content stacked above main */}
       <div
         className="flex flex-col gap-4 p-3 md:hidden"
         style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
       >
-        {/* Composite Index — compact horizontal layout on mobile */}
         {brief.compositeIndex != null && brief.compositeLabel && (
           <div className="flex items-center gap-4">
             <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
           </div>
         )}
 
-        {/* Regime + Overview in a 2-col grid on mobile */}
         <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
           <div>
             <div
@@ -336,18 +337,6 @@ export default function Dashboard() {
 
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col">
-          {/* Price delta strip */}
-          {brief.snapshotPrice != null && (
-            <div className="px-3 pt-3 md:px-5 md:pt-4">
-              <PriceDelta
-                asset={asset}
-                snapshotPrice={brief.snapshotPrice}
-                briefTimestamp={brief.timestamp}
-                apiUrl={apiUrl}
-              />
-            </div>
-          )}
-
           {/* Brief section */}
           <div className="p-3 md:p-5" style={{ borderBottom: "1px solid var(--border)" }}>
             {brief.richBrief?.blocks ? (
@@ -359,16 +348,6 @@ export default function Dashboard() {
                   >
                     Market Brief
                   </span>
-                  <Link
-                    to={`/brief/${brief.id}`}
-                    className="text-[10px] transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                  >
-                    {asset} &middot; Generated{" "}
-                    {formatDistanceToNowStrict(new Date(brief.timestamp), { addSuffix: true })} →
-                  </Link>
                 </div>
                 <RichBriefRenderer blocks={brief.richBrief.blocks} />
               </div>
@@ -384,12 +363,12 @@ export default function Dashboard() {
                   expertConsensus: brief.expertConsensus,
                 }}
                 timestamp={brief.timestamp}
-                asset={asset}
+                asset={brief.asset}
               />
             )}
           </div>
 
-          {/* Dimension tabs — only show tabs that have data */}
+          {/* Dimension tabs */}
           <div
             className="flex items-center gap-0 overflow-x-auto px-3 md:px-5"
             style={{ borderBottom: "1px solid var(--border)" }}
@@ -411,19 +390,6 @@ export default function Dashboard() {
             })}
           </div>
 
-          {/* Low-data disclaimer */}
-          <div
-            className="mx-3 mt-3 flex items-center gap-2 rounded px-3 py-2 text-xs md:mx-5 md:mt-4"
-            style={{
-              background: "var(--surface-secondary)",
-              color: "var(--text-muted)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <span>⚠</span>
-            <span>Limited data available — charts may not be fully representative yet.</span>
-          </div>
-
           {/* Tab content */}
           <div className="flex-1 p-3 md:p-5">
             {availableDims.map((dim) => {
@@ -437,7 +403,7 @@ export default function Dashboard() {
                   regime={bd.regime}
                   context={bd.context}
                   interpretation={bd.interpretation}
-                  chartData={chartData[dim] ?? []}
+                  chartData={[]}
                   isActive={activeTab === dim}
                 />
               );

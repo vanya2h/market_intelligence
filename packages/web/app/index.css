@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.font-mono-jb {
+  font-family: "JetBrains Mono", monospace;
+}
+
 :root {
   --bg-primary: #07080a;
   --bg-card: #0d0e12;

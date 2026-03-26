@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { describeRoute, resolver, validator } from "hono-openapi";
 import { prisma } from "@market-intel/pipeline";
 import { createController } from "../common/controller.js";
@@ -71,10 +72,58 @@ export const GetBriefHistoryController = createController({
       ),
 });
 
+const BriefIdParamSchema = z.object({
+  id: z.string().min(1),
+});
+
+const byIdRoute = describeRoute({
+  summary: "Get brief by ID",
+  description: "Returns a single brief by its ID, with links to the previous and next briefs for navigation",
+  tags: ["Briefs"],
+  responses: {
+    200: {
+      description: "Brief with prev/next navigation IDs",
+    },
+    404: { description: "Brief not found" },
+  },
+});
+
+export const GetBriefByIdController = createController({
+  build: (factory) =>
+    factory.createApp().get("/:id", byIdRoute, validator("param", BriefIdParamSchema), async (c) => {
+      const { id } = c.req.valid("param");
+      const brief = await prisma.brief.findUnique({
+        where: { id },
+        include: { dimensions: true },
+      });
+      if (!brief) return c.json({ error: "Brief not found" }, 404);
+
+      const [prev, next] = await Promise.all([
+        prisma.brief.findFirst({
+          where: { asset: brief.asset, timestamp: { lt: brief.timestamp } },
+          orderBy: { timestamp: "desc" },
+          select: { id: true },
+        }),
+        prisma.brief.findFirst({
+          where: { asset: brief.asset, timestamp: { gt: brief.timestamp } },
+          orderBy: { timestamp: "asc" },
+          select: { id: true },
+        }),
+      ]);
+
+      return c.json({
+        ...brief,
+        prevId: prev?.id ?? null,
+        nextId: next?.id ?? null,
+      });
+    }),
+});
+
 export const BriefsController = createController({
   build: (factory) =>
     factory
       .createApp()
       .route("/", GetLatestBriefController.build(factory))
-      .route("/", GetBriefHistoryController.build(factory)),
+      .route("/", GetBriefHistoryController.build(factory))
+      .route("/", GetBriefByIdController.build(factory)),
 });

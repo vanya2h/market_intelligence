@@ -12,7 +12,7 @@ export function SentimentGauge({ value, label }: { value: number; label: string 
   return (
     <div className="flex flex-col gap-3 w-full">
       <div className="flex items-baseline gap-2">
-        <span className="text-4xl font-bold tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace", color }}>
+        <span className="font-mono-jb text-4xl font-bold tabular-nums" style={{ color }}>
           {Math.round(value)}
         </span>
         <span className="text-xs tracking-wide" style={{ color: "var(--text-muted)" }}>
@@ -30,11 +30,8 @@ export function SentimentGauge({ value, label }: { value: number; label: string 
         {[0, 25, 50, 75, 100].map((tick) => (
           <span
             key={tick}
-            className="text-[9px] tabular-nums"
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              color: "var(--text-muted)",
-            }}
+            className="font-mono-jb text-[9px] tabular-nums"
+            style={{ color: "var(--text-muted)" }}
           >
             {tick}
           </span>

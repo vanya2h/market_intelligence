@@ -42,7 +42,7 @@ export function MiniChart({
               border: "1px solid var(--border)",
               borderRadius: 4,
               fontSize: 11,
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "JetBrains Mono, monospace",
               padding: "6px 10px",
             }}
             labelStyle={{ color: "var(--text-muted)", fontSize: 10 }}
