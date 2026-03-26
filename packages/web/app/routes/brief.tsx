@@ -1,33 +1,21 @@
-import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { formatDistanceToNowStrict, format } from "date-fns";
 import { api } from "../server/api.server";
-import { DIMENSIONS } from "../lib/dimension-config";
-import { BriefCard } from "../components/BriefCard";
-import { RichBriefRenderer } from "../components/RichBrief";
-import { DimensionCard } from "../components/DimensionCard";
+import { BriefSection } from "../components/BriefSection";
 import { AppHeader } from "../components/AppHeader";
-import { BriefSidebar, DIMENSION_TABS, TAB_LABELS } from "../components/BriefSidebar";
-import { SentimentGauge } from "../components/SentimentGauge";
-import { SectionBlock } from "../components/SectionBlock";
-import { regimeColor } from "../lib/regime-colors";
+import { BriefSidebar } from "../components/BriefSidebar";
+import { MobileBriefSummary } from "../components/MobileBriefSummary";
+import { DimensionTabs } from "../components/DimensionTabs";
+import { StickyFooter } from "../components/StickyFooter";
 import { UsdValue } from "../components/UsdValue";
 import { Tooltip } from "../components/Tooltip";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
-
 import type { RichBlock } from "../components/RichBrief";
-
-interface BriefDimension {
-  dimension: string;
-  regime: string;
-  context: Record<string, unknown>;
-  interpretation: string;
-}
 
 interface BriefData {
   id: string;
-  asset: string;
+  asset: "BTC" | "ETH";
   brief: string;
   richBrief?: { blocks: RichBlock[] } | null;
   snapshotPrice?: number | null;
@@ -38,7 +26,7 @@ interface BriefData {
   institutionalFlows: number | null;
   expertConsensus: number | null;
   timestamp: string;
-  dimensions: BriefDimension[];
+  dimensions: { dimension: string; regime: string; context: Record<string, unknown>; interpretation: string }[];
   prevId: string | null;
   nextId: string | null;
 }
@@ -58,13 +46,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
-
 export default function BriefPage() {
   const { brief } = useLoaderData<LoaderData>();
-
-  const availableDims = DIMENSION_TABS.filter((dim) => brief.dimensions.some((d) => d.dimension === dim));
-
-  const [activeTab, setActiveTab] = useState<string>(availableDims[0] ?? "DERIVATIVES");
 
   const briefDate = new Date(brief.timestamp);
 
@@ -134,69 +117,7 @@ export default function BriefPage() {
       {/* Timestamp header */}
 
       {/* Mobile: sidebar content stacked above main */}
-      <div
-        className="flex flex-col gap-4 p-3 md:hidden"
-        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
-      >
-        {brief.compositeIndex != null && brief.compositeLabel && (
-          <div className="flex items-center gap-4">
-            <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-          <SectionBlock title="Regime Overview">
-            <div className="space-y-0.5">
-              {DIMENSION_TABS.map((dim) => {
-                const bd = brief.dimensions.find((d) => d.dimension === dim);
-                if (!bd) return null;
-                const { color, arrow } = regimeColor(bd.regime);
-                return (
-                  <div
-                    key={dim}
-                    className="flex items-center justify-between py-1"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                      {TAB_LABELS[dim]}
-                    </span>
-                    <span className="text-[11px] font-medium" style={{ color }}>
-                      {bd.regime} {arrow}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionBlock>
-          <SectionBlock title="Overview">
-            <div className="space-y-0.5">
-              {[
-                { label: "Positioning", value: brief.positioning },
-                { label: "Trend", value: brief.trend },
-                { label: "Inst. Flows", value: brief.institutionalFlows },
-                { label: "Expert Cons.", value: brief.expertConsensus },
-              ].map(({ label, value }) => {
-                if (value == null) return null;
-                const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
-                return (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between py-1"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                      {label}
-                    </span>
-                    <span className="font-mono-jb text-[11px] font-medium tabular-nums" style={{ color }}>
-                      {Math.round(value)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionBlock>
-        </div>
-      </div>
+      <MobileBriefSummary brief={brief} />
 
       {/* Desktop: side-by-side layout */}
       <div className="flex">
@@ -204,81 +125,17 @@ export default function BriefPage() {
         <BriefSidebar brief={brief} />
 
         {/* Main content */}
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="flex min-w-0 flex-1 flex-col md:max-w-3xl">
           {/* Brief section */}
-          <div className="p-3 md:p-5" style={{ borderBottom: "1px solid var(--border)" }}>
-            {brief.richBrief?.blocks ? (
-              <div>
-                <div className="mb-4 flex items-center gap-3">
-                  <span
-                    className="text-[10px] font-medium uppercase tracking-widest"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Market Brief
-                  </span>
-                </div>
-                <RichBriefRenderer blocks={brief.richBrief.blocks} />
-              </div>
-            ) : (
-              <BriefCard
-                brief={brief.brief}
-                compositeIndex={brief.compositeIndex}
-                compositeLabel={brief.compositeLabel}
-                components={{
-                  positioning: brief.positioning,
-                  trend: brief.trend,
-                  institutionalFlows: brief.institutionalFlows,
-                  expertConsensus: brief.expertConsensus,
-                }}
-                timestamp={brief.timestamp}
-                asset={brief.asset}
-              />
-            )}
+          <div className="p-4 md:p-6">
+            <BriefSection brief={brief} asset={brief.asset} />
           </div>
 
-          {/* Dimension tabs */}
-          <div
-            className="flex items-center gap-0 overflow-x-auto px-3 md:px-5"
-            style={{ borderBottom: "1px solid var(--border)" }}
-          >
-            {availableDims.map((dim) => {
-              const isActive = activeTab === dim;
-              return (
-                <button
-                  key={dim}
-                  onClick={() => setActiveTab(dim)}
-                  className={`relative shrink-0 px-3 py-3 text-xs font-medium tracking-wide transition-colors md:px-4 ${isActive ? "tab-active" : ""}`}
-                  style={{
-                    color: isActive ? "var(--text-primary)" : "var(--text-muted)",
-                  }}
-                >
-                  {TAB_LABELS[dim]}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 p-3 md:p-5">
-            {availableDims.map((dim) => {
-              const bd = brief.dimensions.find((d: BriefDimension) => d.dimension === dim);
-              if (!bd) return null;
-
-              return (
-                <DimensionCard
-                  key={dim}
-                  dimension={dim}
-                  regime={bd.regime}
-                  context={bd.context}
-                  interpretation={bd.interpretation}
-                  chartData={[]}
-                  isActive={activeTab === dim}
-                />
-              );
-            })}
-          </div>
+          {/* Dimension tabs + content */}
+          <DimensionTabs dimensions={brief.dimensions} />
         </main>
       </div>
+      <StickyFooter />
     </div>
   );
 }

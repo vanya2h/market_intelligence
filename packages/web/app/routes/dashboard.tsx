@@ -1,26 +1,14 @@
-import { useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
-import { Link, useLoaderData } from "react-router";
-import { formatDistanceToNowStrict } from "date-fns";
+import { useLoaderData } from "react-router";
 import { api } from "../server/api.server";
 import { DIMENSIONS } from "../lib/dimension-config";
-import { BriefCard } from "../components/BriefCard";
-import { RichBriefRenderer } from "../components/RichBrief";
-import { PriceDelta } from "../components/PriceDelta";
-import { DimensionCard } from "../components/DimensionCard";
+import { BriefSection } from "../components/BriefSection";
 import { AssetSelector } from "../components/AssetSelector";
 import { AppHeader } from "../components/AppHeader";
-import { BriefSidebar, DIMENSION_TABS, TAB_LABELS } from "../components/BriefSidebar";
-import { SentimentGauge } from "../components/SentimentGauge";
-import { SectionBlock } from "../components/SectionBlock";
-import { regimeColor } from "../lib/regime-colors";
-
-interface BriefDimension {
-  dimension: string;
-  regime: string;
-  context: Record<string, unknown>;
-  interpretation: string;
-}
+import { BriefSidebar } from "../components/BriefSidebar";
+import { MobileBriefSummary } from "../components/MobileBriefSummary";
+import { DimensionTabs } from "../components/DimensionTabs";
+import { StickyFooter } from "../components/StickyFooter";
 
 import type { RichBlock } from "../components/RichBrief";
 
@@ -36,7 +24,7 @@ interface BriefData {
   institutionalFlows: number | null;
   expertConsensus: number | null;
   timestamp: string;
-  dimensions: BriefDimension[];
+  dimensions: { dimension: string; regime: string; context: Record<string, unknown>; interpretation: string }[];
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -75,20 +63,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  const apiUrl = process.env.API_URL ?? "http://localhost:3001";
-
-  return { asset, brief, chartData, apiUrl };
+  return { asset, brief, chartData };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
-
 export default function Dashboard() {
-  const { asset, brief, chartData, apiUrl } = useLoaderData<LoaderData>();
-
-  const availableDims = brief ? DIMENSION_TABS.filter((dim) => brief.dimensions.some((d) => d.dimension === dim)) : [];
-
-  const [activeTab, setActiveTab] = useState<string>(availableDims[0] ?? "DERIVATIVES");
+  const { asset, brief, chartData } = useLoaderData<LoaderData>();
 
   if (!brief) {
     return (
@@ -118,71 +99,7 @@ export default function Dashboard() {
       </AppHeader>
 
       {/* Mobile: sidebar content stacked above main */}
-      <div
-        className="flex flex-col gap-4 p-3 md:hidden"
-        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
-      >
-        {/* Composite Index — compact horizontal layout on mobile */}
-        {brief.compositeIndex != null && brief.compositeLabel && (
-          <div className="flex items-center gap-4">
-            <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
-          </div>
-        )}
-
-        {/* Regime + Overview in a 2-col grid on mobile */}
-        <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
-          <SectionBlock title="Regime Overview">
-            <div className="space-y-0.5">
-              {DIMENSION_TABS.map((dim) => {
-                const bd = brief.dimensions.find((d) => d.dimension === dim);
-                if (!bd) return null;
-                const { color, arrow } = regimeColor(bd.regime);
-                return (
-                  <div
-                    key={dim}
-                    className="flex items-center justify-between py-1"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                      {TAB_LABELS[dim]}
-                    </span>
-                    <span className="text-[11px] font-medium" style={{ color }}>
-                      {bd.regime} {arrow}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionBlock>
-          <SectionBlock title="Overview">
-            <div className="space-y-0.5">
-              {[
-                { label: "Positioning", value: brief.positioning },
-                { label: "Trend", value: brief.trend },
-                { label: "Inst. Flows", value: brief.institutionalFlows },
-                { label: "Expert Cons.", value: brief.expertConsensus },
-              ].map(({ label, value }) => {
-                if (value == null) return null;
-                const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
-                return (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between py-1"
-                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
-                  >
-                    <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                      {label}
-                    </span>
-                    <span className="font-mono-jb text-[11px] font-medium tabular-nums" style={{ color }}>
-                      {Math.round(value)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionBlock>
-        </div>
-      </div>
+      <MobileBriefSummary brief={brief} />
 
       {/* Desktop: side-by-side layout */}
       <div className="flex">
@@ -190,80 +107,10 @@ export default function Dashboard() {
         <BriefSidebar brief={brief} />
 
         {/* Main content */}
-        <main className="flex min-w-0 flex-1 flex-col">
-          {/* Price delta strip */}
-          {brief.snapshotPrice != null && (
-            <div className="px-3 pt-3 md:px-5 md:pt-4">
-              <PriceDelta
-                asset={asset}
-                snapshotPrice={brief.snapshotPrice}
-                briefTimestamp={brief.timestamp}
-                apiUrl={apiUrl}
-              />
-            </div>
-          )}
-
+        <main className="flex min-w-0 flex-1 flex-col md:max-w-3xl">
           {/* Brief section */}
-          <div className="p-3 md:p-5" style={{ borderBottom: "1px solid var(--border)" }}>
-            {brief.richBrief?.blocks ? (
-              <div>
-                <div className="mb-4 flex items-center gap-3">
-                  <span
-                    className="text-[10px] font-medium uppercase tracking-widest"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Market Brief
-                  </span>
-                  <Link
-                    to={`/brief/${brief.id}`}
-                    className="text-[10px] transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                  >
-                    {asset} &middot; Generated{" "}
-                    {formatDistanceToNowStrict(new Date(brief.timestamp), { addSuffix: true })} →
-                  </Link>
-                </div>
-                <RichBriefRenderer blocks={brief.richBrief.blocks} />
-              </div>
-            ) : (
-              <BriefCard
-                brief={brief.brief}
-                compositeIndex={brief.compositeIndex}
-                compositeLabel={brief.compositeLabel}
-                components={{
-                  positioning: brief.positioning,
-                  trend: brief.trend,
-                  institutionalFlows: brief.institutionalFlows,
-                  expertConsensus: brief.expertConsensus,
-                }}
-                timestamp={brief.timestamp}
-                asset={asset}
-              />
-            )}
-          </div>
-
-          {/* Dimension tabs — only show tabs that have data */}
-          <div
-            className="flex items-center gap-0 overflow-x-auto px-3 md:px-5"
-            style={{ borderBottom: "1px solid var(--border)" }}
-          >
-            {availableDims.map((dim) => {
-              const isActive = activeTab === dim;
-              return (
-                <button
-                  key={dim}
-                  onClick={() => setActiveTab(dim)}
-                  className={`relative shrink-0 px-3 py-3 text-xs font-medium tracking-wide transition-colors md:px-4 ${isActive ? "tab-active" : ""}`}
-                  style={{
-                    color: isActive ? "var(--text-primary)" : "var(--text-muted)",
-                  }}
-                >
-                  {TAB_LABELS[dim]}
-                </button>
-              );
-            })}
+          <div className="p-4 md:p-6">
+            <BriefSection brief={brief} asset={asset} />
           </div>
 
           {/* Low-data disclaimer */}
@@ -279,27 +126,11 @@ export default function Dashboard() {
             <span>Limited data available — charts may not be fully representative yet.</span>
           </div>
 
-          {/* Tab content */}
-          <div className="flex-1 p-3 md:p-5">
-            {availableDims.map((dim) => {
-              const bd = brief.dimensions.find((d: BriefDimension) => d.dimension === dim);
-              if (!bd) return null;
-
-              return (
-                <DimensionCard
-                  key={dim}
-                  dimension={dim}
-                  regime={bd.regime}
-                  context={bd.context}
-                  interpretation={bd.interpretation}
-                  chartData={chartData[dim] ?? []}
-                  isActive={activeTab === dim}
-                />
-              );
-            })}
-          </div>
+          {/* Dimension tabs + content */}
+          <DimensionTabs dimensions={brief.dimensions} chartData={chartData} />
         </main>
       </div>
+      <StickyFooter />
     </div>
   );
 }

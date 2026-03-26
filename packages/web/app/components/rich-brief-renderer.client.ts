@@ -19,7 +19,6 @@ import type {
   BarChartBlock,
   HeatmapBlock,
   ScorecardBlock,
-  ComparisonBlock,
   CalloutBlock,
   SignalBlock,
   LevelMapBlock,
@@ -255,36 +254,6 @@ function renderScorecard(b: ScorecardBlock) {
   </div>`;
 }
 
-function renderComparison(b: ComparisonBlock) {
-  const [hA, hB] = b.headers ?? ["A", "B"];
-  const titleStyle = `font-size: 11px; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;`;
-  const tableStyle = `border: 1px solid ${C.borderSubtle}; border-radius: 6px; overflow: hidden;`;
-  const headStyle = `display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; padding: 6px 12px; background: ${C.bgHover};`;
-  const headCellStyle = `font-size: 10px; color: ${C.textMuted}; text-align: center; text-transform: uppercase; letter-spacing: 0.05em;`;
-  const cellLabelStyle = `font-size: 12px; color: ${C.textSecondary};`;
-  const cellValueStyle = `font-size: 12px; font-family: ${mono}; color: ${C.textPrimary}; text-align: center;`;
-  const blockStyle = `padding: 14px; background: ${C.bgSurface}; border: 1px solid ${C.borderSubtle}; border-radius: 6px; margin: 2px 0;`;
-
-  return html`<div style="${blockStyle}">
-    ${b.title ? html`<div style="${titleStyle}">${b.title}</div>` : html``}
-    <div style="${tableStyle}">
-      <div style="${headStyle}">
-        <span style="${`font-size: 10px; color: ${C.textMuted};`}"></span>
-        <span style="${headCellStyle}">${hA}</span>
-        <span style="${headCellStyle}">${hB}</span>
-      </div>
-      ${b.rows.map((row) => {
-        const rowStyle = `display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; padding: 8px 12px; border-top: 1px solid ${C.borderSubtle};`;
-        return html`<div style="${rowStyle}">
-          <span style="${cellLabelStyle}">${row.label}</span>
-          <span style="${cellValueStyle}">${row.a}</span>
-          <span style="${cellValueStyle}">${row.b}</span>
-        </div>`;
-      })}
-    </div>
-  </div>`;
-}
-
 function renderCallout(b: CalloutBlock) {
   const color = variantColor(b.variant);
   const bg = variantBg(b.variant);
@@ -447,8 +416,6 @@ function renderBlock(block: RichBlock) {
       return renderHeatmap(block);
     case "scorecard":
       return renderScorecard(block);
-    case "comparison":
-      return renderComparison(block);
     case "callout":
       return renderCallout(block);
     case "signal":

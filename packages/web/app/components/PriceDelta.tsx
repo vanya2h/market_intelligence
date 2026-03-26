@@ -7,29 +7,27 @@
 
 import { useEffect, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
+import { parseResponse } from "hono/client";
+import { api } from "../lib/api.client";
 import { UsdValue } from "./UsdValue";
 
 interface PriceDeltaProps {
-  asset: string;
+  asset: "BTC" | "ETH";
   snapshotPrice: number;
   briefTimestamp: string;
-  apiUrl?: string;
 }
 
-
-export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: PriceDeltaProps) {
+export function PriceDelta({ asset, snapshotPrice, briefTimestamp }: PriceDeltaProps) {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const base = apiUrl ?? "";
 
     async function fetchPrice() {
       try {
-        const res = await fetch(`${base}/api/price/${asset}`);
-        if (!res.ok) throw new Error("fetch failed");
-        const data = await res.json() as { price: number };
+        const res = api.api.price[":asset"].$get({ param: { asset } });
+        const data = await parseResponse(res);
         if (!cancelled) {
           setLivePrice(data.price);
           setError(false);
@@ -40,13 +38,13 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
     }
 
     fetchPrice();
-    const interval = setInterval(fetchPrice, 30_000);
+    const interval = setInterval(fetchPrice, 1_000);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [asset, apiUrl]);
+  }, [asset]);
 
   if (error || livePrice === null) {
     return (
@@ -71,10 +69,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         >
           Brief price
         </span>
-        <UsdValue
-          value={snapshotPrice}
-          style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}
-        />
+        <UsdValue value={snapshotPrice} style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }} />
         <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
           {formatDistanceToNowStrict(new Date(briefTimestamp), { addSuffix: true })}
         </span>
@@ -114,10 +109,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         >
           Brief
         </span>
-        <UsdValue
-          value={snapshotPrice}
-          style={{ fontSize: "13px", color: "var(--text-secondary)" }}
-        />
+        <UsdValue value={snapshotPrice} style={{ fontSize: "13px", color: "var(--text-secondary)" }} />
       </div>
 
       {/* Arrow separator */}
@@ -143,10 +135,7 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         >
           Now
         </span>
-        <UsdValue
-          value={livePrice}
-          style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}
-        />
+        <UsdValue value={livePrice} style={{ fontSize: "13px", color: "var(--text-secondary)" }} />
       </div>
 
       {/* Delta badge */}
@@ -162,13 +151,8 @@ export function PriceDelta({ asset, snapshotPrice, briefTimestamp, apiUrl }: Pri
         }}
       >
         <span style={{ fontSize: "11px", color: deltaColor }}>{arrow}</span>
-        <span style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }}>
-          {isPositive ? "+" : "-"}
-        </span>
-        <UsdValue
-          value={Math.abs(delta)}
-          style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }}
-        />
+        <span style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }}>{isPositive ? "+" : "-"}</span>
+        <UsdValue value={Math.abs(delta)} style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }} />
         <span
           className="font-mono-jb"
           style={{

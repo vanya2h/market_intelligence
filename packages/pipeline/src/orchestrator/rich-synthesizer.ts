@@ -152,6 +152,7 @@ CONTEXTUAL / EDITORIAL:
   A directional signal indicator with strength dots. Use for clear directional calls.
 - level_map: { type: "level_map", current: number, levels: [{ price, label, type: "support"|"resistance"|"target"|"stop" }] }
   A vertical price level diagram showing key levels relative to current price.
+  IMPORTANT: All "price" values MUST be actual asset price levels (e.g. 69000 for BTC). Never use raw metric values like open interest, volume, or liquidation amounts — those are NOT prices.
 - regime_banner: { type: "regime_banner", regime: string, subtitle?: string, sentiment: "bullish"|"bearish"|"neutral"|"mixed" }
   A prominent banner showing the macro regime. Use as the opening block.
 - tension: { type: "tension", title: string, left: { label, detail, sentiment }, right: { label, detail, sentiment } }
@@ -241,6 +242,19 @@ async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Pro
 
   if (!parsed.blocks || !Array.isArray(parsed.blocks)) {
     throw new Error("Rich brief response missing blocks array");
+  }
+
+  // Sanitize level_map blocks: remove levels with prices wildly off from current
+  for (const block of parsed.blocks) {
+    if (block.type === "level_map" && block.levels.length > 0) {
+      const current = block.current;
+      block.levels = block.levels.filter((lvl) => {
+        const ratio = lvl.price / current;
+        // Keep levels within 50% of current price — anything beyond is likely
+        // a raw metric value (OI, volume) mistakenly used as a price
+        return ratio > 0.5 && ratio < 1.5;
+      });
+    }
   }
 
   return parsed;

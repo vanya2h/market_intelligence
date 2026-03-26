@@ -70,13 +70,6 @@ export interface ScorecardBlock extends BaseBlock {
   }[];
 }
 
-export interface ComparisonBlock extends BaseBlock {
-  type: "comparison";
-  title?: string;
-  headers?: [string, string];
-  rows: { label: string; a: string; b: string }[];
-}
-
 export interface CalloutBlock extends BaseBlock {
   type: "callout";
   variant: "bullish" | "bearish" | "warning" | "info";
@@ -134,7 +127,6 @@ export type RichBlock =
   | BarChartBlock
   | HeatmapBlock
   | ScorecardBlock
-  | ComparisonBlock
   | CalloutBlock
   | SignalBlock
   | LevelMapBlock

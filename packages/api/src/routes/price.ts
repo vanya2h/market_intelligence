@@ -12,7 +12,7 @@ import { createController } from "../common/controller.js";
 import { AssetParamSchema } from "../common/schemas.js";
 
 const BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/price";
-const CACHE_TTL_MS = 10_000; // 10 seconds
+const CACHE_TTL_MS = 5_000; // 5 seconds
 
 interface BinanceTicker {
   symbol: string;
