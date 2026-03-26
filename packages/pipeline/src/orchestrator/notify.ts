@@ -2,14 +2,14 @@
  * Orchestrator — Telegram Notifier
  *
  * Runs the full brief pipeline and sends the result to a Telegram channel:
- *   1. Color-coded regime card image (via sendPhoto)
- *   2. Short synthesized brief text (via sendMessage)
+ *   1. Short synthesized brief text (via sendMessage) with link to full brief
  *
  * Uses the raw Telegram Bot API via fetch — no extra dependency.
  *
  * Env vars:
  *   TELEGRAM_BOT_TOKEN  — from @BotFather
  *   TELEGRAM_CHAT_ID    — channel or chat ID (e.g. @yourchannel)
+ *   WEB_APP_URL         — base URL of the web app (e.g. https://app.example.com)
  *
  * Usage:
  *   pnpm notify
@@ -22,7 +22,6 @@ import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
 import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
-import { generateCard } from "./card.js";
 
 // ─── Telegram API ────────────────────────────────────────────────────────────
 
@@ -43,9 +42,13 @@ function markdownToTelegramHtml(text: string): string {
   return html;
 }
 
-function buildTextMessage(asset: string, brief: string): string {
+function buildTextMessage(asset: string, brief: string, briefUrl?: string): string {
   const date = new Date().toUTCString().replace(/ GMT$/, " UTC");
   let msg = `<b>${asset} MARKET BRIEF</b>  —  ${date}\n\n` + markdownToTelegramHtml(brief);
+
+  if (briefUrl) {
+    msg += `\n\n<a href="${briefUrl}">View full brief →</a>`;
+  }
 
   if (msg.length > MAX_MESSAGE_LENGTH) {
     msg = msg.slice(0, MAX_MESSAGE_LENGTH - 20) + "\n\n<i>[truncated]</i>";
@@ -54,25 +57,6 @@ function buildTextMessage(asset: string, brief: string): string {
   return msg;
 }
 
-async function sendPhoto(token: string, chatId: string, png: Buffer, caption?: string): Promise<void> {
-  const form = new FormData();
-  form.append("chat_id", chatId);
-  form.append("photo", new Blob([new Uint8Array(png)], { type: "image/png" }), "brief.png");
-  if (caption) {
-    form.append("caption", caption);
-    form.append("parse_mode", "HTML");
-  }
-
-  const res = await fetch(`${TELEGRAM_API}/bot${token}/sendPhoto`, {
-    method: "POST",
-    body: form,
-  });
-
-  const body = await res.json();
-  if (!res.ok) {
-    throw new Error(`Telegram sendPhoto error ${res.status}: ${JSON.stringify(body)}`);
-  }
-}
 
 async function sendText(token: string, chatId: string, html: string): Promise<void> {
   const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
@@ -107,32 +91,30 @@ function note(text: string): void {
 export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
+  const webAppUrl = process.env.WEB_APP_URL;
 
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
   if (!chatId) throw new Error("TELEGRAM_CHAT_ID is not set");
 
   for (const asset of assets) {
-    step(1, 5, `Running all dimension pipelines (${asset})...`);
+    step(1, 4, `Running all dimension pipelines (${asset})...`);
     const outputs = await runAllDimensions(asset);
     note(`${outputs.length} dimensions completed`);
 
-    step(2, 5, "Synthesizing market brief...");
+    step(2, 4, "Synthesizing market brief...");
     const [brief, richBrief] = await Promise.all([
       synthesize(asset, outputs),
       synthesizeRich(asset, outputs),
     ]);
     if (richBrief) note("rich brief generated");
 
-    step(3, 5, "Saving to database...");
-    await saveBrief(asset, brief, outputs, richBrief);
+    step(3, 4, "Saving to database...");
+    const briefId = await saveBrief(asset, brief, outputs, richBrief);
+    const briefUrl = webAppUrl ? `${webAppUrl}/brief/${briefId}` : undefined;
+    if (briefUrl) note(`brief URL: ${briefUrl}`);
 
-    step(4, 5, "Generating regime card...");
-    const cardPng = await generateCard(asset, outputs);
-    note(`card: ${(cardPng.length / 1024).toFixed(1)} KB`);
-
-    step(5, 5, `Sending ${asset} to Telegram...`);
-    await sendPhoto(token, chatId, cardPng);
-    const textMsg = buildTextMessage(asset, brief);
+    step(4, 4, `Sending ${asset} to Telegram...`);
+    const textMsg = buildTextMessage(asset, brief, briefUrl);
     note(`text: ${textMsg.length} chars`);
     await sendText(token, chatId, textMsg);
 

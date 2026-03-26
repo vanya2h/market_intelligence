@@ -15,7 +15,7 @@ export async function saveBrief(
   brief: string,
   outputs: DimensionOutput[],
   richBrief?: RichBrief | null
-): Promise<void> {
+): Promise<string> {
   // Extract sentiment metrics if the sentiment dimension ran
   const sentiment = outputs.find((o) => o.dimension === "sentiment");
   const metrics = (sentiment?.context as SentimentContext | undefined)?.metrics;
@@ -24,7 +24,7 @@ export async function saveBrief(
   const htf = outputs.find((o) => o.dimension === "htf");
   const snapshotPrice = (htf?.context as HtfContext | undefined)?.price;
 
-  await prisma.brief.create({
+  const record = await prisma.brief.create({
     data: {
       asset,
       brief,
@@ -47,4 +47,5 @@ export async function saveBrief(
       },
     },
   });
+  return record.id;
 }
