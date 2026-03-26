@@ -1,15 +1,9 @@
 import { MarkdownContent } from "./MarkdownContent";
 import { RegimeBadge } from "./RegimeBadge";
 import { MetricRow } from "./MetricRow";
-import { MiniChart } from "./MiniChart";
 import { SectionBlock } from "./SectionBlock";
 import { DIMENSIONS } from "../lib/dimension-config";
 import type { MetricDef } from "../lib/dimension-config";
-
-interface ChartPoint {
-  timestamp: string;
-  value: number;
-}
 
 function renderMetricGroups(metrics: MetricDef[]) {
   const ungrouped = metrics.filter((m) => !m.group);
@@ -41,33 +35,23 @@ function renderMetricGroups(metrics: MetricDef[]) {
   );
 }
 
-const CHART_COLORS: Record<string, string> = {
-  DERIVATIVES: "var(--red)",
-  ETFS: "var(--green)",
-  SENTIMENT: "var(--amber)",
-  HTF: "#6366f1",
-};
-
 export function DimensionCard({
   dimension,
   regime,
   context,
   interpretation,
-  chartData,
   isActive,
 }: {
   dimension: string;
   regime: string;
   context: Record<string, unknown>;
   interpretation: string;
-  chartData: ChartPoint[];
   isActive: boolean;
 }) {
   const config = DIMENSIONS[dimension];
   if (!config) return null;
 
   const metrics = config.extractMetrics(context);
-  const chartColor = CHART_COLORS[dimension] ?? "var(--text-secondary)";
 
   if (!isActive) return null;
 
@@ -81,12 +65,6 @@ export function DimensionCard({
       </div>
 
       {/* Chart */}
-      <div className="mb-5 p-3" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}>
-        <div className="mb-1 text-[10px] font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-          {config.chartLabel}
-        </div>
-        <MiniChart data={chartData} label={config.chartLabel} color={chartColor} />
-      </div>
 
       {/* Metrics — grouped by group field, ungrouped rows at top */}
       <div className="space-y-4">{renderMetricGroups(metrics)}</div>

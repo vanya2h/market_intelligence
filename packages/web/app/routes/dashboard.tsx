@@ -31,45 +31,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
 
-  const [briefRes, historyRes] = await Promise.all([
-    api.api.briefs.latest[":asset"].$get({ param: { asset } }),
-    api.api.briefs.history[":asset"].$get({
-      param: { asset },
-      query: { take: "30" },
-    }),
-  ]);
-
+  const briefRes = await api.api.briefs.latest[":asset"].$get({ param: { asset } });
   const brief: BriefData | null = briefRes.ok ? ((await briefRes.json()) as BriefData) : null;
-  const history: BriefData[] = historyRes.ok ? ((await historyRes.json()) as BriefData[]) : [];
 
-  const chartData: Record<string, { timestamp: string; value: number }[]> = {};
-
-  for (const dim of Object.keys(DIMENSIONS)) {
-    chartData[dim] = [];
-  }
-
-  for (const b of history) {
-    for (const bd of b.dimensions) {
-      const config = DIMENSIONS[bd.dimension];
-      if (!config) continue;
-      const ctx = bd.context as Record<string, unknown>;
-      const value = config.extractChartValue(ctx);
-      if (value != null) {
-        chartData[bd.dimension]!.push({
-          timestamp: b.timestamp,
-          value,
-        });
-      }
-    }
-  }
-
-  return { asset, brief, chartData };
+  return { asset, brief };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Dashboard() {
-  const { asset, brief, chartData } = useLoaderData<LoaderData>();
+  const { asset, brief } = useLoaderData<LoaderData>();
 
   if (!brief) {
     return (
@@ -127,7 +98,7 @@ export default function Dashboard() {
           </div>
 
           {/* Dimension tabs + content */}
-          <DimensionTabs dimensions={brief.dimensions} chartData={chartData} />
+          <DimensionTabs dimensions={brief.dimensions} />
         </main>
       </div>
       <StickyFooter />

@@ -11,10 +11,9 @@ interface BriefDimension {
 
 interface DimensionTabsProps {
   dimensions: BriefDimension[];
-  chartData?: Record<string, { timestamp: string; value: number }[]>;
 }
 
-export function DimensionTabs({ dimensions, chartData = {} }: DimensionTabsProps) {
+export function DimensionTabs({ dimensions }: DimensionTabsProps) {
   const availableDims = DIMENSION_TABS.filter((dim) => dimensions.some((d) => d.dimension === dim));
 
   const [activeTab, setActiveTab] = useState<string>(availableDims[0] ?? "DERIVATIVES");
@@ -56,7 +55,6 @@ export function DimensionTabs({ dimensions, chartData = {} }: DimensionTabsProps
               regime={bd.regime}
               context={bd.context}
               interpretation={bd.interpretation}
-              chartData={chartData[dim] ?? []}
               isActive={activeTab === dim}
             />
           );
