@@ -92,7 +92,7 @@ async function sendText(token: string, chatId: string, html: string): Promise<vo
   }
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Logging ─────────────────────────────────────────────────────────────────
 
 function step(n: number, total: number, label: string): void {
   console.log(`\n${chalk.cyan.bold(`[${n}/${total}]`)} ${chalk.white(label)}`);
@@ -102,29 +102,21 @@ function note(text: string): void {
   console.log(`      ${chalk.dim(text)}`);
 }
 
-async function main(): Promise<void> {
+// ─── Core pipeline (reusable) ────────────────────────────────────────────────
+
+export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  if (!token) {
-    console.error(chalk.red.bold("TELEGRAM_BOT_TOKEN is not set in .env"));
-    process.exit(1);
-  }
-  if (!chatId) {
-    console.error(chalk.red.bold("TELEGRAM_CHAT_ID is not set in .env"));
-    process.exit(1);
-  }
-
-  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
-    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
-    : ["BTC", "ETH"];
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
+  if (!chatId) throw new Error("TELEGRAM_CHAT_ID is not set");
 
   for (const asset of assets) {
-    step(1, 4, `Running all dimension pipelines (${asset})...`);
+    step(1, 5, `Running all dimension pipelines (${asset})...`);
     const outputs = await runAllDimensions(asset);
     note(`${outputs.length} dimensions completed`);
 
-    step(2, 4, "Synthesizing market brief...");
+    step(2, 5, "Synthesizing market brief...");
     const [brief, richBrief] = await Promise.all([
       synthesize(asset, outputs),
       synthesizeRich(asset, outputs),
@@ -146,6 +138,16 @@ async function main(): Promise<void> {
 
     console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent to Telegram`);
   }
+}
+
+// ─── CLI entry point ─────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
+    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
+    : ["BTC", "ETH"];
+
+  await runNotify(assets);
 }
 
 main().catch((err) => {

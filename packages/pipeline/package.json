@@ -11,6 +11,7 @@
     "sentiment": "tsx src/sentiment/run.ts",
     "brief": "tsx src/orchestrator/run.ts",
     "notify": "tsx src/orchestrator/notify.ts",
+    "schedule": "tsx src/orchestrator/scheduler.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "typecheck": "tsc --noEmit"
@@ -23,12 +24,14 @@
     "chalk": "^5.6.2",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
+    "node-cron": "^4.2.1",
     "pg": "^8.20.0",
     "prisma": "^7.5.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
