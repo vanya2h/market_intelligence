@@ -34,6 +34,9 @@ function contextCacheKey(ctx: HtfContext): string {
     priceVsWeeklyVwap: ctx.price > ctx.vwap.weekly ? "above" : "below",
     priceVsMonthlyVwap: ctx.price > ctx.vwap.monthly ? "above" : "below",
     events: ctx.events.map((e) => e.type).sort(),
+    // Staleness — bucket to avoid noisy cache misses
+    staleRsi: ctx.staleness.rsiExtreme !== null ? Math.min(ctx.staleness.rsiExtreme, 10) : null,
+    staleCvdDiv: ctx.staleness.cvdDivergencePeak !== null ? Math.min(ctx.staleness.cvdDivergencePeak, 10) : null,
   };
   const hash = crypto
     .createHash("sha256")

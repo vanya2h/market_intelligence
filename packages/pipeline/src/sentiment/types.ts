@@ -49,8 +49,12 @@ export interface CrossDimensionInputs {
     priceVsSma50Pct: number;       // % above/below
     priceVsSma200Pct: number;
     dailyRsi: number;
+    h4Rsi: number;                 // 4h RSI for momentum divergence detection
     structure: string;             // HH_HL, LH_LL, etc.
     regime: string;
+    atr: number;                   // ATR-14 on 4h — execution-timeframe volatility
+    atrRatio: number;              // current ATR / 30d-mean ATR — compression detection
+    cvdDivergence: string;         // futures CVD divergence: BULLISH, BEARISH, NONE
   } | null;
 }
 
@@ -58,8 +62,10 @@ export interface CrossDimensionInputs {
 
 /** Individual component scores (0–100 each) for the composite F&G */
 export interface FearGreedComponents {
-  positioning: number;    // from derivatives: funding, L/S, OI
-  trend: number;          // from HTF: price vs SMAs, RSI, structure
+  positioning: number;        // from derivatives: funding, L/S, OI
+  trend: number;              // from HTF: price vs SMAs, RSI, structure
+  momentumDivergence: number; // from HTF: price-RSI divergence + CVD divergence
+  volatility: number;         // from HTF: ATR compression/expansion
   institutionalFlows: number; // from ETFs: flow streaks, magnitude
   expertConsensus: number;    // from unbias: consensus index, z-score
 }

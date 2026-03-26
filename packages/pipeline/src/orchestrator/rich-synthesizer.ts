@@ -182,6 +182,7 @@ You have ${dimensionCount} analytical dimensions to work with. Your job is to tu
 ${BLOCK_CATALOG}
 
 GUIDELINES:
+- The system's primary goal is detecting **swing trade reversals**. Prioritize reversal signals.
 - Be creative. Choose the block types that BEST communicate each insight visually.
 - Start with a regime_banner to set the macro context.
 - Use spectrums and bar_charts to show quantitative data — don't just write numbers in text.
@@ -189,8 +190,12 @@ GUIDELINES:
 - Use tension blocks when dimensions conflict — this is often the most valuable signal.
 - Use level_map when price levels are relevant to the trade setup.
 - Use signal blocks for clear directional calls with conviction level.
+  - strength 3: highest-conviction confluence (e.g., derivatives stress + CVD divergence)
+  - strength 2: high-conviction (e.g., CVD divergence + structure shift, or ETF reversal + crowded positioning)
+  - strength 1: moderate (e.g., accumulation/distribution regime + RSI extreme)
 - Use metric_row for headline numbers that need to be scannable.
 - Use scorecard or heatmap for multi-factor overviews.
+- If signal staleness data is present, note when signals are fresh (0-2 candles ago) vs fading (5+ candles).
 - Aim for 6-12 blocks total. Too few = underutilizing the visual format. Too many = visual noise.
 - Every block should ADD something a reader can't get from plain text.
 - Cite specific numbers from the data. No vague statements.

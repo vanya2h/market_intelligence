@@ -78,9 +78,25 @@ export interface HtfEvent {
     | "rsi_daily_overbought"
     | "rsi_daily_oversold"
     | "structure_shift_bullish"
-    | "structure_shift_bearish";
+    | "structure_shift_bearish"
+    | "cvd_divergence_bullish"
+    | "cvd_divergence_bearish";
   detail: string;
   at: string;
+}
+
+/**
+ * Signal staleness — how many 4h candles ago each key signal was strongest.
+ * Helps the LLM judge whether an entry is timely or fading.
+ * null = signal not present in current window.
+ */
+export interface SignalStaleness {
+  /** Candles since RSI-14 was most overbought/oversold in the short window */
+  rsiExtreme: number | null;
+  /** Candles since CVD divergence R² peaked (strongest conviction) */
+  cvdDivergencePeak: number | null;
+  /** Candles since the most recent pivot completed */
+  lastPivot: number | null;
 }
 
 // Structured context passed to the LLM agent
@@ -97,6 +113,10 @@ export interface HtfContext {
   vwap: VwapContext;
   structure: MarketStructure;
   events: HtfEvent[];
+  /** ATR-14 on 4h candles — execution-timeframe volatility context */
+  atr: number;
+  /** How fresh each key signal is (candles since peak) — null if not present */
+  staleness: SignalStaleness;
 }
 
 // Persisted state

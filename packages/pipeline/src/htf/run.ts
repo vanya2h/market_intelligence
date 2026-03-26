@@ -50,6 +50,8 @@ function regimeColor(regime: HtfRegime): ChalkInstance {
       return chalk.cyan;
     case "RANGING":
       return chalk.white;
+    default:
+      return chalk.white;
   }
 }
 

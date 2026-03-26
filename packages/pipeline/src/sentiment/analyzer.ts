@@ -75,7 +75,8 @@ function scorePositioning(d: CrossDimensionInputs["derivatives"]): number {
 
 /**
  * Trend score from HTF technicals.
- * Price above SMAs + high RSI + bullish structure = greedy.
+ * Price above SMAs + bullish structure = greedy. (Weight reduced from 30% to 15%
+ * since trend is lagging at reversal points.)
  */
 function scoreTrend(h: CrossDimensionInputs["htf"]): number {
   if (!h) return 50;
@@ -97,6 +98,71 @@ function scoreTrend(h: CrossDimensionInputs["htf"]): number {
   else if (h.structure === "LH_HL") structureScore = 45; // contracting
 
   return clamp(sma200Score * 0.3 + sma50Score * 0.2 + rsiScore * 0.3 + structureScore * 0.2);
+}
+
+/**
+ * Momentum divergence score — explicitly reversal-predictive.
+ *
+ * Detects when price is trending but internal momentum disagrees:
+ *   - Price rising + RSI falling → bearish divergence (distribution)
+ *   - Price falling + RSI rising → bullish divergence (accumulation)
+ *   - CVD divergence amplifies the signal
+ *
+ * Score > 50 = bullish reversal pressure, < 50 = bearish reversal pressure.
+ * Near 50 = no divergence detected.
+ */
+function scoreMomentumDivergence(h: CrossDimensionInputs["htf"]): number {
+  if (!h) return 50;
+
+  let score = 50;
+
+  // Price-RSI divergence: compare daily RSI direction vs price direction
+  // Price rising (above SMA50) but RSI cooling → bearish divergence
+  // Price falling (below SMA50) but RSI warming → bullish divergence
+  if (h.priceVsSma50Pct > 2 && h.dailyRsi < 50) {
+    // Price elevated but RSI weak — bearish divergence
+    score -= Math.min(20, (h.priceVsSma50Pct - 2) * 3);
+  } else if (h.priceVsSma50Pct < -2 && h.dailyRsi > 50) {
+    // Price depressed but RSI warming — bullish divergence
+    score += Math.min(20, (-h.priceVsSma50Pct - 2) * 3);
+  }
+
+  // RSI extremes amplify: overbought RSI in uptrend = bearish pressure
+  if (h.dailyRsi > 70) score -= 10;
+  else if (h.dailyRsi < 30) score += 10;
+
+  // CVD divergence is the strongest reversal signal
+  if (h.cvdDivergence === "BULLISH") score += 20;   // accumulation into weakness
+  else if (h.cvdDivergence === "BEARISH") score -= 20; // distribution into strength
+
+  return clamp(score);
+}
+
+/**
+ * Volatility score — reversals often follow compression.
+ *
+ * Uses ATR ratio (current ATR / 30d mean ATR):
+ *   ratio < 0.7 → compressed → high reversal potential (score toward extremes)
+ *   ratio > 1.3 → expanded → trend continuation likely (score toward 50)
+ *
+ * Direction comes from price position: compressed below SMAs = fearful,
+ * compressed above SMAs = greedy (both signal potential reversal energy).
+ */
+function scoreVolatility(h: CrossDimensionInputs["htf"]): number {
+  if (!h || h.atrRatio === 0) return 50;
+
+  // Compression score: how much is volatility compressed vs normal
+  // ratio 0.5 → 100% compressed, ratio 1.0 → 0% compressed, ratio 1.5 → -50% (expanded)
+  const compression = clamp((1 - h.atrRatio) * 100 + 50);
+
+  // Direction: compressed + above SMAs = greedy energy, compressed + below = fearful energy
+  if (h.priceVsSma200Pct > 0) {
+    // Above 200 SMA: compression = building bullish energy
+    return clamp(50 + (compression - 50) * 0.6);
+  } else {
+    // Below 200 SMA: compression = building bearish energy (or capitulation bottom)
+    return clamp(50 - (compression - 50) * 0.6);
+  }
 }
 
 /**
@@ -162,10 +228,16 @@ function scoreExpertConsensus(consensus: UnbiasConsensusEntry[]): {
 
 // ─── Composite F&G ───────────────────────────────────────────────────────────
 
+// Weights rebalanced for reversal detection:
+// - Trend reduced from 30% to 15% (lagging at reversal points)
+// - Momentum divergence added at 10% (explicitly reversal-predictive)
+// - Volatility added at 5% (compression precedes reversals)
 // Expert consensus temporarily excluded while we collect delta-based data (re-enable ~2026-04-02)
 const WEIGHTS = {
   positioning: 0.40,
-  trend: 0.30,
+  trend: 0.15,
+  momentumDivergence: 0.10,
+  volatility: 0.05,
   institutionalFlows: 0.30,
   expertConsensus: 0,
 };
@@ -174,6 +246,8 @@ function computeComposite(components: FearGreedComponents): number {
   const raw =
     components.positioning * WEIGHTS.positioning +
     components.trend * WEIGHTS.trend +
+    components.momentumDivergence * WEIGHTS.momentumDivergence +
+    components.volatility * WEIGHTS.volatility +
     components.institutionalFlows * WEIGHTS.institutionalFlows +
     components.expertConsensus * WEIGHTS.expertConsensus;
 
@@ -206,6 +280,8 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
   const components: FearGreedComponents = {
     positioning: scorePositioning(cd.derivatives),
     trend: scoreTrend(cd.htf),
+    momentumDivergence: scoreMomentumDivergence(cd.htf),
+    volatility: scoreVolatility(cd.htf),
     institutionalFlows: scoreInstitutionalFlows(cd.etfs),
     expertConsensus: expert.score,
   };

@@ -32,6 +32,12 @@ export interface EtfFlowMetrics {
   sigma30d: number;
   todaySigma: number; // (today - mean) / sigma
   percentile1m: number; // today vs 30d distribution
+  /** Cumulative flow of the prior directional streak (before current reversal) */
+  priorStreakFlow: number;
+  /** Cumulative flow of the current reversal streak */
+  reversalFlow: number;
+  /** reversalFlow / |priorStreakFlow| — how much of the prior move has been reversed */
+  reversalRatio: number;
 }
 
 export interface EtfEvent {

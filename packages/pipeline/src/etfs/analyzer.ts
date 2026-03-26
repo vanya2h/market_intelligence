@@ -39,6 +39,7 @@ function computeFlowMetrics(history: EtfFlowDay[]): EtfFlowMetrics {
       today: 0, d3Sum: 0, d7Sum: 0, d30Sum: 0,
       consecutiveOutflowDays: 0, consecutiveInflowDays: 0,
       mean30d: 0, sigma30d: 0, todaySigma: 0, percentile1m: 50,
+      priorStreakFlow: 0, reversalFlow: 0, reversalRatio: 0,
     };
   }
 
@@ -72,33 +73,86 @@ function computeFlowMetrics(history: EtfFlowDay[]): EtfFlowMetrics {
     }
   }
 
+  // Compute reversal magnitude: cumulative flow of the current streak vs prior streak
+  // This lets us distinguish a real reversal ($300M inflow after $500M outflow)
+  // from noise ($10M inflow after $500M outflow)
+  const currentStreakLen = consecutiveInflowDays || consecutiveOutflowDays;
+  let reversalFlow = 0;
+  let priorStreakFlow = 0;
+
+  // Sum current streak
+  for (let i = sorted.length - 1; i >= sorted.length - currentStreakLen && i >= 0; i--) {
+    reversalFlow += sorted[i]!.flowUsd;
+  }
+
+  // Find and sum the prior opposite streak
+  const priorStart = sorted.length - currentStreakLen - 1;
+  if (priorStart >= 0) {
+    const priorDirection = sorted[priorStart]!.flowUsd > 0 ? 1 : -1;
+    for (let i = priorStart; i >= 0; i--) {
+      const f = sorted[i]!.flowUsd;
+      if ((f > 0 ? 1 : -1) !== priorDirection) break;
+      priorStreakFlow += f;
+    }
+  }
+
+  const reversalRatio = Math.abs(priorStreakFlow) > 0
+    ? parseFloat((Math.abs(reversalFlow) / Math.abs(priorStreakFlow)).toFixed(3))
+    : 0;
+
   return {
     today, d3Sum, d7Sum, d30Sum,
     consecutiveOutflowDays, consecutiveInflowDays,
     mean30d, sigma30d, todaySigma, percentile1m,
+    priorStreakFlow, reversalFlow, reversalRatio,
   };
 }
 
 // ─── State machine ────────────────────────────────────────────────────────────
 
-function determineRegime(metrics: EtfFlowMetrics, prevRegime: EtfRegime | null): EtfRegime {
-  const { consecutiveOutflowDays, consecutiveInflowDays } = metrics;
+// Minimum fraction of the prior streak that must be reversed for a regime change.
+// A $10M inflow after $500M outflow (2%) is noise, not a reversal.
+// A $200M inflow after $500M outflow (40%) is meaningful.
+const MIN_REVERSAL_RATIO = 0.20;
 
+function determineRegime(metrics: EtfFlowMetrics, prevRegime: EtfRegime | null): EtfRegime {
+  const { consecutiveOutflowDays, consecutiveInflowDays, reversalRatio } = metrics;
+
+  // Strong directional streaks — require magnitude for reversal classification
   if (consecutiveOutflowDays >= 3) {
-    if (prevRegime === "STRONG_INFLOW" || prevRegime === "REVERSAL_TO_INFLOW") return "REVERSAL_TO_OUTFLOW";
+    if (
+      (prevRegime === "STRONG_INFLOW" || prevRegime === "REVERSAL_TO_INFLOW") &&
+      reversalRatio >= MIN_REVERSAL_RATIO
+    ) {
+      return "REVERSAL_TO_OUTFLOW";
+    }
     return "STRONG_OUTFLOW";
   }
 
   if (consecutiveInflowDays >= 3) {
-    if (prevRegime === "STRONG_OUTFLOW" || prevRegime === "REVERSAL_TO_OUTFLOW") return "REVERSAL_TO_INFLOW";
+    if (
+      (prevRegime === "STRONG_OUTFLOW" || prevRegime === "REVERSAL_TO_OUTFLOW") &&
+      reversalRatio >= MIN_REVERSAL_RATIO
+    ) {
+      return "REVERSAL_TO_INFLOW";
+    }
     return "STRONG_INFLOW";
   }
 
-  if (consecutiveInflowDays >= 2 && (prevRegime === "STRONG_OUTFLOW" || prevRegime === "REVERSAL_TO_OUTFLOW")) {
+  // Early reversal detection (2 days) — also requires magnitude
+  if (
+    consecutiveInflowDays >= 2 &&
+    (prevRegime === "STRONG_OUTFLOW" || prevRegime === "REVERSAL_TO_OUTFLOW") &&
+    reversalRatio >= MIN_REVERSAL_RATIO
+  ) {
     return "REVERSAL_TO_INFLOW";
   }
 
-  if (consecutiveOutflowDays >= 2 && (prevRegime === "STRONG_INFLOW" || prevRegime === "REVERSAL_TO_INFLOW")) {
+  if (
+    consecutiveOutflowDays >= 2 &&
+    (prevRegime === "STRONG_INFLOW" || prevRegime === "REVERSAL_TO_INFLOW") &&
+    reversalRatio >= MIN_REVERSAL_RATIO
+  ) {
     return "REVERSAL_TO_OUTFLOW";
   }
 

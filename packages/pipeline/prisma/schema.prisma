@@ -53,6 +53,8 @@ enum HtfRegime {
     BEAR_EXTENDED
     RECLAIMING
     RANGING
+    ACCUMULATION
+    DISTRIBUTION
 }
 
 enum MarketStructure {
