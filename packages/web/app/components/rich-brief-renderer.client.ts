@@ -161,36 +161,38 @@ function renderBarChart(b: BarChartBlock) {
   const titleStyle = `font-size: 11px; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;`;
   const blockStyle = `padding: 14px; background: ${C.bgSurface}; border: 1px solid ${C.borderSubtle}; border-radius: 6px; margin: 2px 0;`;
 
-  return html`<div style="${blockStyle}">
+  return html`<div style="margin: 2px 0;">
     ${b.title ? html`<div style="${titleStyle}">${b.title}</div>` : html``}
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      ${b.items.map((item) => {
-        const pct = maxVal > 0 ? (item.value / maxVal) * 100 : 0;
-        const color = item.value >= 0 ? C.green : C.red;
-        const absPct = Math.abs(pct);
+    <div style="${blockStyle}">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${b.items.map((item) => {
+          const pct = maxVal > 0 ? (item.value / maxVal) * 100 : 0;
+          const color = item.value >= 0 ? C.green : C.red;
+          const absPct = Math.abs(pct);
 
-        const state = reactive({ animated: 0 });
-        setTimeout(() => {
-          state.animated = absPct;
-        }, 50);
+          const state = reactive({ animated: 0 });
+          setTimeout(() => {
+            state.animated = absPct;
+          }, 50);
 
-        const lblStyle = `font-size: 11px; color: ${C.textSecondary};`;
-        const numStyle = `font-size: 11px; font-family: ${mono}; color: ${color};`;
-        const trackStyle = `height: 4px; background: ${C.bgHover}; border-radius: 2px; overflow: hidden;`;
+          const lblStyle = `font-size: 11px; color: ${C.textSecondary};`;
+          const numStyle = `font-size: 11px; font-family: ${mono}; color: ${color};`;
+          const trackStyle = `height: 4px; background: ${C.bgHover}; border-radius: 2px; overflow: hidden;`;
 
-        return html`<div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-            <span style="${lblStyle}">${item.label}</span>
-            <span style="${numStyle}">${item.value.toLocaleString()}</span>
-          </div>
-          <div style="${trackStyle}">
-            <div
-              style="${() =>
-                `height: 100%; width: ${state.animated}%; background: ${color}; border-radius: 2px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);`}"
-            ></div>
-          </div>
-        </div>`;
-      })}
+          return html`<div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="${lblStyle}">${item.label}</span>
+              <span style="${numStyle}">${item.value.toLocaleString()}</span>
+            </div>
+            <div style="${trackStyle}">
+              <div
+                style="${() =>
+                  `height: 100%; width: ${state.animated}%; background: ${color}; border-radius: 2px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);`}"
+              ></div>
+            </div>
+          </div>`;
+        })}
+      </div>
     </div>
   </div>`;
 }
@@ -199,25 +201,31 @@ function renderHeatmap(b: HeatmapBlock) {
   const titleStyle = `font-size: 11px; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;`;
   const gridStyle = `display: grid; grid-template-columns: repeat(${Math.min(b.cells.length, 5)}, 1fr); gap: 4px;`;
   const cellLabelStyle = `font-size: 9px; color: ${C.textMuted}; margin-bottom: 2px;`;
-  const blockStyle = `padding: 14px; background: ${C.bgSurface}; border: 1px solid ${C.borderSubtle}; border-radius: 6px; margin: 2px 0;`;
 
-  return html`<div style="${blockStyle}">
+  return html`<div style="margin: 2px 0;">
     ${b.title ? html`<div style="${titleStyle}">${b.title}</div>` : html``}
-    <div style="${gridStyle}">
-      ${b.cells.map((cell) => {
-        const min = cell.min ?? 0;
-        const max = cell.max ?? 100;
-        const norm = Math.max(0, Math.min(1, (cell.value - min) / (max - min)));
-        const bg = norm < 0.3 ? C.redDim : norm > 0.7 ? C.greenDim : C.amberDim;
-        const color = norm < 0.3 ? C.red : norm > 0.7 ? C.green : C.amber;
-        const cellStyle = `padding: 8px; background: ${bg}; border-radius: 4px; text-align: center;`;
-        const valStyle = `font-size: 14px; font-weight: 700; font-family: ${mono}; color: ${color};`;
+    <div>
+      <div style="${gridStyle}">
+        ${b.cells.map((cell) => {
+          const min = cell.min ?? 0;
+          const max = cell.max ?? 100;
+          const norm = Math.max(0, Math.min(1, (cell.value - min) / (max - min)));
+          // How far from neutral (0.5) — 0 = boring, 1 = extreme
+          const intensity = Math.abs(norm - 0.5) * 2;
+          const baseColor = norm < 0.3 ? C.red : norm > 0.7 ? C.green : C.amber;
+          const baseBg = norm < 0.3 ? C.redDim : norm > 0.7 ? C.greenDim : C.amberDim;
+          // Blend bg toward surface for low-intensity, keep vivid for high
+          const bg = `color-mix(in srgb, ${baseBg} ${Math.round(10 + intensity * 90)}%, ${C.bgSurface})`;
+          const opacity = (0.2 + intensity * 0.8).toFixed(2);
+          const cellStyle = `padding: 8px; background: ${bg}; border-radius: 4px; text-align: center;`;
+          const valStyle = `font-size: 14px; font-weight: 700; font-family: ${mono}; color: ${baseColor}; opacity: ${opacity};`;
 
-        return html`<div style="${cellStyle}">
-          <div style="${cellLabelStyle}">${cell.label}</div>
-          <div style="${valStyle}">${cell.value.toFixed(0)}</div>
-        </div>`;
-      })}
+          return html`<div style="${cellStyle}">
+            <div style="${cellLabelStyle}">${cell.label}</div>
+            <div style="${valStyle}">${cell.value.toFixed(0)}</div>
+          </div>`;
+        })}
+      </div>
     </div>
   </div>`;
 }
@@ -226,13 +234,14 @@ function renderScorecard(b: ScorecardBlock) {
   const trendArrow = (t?: string) => (t === "up" ? " ↑" : t === "down" ? " ↓" : t === "flat" ? " →" : "");
   const trendColor = (t?: string) => (t === "up" ? C.green : t === "down" ? C.red : C.textMuted);
   const titleStyle = `font-size: 11px; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;`;
-  const listStyle = `display: flex; flex-direction: column; gap: 1px; background: ${C.borderSubtle}; border-radius: 6px; overflow: hidden;`;
+  const listStyle = `display: flex; flex-direction: column; gap: 1px; background: ${C.bgSurface}; border-radius: 6px; overflow: hidden;`;
   const rowBaseStyle = `display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ${C.bgSurface};`;
   const labelStyle = `flex: 1; font-size: 12px; color: ${C.textSecondary};`;
   const trackStyle = `width: 60px; height: 3px; background: ${C.bgHover}; border-radius: 2px; overflow: hidden;`;
-  const blockStyle = `padding: 14px; background: ${C.bgSurface}; border: 1px solid ${C.borderSubtle}; border-radius: 6px; margin: 2px 0;`;
 
-  return html`<div style="${blockStyle}">
+  const interpStyle = `font-size: 12px; line-height: 1.5; color: ${C.textSecondary}; padding: 8px 12px; background: ${C.bgHover}; border-radius: 4px; margin-top: 8px;`;
+
+  return html`<div style="margin: 2px 0;">
     ${b.title ? html`<div style="${titleStyle}">${b.title}</div>` : html``}
     <div style="${listStyle}">
       ${b.items.map((item) => {
@@ -253,6 +262,7 @@ function renderScorecard(b: ScorecardBlock) {
         </div>`;
       })}
     </div>
+    ${b.interpretation ? html`<div style="${interpStyle}">${b.interpretation}</div>` : html``}
   </div>`;
 }
 
@@ -315,32 +325,27 @@ function renderLevelMap(b: LevelMapBlock) {
 
   const sorted = [...b.levels].sort((a, c) => c.price - a.price);
 
-  const containerStyle = `margin: 2px 0; padding: 12px; background: ${C.bgSurface}; border-radius: 6px; border: 1px solid ${C.borderSubtle};`;
+  const containerStyle = `margin: 2px 0;background: ${C.bgSurface}; border-radius: 6px; border: 1px solid ${C.borderSubtle};`;
   const titleStyle = `font-size: 11px; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;`;
-  const currentStyle = `display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: ${C.bgHover}; border-radius: 4px; margin-bottom: 6px;`;
-  const currentLabelStyle = `font-size: 10px; color: ${C.textMuted}; text-transform: uppercase; letter-spacing: 0.05em;`;
-  const currentPriceStyle = `font-size: 13px; font-weight: 700; font-family: ${mono}; color: ${C.textPrimary};`;
 
-  return html`<div style="${containerStyle}">
+  return html`<div style="margin: 2px 0;">
     <div style="${titleStyle}">Key Levels</div>
-    <div style="${currentStyle}">
-      <span style="${currentLabelStyle}">Current</span>
-      <span style="${currentPriceStyle}">${b.current.toLocaleString()}</span>
-    </div>
-    <div style="display: flex; flex-direction: column; gap: 2px;">
-      ${sorted.map((level) => {
-        const color = levelColor(level.type);
-        const rowStyle = `display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid ${C.borderSubtle};`;
-        const tagStyle = `font-size: 9px; font-weight: 600; color: ${color}; text-transform: uppercase; letter-spacing: 0.05em; min-width: 28px;`;
-        const lblStyle = `flex: 1; font-size: 12px; color: ${C.textSecondary};`;
-        const priceStyle = `font-size: 12px; font-weight: 600; font-family: ${mono}; color: ${color};`;
+    <div style="${containerStyle}">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        ${sorted.map((level) => {
+          const color = levelColor(level.type);
+          const rowStyle = `display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid ${C.borderSubtle};`;
+          const tagStyle = `font-size: 9px; font-weight: 600; color: ${color}; text-transform: uppercase; letter-spacing: 0.05em; min-width: 28px;`;
+          const lblStyle = `flex: 1; font-size: 12px; color: ${C.textSecondary};`;
+          const priceStyle = `font-size: 12px; font-weight: 600; font-family: ${mono}; color: ${color};`;
 
-        return html`<div style="${rowStyle}">
-          <span style="${tagStyle}">${typeLabel(level.type)}</span>
-          <span style="${lblStyle}">${level.label}</span>
-          <span style="${priceStyle}">${level.price.toLocaleString()}</span>
-        </div>`;
-      })}
+          return html`<div style="${rowStyle}">
+            <span style="${tagStyle}">${typeLabel(level.type)}</span>
+            <span style="${lblStyle}">${level.label}</span>
+            <span style="${priceStyle}">${level.price.toLocaleString()}</span>
+          </div>`;
+        })}
+      </div>
     </div>
   </div>`;
 }

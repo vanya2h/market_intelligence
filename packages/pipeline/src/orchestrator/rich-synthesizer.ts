@@ -66,6 +66,7 @@ export type RichBlock =
   | {
       type: "scorecard";
       title?: string;
+      interpretation?: string;
       items: {
         label: string;
         score: number;
@@ -73,13 +74,6 @@ export type RichBlock =
         trend?: "up" | "down" | "flat";
       }[];
     }
-  | {
-      type: "comparison";
-      title?: string;
-      headers?: [string, string];
-      rows: { label: string; a: string; b: string }[];
-    }
-
   // ── Contextual / editorial ──
   | {
       type: "callout";
@@ -125,7 +119,6 @@ export type MetricRowBlock = Extract<RichBlock, { type: "metric_row" }>;
 export type BarChartBlock = Extract<RichBlock, { type: "bar_chart" }>;
 export type HeatmapBlock = Extract<RichBlock, { type: "heatmap" }>;
 export type ScorecardBlock = Extract<RichBlock, { type: "scorecard" }>;
-export type ComparisonBlock = Extract<RichBlock, { type: "comparison" }>;
 export type CalloutBlock = Extract<RichBlock, { type: "callout" }>;
 export type SignalBlock = Extract<RichBlock, { type: "signal" }>;
 export type LevelMapBlock = Extract<RichBlock, { type: "level_map" }>;
@@ -157,11 +150,9 @@ DATA DISPLAY:
   Horizontal bar chart comparing values. Good for relative comparisons.
 - heatmap: { type: "heatmap", title?: string, cells: [{ label, value, min?, max? }] }
   Grid of colored cells. Use for multi-dimensional overviews.
-- scorecard: { type: "scorecard", title?: string, items: [{ label, score, maxScore?, trend?: "up"|"down"|"flat" }] }
-  Score list with trend arrows. Good for component breakdowns.
-- comparison: { type: "comparison", title?: string, headers?: [string, string], rows: [{ label, a, b }] }
-  Side-by-side comparison table.
-
+  IMPORTANT: Use ACTUAL metric values, never normalize to 0-100. Set min/max to each metric's natural range (e.g. percentile: 0-100, cycle count: 0-30, z-score: -3 to 3).
+- scorecard: { type: "scorecard", title?: string, interpretation?: string, items: [{ label, score, maxScore?, trend?: "up"|"down"|"flat" }] }
+  Score list with trend arrows. Good for component breakdowns. Use "interpretation" to add a short (1-2 sentence) takeaway that explains what the scores mean together — highlight divergences, confluences, or the key signal a reader should focus on.
 CONTEXTUAL / EDITORIAL:
 - callout: { type: "callout", variant: "bullish"|"bearish"|"warning"|"info", title: string, content: string }
   A highlighted box for key insights, warnings, or trade ideas. High visual impact.

@@ -70,7 +70,6 @@ export type {
   BarChartBlock,
   HeatmapBlock,
   ScorecardBlock,
-  ComparisonBlock,
   CalloutBlock,
   SignalBlock,
   LevelMapBlock,
