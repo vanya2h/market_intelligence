@@ -6,25 +6,29 @@ import { AppHeader } from "../components/AppHeader";
 import { BriefSidebar } from "../components/BriefSidebar";
 import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { DimensionTabs } from "../components/DimensionTabs";
+import { TradeIdeaSection } from "../components/TradeIdeaSection";
 import { StickyFooter } from "../components/StickyFooter";
 
 import { getLatestBriefByAsset } from "../lib/brief";
+import { getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
 
-  return {
-    asset,
-    brief: await getLatestBriefByAsset(asset)(api),
-  };
+  const brief = await getLatestBriefByAsset(asset)(api);
+  const tradeIdea = brief
+    ? await getTradeIdeaByBriefId(brief.id)(api).catch(() => null)
+    : null;
+
+  return { asset, brief, tradeIdea };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Dashboard() {
-  const { asset, brief } = useLoaderData<LoaderData>();
+  const { asset, brief, tradeIdea } = useLoaderData<LoaderData>();
 
   if (!brief) {
     return (
@@ -67,6 +71,13 @@ export default function Dashboard() {
           <div className="p-4 md:p-6">
             <BriefSection brief={brief} />
           </div>
+
+          {/* Trade idea section */}
+          {tradeIdea && (
+            <div className="px-4 pb-4 md:px-6 md:pb-6">
+              <TradeIdeaSection tradeIdea={tradeIdea} />
+            </div>
+          )}
 
           <div className="mt-4">
             <DimensionTabs dimensions={brief.dimensions} />

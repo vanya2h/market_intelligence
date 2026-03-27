@@ -15,7 +15,8 @@ import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
 import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
-import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
+import { processTradeIdea } from "./trade-idea/index.js";
+import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -114,7 +115,7 @@ function printBrief(asset: string, outputs: DimensionOutput[], brief: string): v
 
 export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
   for (const asset of assets) {
-    const totalSteps = 3;
+    const totalSteps = 4;
 
     step(1, totalSteps, `Running all dimension pipelines (${asset})...`);
     const startTime = Date.now();
@@ -132,7 +133,15 @@ export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
     if (richBrief) note("rich brief generated");
 
     step(3, totalSteps, "Saving to database...");
-    await saveBrief(asset, brief, outputs, richBrief);
+    const briefId = await saveBrief(asset, brief, outputs, richBrief);
+
+    step(4, totalSteps, "Extracting trade idea...");
+    const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
+    if (htfOut) {
+      await processTradeIdea(briefId, asset, brief, htfOut.context, outputs);
+    } else {
+      note("skipped — no HTF output available");
+    }
 
     printBrief(asset, outputs, brief);
   }
