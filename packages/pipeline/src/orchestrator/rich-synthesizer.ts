@@ -196,15 +196,15 @@ GUIDELINES:
 - Use metric_row for headline numbers that need to be scannable.
 - Use scorecard or heatmap for multi-factor overviews.
 - If signal staleness data is present, note when signals are fresh (0-2 candles ago) vs fading (5+ candles).
-- Aim for 6-12 blocks total. Too few = underutilizing the visual format. Too many = visual noise.
+- Aim for 6-10 blocks total. Too few = underutilizing the visual format. Too many = visual noise.
 - Every block should ADD something a reader can't get from plain text.
 - Cite specific numbers from the data. No vague statements.
 
 OUTPUT FORMAT:
-Return ONLY a valid JSON object with this structure:
-{ "blocks": [ ...array of block objects... ] }
+Return ONLY a valid **minified** JSON object (no extra whitespace or newlines) with this structure:
+{"blocks":[...array of block objects...]}
 
-No markdown fences, no explanation, no preamble. Just the JSON object.`;
+No markdown fences, no explanation, no preamble. Just the compact JSON object.`;
 }
 
 function buildUserPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[]): string {
@@ -253,6 +253,10 @@ async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Pro
     messages: [{ role: "user", content: buildUserPrompt(asset, outputs) }],
     system: buildSystemPrompt(outputs.length),
   });
+
+  if (message.stop_reason !== "end_turn") {
+    throw new Error(`Rich brief response truncated (stop_reason: ${message.stop_reason})`);
+  }
 
   const block = message.content[0]!;
   const text = block.type === "text" ? block.text : "{}";
