@@ -37,35 +37,7 @@ export default function BriefPage() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader currentBriefId={brief.id}>
-        <div className="flex items-center justify-between gap-4 w-full">
-          <div className="flex items-center gap-3">
-            <Tooltip side="bottom" content="The date when report was generated">
-              <span
-                className="font-mono-jb text-[11px] font-medium tabular-nums inline-flex items-center gap-1.5"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {format(brief.timestamp, "MMM d, yyyy · HH:mm")}
-                <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
-              </span>
-            </Tooltip>
-            <RelativeTime
-              date={brief.timestamp}
-              className="text-xs"
-              style={{ color: "var(--text-muted)" }}
-            />
-          </div>
-          <div className="grow" />
-          {brief.snapshotPrice != null && (
-            <Tooltip side="bottom" content="Price at the moment when report is generated">
-              <span className="inline-flex items-center gap-1.5 text-[11px]">
-                <UsdValue value={brief.snapshotPrice} />
-                <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
-              </span>
-            </Tooltip>
-          )}
-        </div>
-      </AppHeader>
+      <AppHeader currentBriefId={brief.id} />
 
       {/* Mobile: sidebar content stacked above main */}
       <MobileBriefSummary brief={brief} />
@@ -76,21 +48,25 @@ export default function BriefPage() {
         <BriefSidebar brief={brief} />
 
         {/* Main content */}
-        <main className="flex min-w-0 flex-1 flex-col md:max-w-3xl">
+        <main className="flex min-w-0 flex-1 flex-col">
           {/* Brief section */}
-          <div className="p-4 md:p-6">
-            <BriefSection brief={brief} />
-          </div>
-
-          {/* Trade idea section */}
-          {tradeIdea && (
-            <div className="px-4 pb-4 md:px-6 md:pb-6">
-              <TradeIdeaSection tradeIdea={tradeIdea} />
+          <div className="flex flex-col md:max-w-3xl">
+            <div className="p-4 md:p-6">
+              <BriefSection brief={brief} />
             </div>
-          )}
 
-          {/* Dimension tabs + content */}
-          <DimensionTabs dimensions={brief.dimensions} />
+            {/* Trade idea section */}
+            {tradeIdea && (
+              <div className="px-4 pb-4 md:px-6 md:pb-6">
+                <TradeIdeaSection tradeIdea={tradeIdea} />
+              </div>
+            )}
+
+            {/* Dimension tabs + content */}
+            <div className="px-4 md:px-6">
+              <DimensionTabs dimensions={brief.dimensions} />
+            </div>
+          </div>
         </main>
       </div>
       <StickyFooter />

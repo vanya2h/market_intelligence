@@ -18,9 +18,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
 
   const brief = await getLatestBriefByAsset(asset)(api);
-  const tradeIdea = brief
-    ? await getTradeIdeaByBriefId(brief.id)(api).catch(() => null)
-    : null;
+  const tradeIdea = brief ? await getTradeIdeaByBriefId(brief.id)(api).catch(() => null) : null;
 
   return { asset, brief, tradeIdea };
 }
@@ -33,9 +31,7 @@ export default function Dashboard() {
   if (!brief) {
     return (
       <div className="min-h-screen">
-        <AppHeader>
-          <AssetSelector current={asset} />
-        </AppHeader>
+        <AppHeader />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 pt-32">
           <p style={{ color: "var(--text-muted)" }}>
             No data for {asset}.{" "}
@@ -53,9 +49,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader>
-        <AssetSelector current={asset} />
-      </AppHeader>
+      <AppHeader />
 
       {/* Mobile: sidebar content stacked above main */}
       <MobileBriefSummary brief={brief} />
@@ -66,21 +60,33 @@ export default function Dashboard() {
         <BriefSidebar brief={brief} />
 
         {/* Main content */}
-        <main className="flex flex-col md:max-w-3xl">
-          {/* Brief section */}
-          <div className="p-4 md:p-6">
-            <BriefSection brief={brief} />
+        <main className="flex flex-col w-full">
+          {/* Subheader: asset selector */}
+          <div
+            className="sticky top-10 z-20 flex w-full h-full min-h-10 items-center gap-4 px-4 md:px-6"
+            style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
+          >
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Asset:
+            </span>
+            <AssetSelector className="h-full" current={asset} />
           </div>
-
-          {/* Trade idea section */}
-          {tradeIdea && (
-            <div className="px-4 pb-4 md:px-6 md:pb-6">
-              <TradeIdeaSection tradeIdea={tradeIdea} />
+          <div className="flex flex-col gap-4 md:max-w-3xl">
+            {/* Brief section */}
+            <div className="p-4 md:p-6">
+              <BriefSection brief={brief} />
             </div>
-          )}
 
-          <div className="mt-4">
-            <DimensionTabs dimensions={brief.dimensions} />
+            {/* Trade idea section */}
+            {tradeIdea && (
+              <div className="px-4 pb-4 md:px-6 md:pb-6">
+                <TradeIdeaSection tradeIdea={tradeIdea} />
+              </div>
+            )}
+
+            <div className="px-4 md:px-6">
+              <DimensionTabs dimensions={brief.dimensions} />
+            </div>
           </div>
         </main>
       </div>

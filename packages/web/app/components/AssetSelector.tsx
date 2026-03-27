@@ -1,12 +1,12 @@
-import { TabBar } from "./TabBar";
+import { TabBar, TabBarProps } from "./TabBar";
 
-export function AssetSelector({ current }: { current: string }) {
+export function AssetSelector({
+  current,
+  ...restProps
+}: { current: string } & Omit<TabBarProps, "activeKey" | "items">) {
   const assets = ["BTC", "ETH"];
 
   return (
-    <TabBar
-      items={assets.map((a) => ({ key: a, label: a, to: `/?asset=${a}` }))}
-      activeKey={current}
-    />
+    <TabBar items={assets.map((a) => ({ key: a, label: a, to: `/?asset=${a}` }))} activeKey={current} {...restProps} />
   );
 }

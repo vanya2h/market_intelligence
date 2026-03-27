@@ -6,7 +6,7 @@ interface TabItem {
   to?: string;
 }
 
-interface TabBarProps {
+export interface TabBarProps {
   items: TabItem[];
   activeKey: string;
   onSelect?: (key: string) => void;
@@ -18,7 +18,7 @@ export function TabBar({ items, activeKey, onSelect, className = "" }: TabBarPro
     <div className={`flex items-center gap-0 ${className}`}>
       {items.map((item) => {
         const isActive = activeKey === item.key;
-        const tabClassName = `relative shrink-0 cursor-pointer px-3 py-2 text-xs font-medium tracking-wide transition-colors ${isActive ? "tab-active" : ""}`;
+        const tabClassName = `flex h-full items-center relative shrink-0 cursor-pointer px-3 py-2 text-xs font-medium tracking-wide transition-colors ${isActive ? "tab-active" : ""}`;
         const style = {
           color: isActive ? "var(--text-primary)" : "var(--text-muted)",
         };
@@ -32,12 +32,7 @@ export function TabBar({ items, activeKey, onSelect, className = "" }: TabBarPro
         }
 
         return (
-          <button
-            key={item.key}
-            onClick={() => onSelect?.(item.key)}
-            className={tabClassName}
-            style={style}
-          >
+          <button key={item.key} onClick={() => onSelect?.(item.key)} className={tabClassName} style={style}>
             {item.label}
           </button>
         );

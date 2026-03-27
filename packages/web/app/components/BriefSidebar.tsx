@@ -111,11 +111,11 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
   } = brief;
   return (
     <aside
-      className="sticky top-19 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
+      className="sticky top-10 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
       style={{
         borderRight: "1px solid var(--border)",
         background: "var(--bg-card)",
-        height: "calc(100vh - 4.75rem)",
+        height: "calc(100vh - 2.5rem)",
       }}
     >
       {compositeIndex != null && compositeLabel && (
@@ -126,7 +126,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
         >
           <SentimentGauge value={compositeIndex} label={compositeLabel} />
           <Link
-            to="/guide"
+            to="/faq"
             className="mt-2 inline-flex items-center gap-1 text-[12px] transition-colors"
             style={{ color: "var(--text-muted)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}

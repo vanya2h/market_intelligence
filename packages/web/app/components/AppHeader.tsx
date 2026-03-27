@@ -25,7 +25,14 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
   const { pathname } = useLocation();
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const activeKey = pathname.startsWith("/guide") ? "guide" : "home";
+  const tabs = [
+    { key: "home", label: "Home", to: "/" },
+    { key: "history", label: "History" },
+    { key: "faq", label: "FAQ", to: "/faq" },
+  ];
+
+  const activeKey =
+    tabs.find((t) => t.to && t.to !== "/" && pathname.startsWith(t.to))?.key ?? "home";
 
   function handleTabSelect(key: string) {
     if (key === "history") setHistoryOpen(true);
@@ -38,7 +45,7 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
         className="flex h-10 items-center justify-between px-3 md:px-4"
         style={{ borderBottom: children ? "1px solid var(--border-subtle)" : "1px solid var(--border)" }}
       >
-        <div className="flex flex-row gap-4 items-center">
+        <div className="flex flex-row gap-4 items-center h-full">
           <Link to="/" className="flex items-center gap-2">
             <img src="/asterisk.png" alt="" className="h-5 w-5" />
             <span
@@ -49,11 +56,8 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
             </span>
           </Link>
           <TabBar
-            items={[
-              { key: "home", label: "Home", to: "/" },
-              { key: "history", label: "History" },
-              { key: "guide", label: "Guide", to: "/guide" },
-            ]}
+            items={tabs}
+            className="h-full"
             activeKey={activeKey}
             onSelect={handleTabSelect}
           />
@@ -75,7 +79,10 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
 
       {/* Subheader: page-specific content */}
       {children && (
-        <div className="flex h-9 items-center px-3 md:px-4" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div
+          className="flex h-full min-h-9 items-center px-3 md:px-4"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
           {children}
         </div>
       )}
