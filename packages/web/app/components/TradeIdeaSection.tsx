@@ -11,7 +11,7 @@ function directionStyle(direction: string): { color: string; bg: string; label: 
   return { color: "var(--text-muted)", bg: "var(--bg-hover)", label: "FLAT \u2014" };
 }
 
-export function TradeIdeaSection({ tradeIdea }: { tradeIdea: TradeIdea }) {
+export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea; compact?: boolean }) {
   const dir = directionStyle(tradeIdea.direction);
 
   return (
@@ -45,27 +45,29 @@ export function TradeIdeaSection({ tradeIdea }: { tradeIdea: TradeIdea }) {
       )}
 
       {/* Main content: levels + chart */}
-      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+      <div className={compact ? "" : "grid gap-4 md:grid-cols-[220px_1fr]"}>
         <LevelStatus
           levels={tradeIdea.levels}
           entryPrice={tradeIdea.entryPrice}
           direction={tradeIdea.direction}
         />
-        <div
-          className="rounded-md p-3"
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-subtle)",
-          }}
-        >
+        {!compact && (
           <div
-            className="mb-2 text-[9px] font-medium uppercase tracking-widest"
-            style={{ color: "var(--text-muted)" }}
+            className="rounded-md p-3"
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+            }}
           >
-            Returns Curve
+            <div
+              className="mb-2 text-[9px] font-medium uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Returns Curve
+            </div>
+            <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
           </div>
-          <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
-        </div>
+        )}
       </div>
     </SectionBlock>
   );

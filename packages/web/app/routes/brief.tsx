@@ -15,6 +15,7 @@ import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { getBriefById } from "../lib/brief";
 import { getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
+import { ComponentProps } from "react";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { id } = params;
@@ -50,22 +51,22 @@ export default function BriefPage() {
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col">
           {/* Brief section */}
-          <div className="flex flex-col md:max-w-3xl">
-            <div className="p-4 md:p-6">
+          <div className="flex flex-col gap-4 py-4 md:max-w-3xl">
+            <Row>
               <BriefSection brief={brief} />
-            </div>
+            </Row>
 
             {/* Trade idea section */}
             {tradeIdea && (
-              <div className="px-4 pb-4 md:px-6 md:pb-6">
+              <Row>
                 <TradeIdeaSection tradeIdea={tradeIdea} />
-              </div>
+              </Row>
             )}
 
             {/* Dimension tabs + content */}
-            <div className="px-4 md:px-6">
+            <Row>
               <DimensionTabs dimensions={brief.dimensions} />
-            </div>
+            </Row>
           </div>
         </main>
       </div>
@@ -73,3 +74,5 @@ export default function BriefPage() {
     </div>
   );
 }
+
+const Row = (props: ComponentProps<"div">) => <div className="px-4 md:px-6" {...props} />;

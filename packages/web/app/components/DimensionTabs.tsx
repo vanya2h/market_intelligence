@@ -16,17 +16,20 @@ export function DimensionTabs({ dimensions }: DimensionTabsProps) {
   return (
     <>
       {/* Dimension tabs */}
-      <div style={{ borderBottom: "1px solid var(--border)" }}>
+      <div
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
+        className="h-10 px-2 rounded-t-md"
+      >
         <TabBar
           items={availableDims.map((dim) => ({ key: dim, label: TAB_LABELS[dim] }))}
           activeKey={activeTab}
           onSelect={setActiveTab}
-          className="overflow-x-auto px-3 md:px-5"
+          className="overflow-x-auto h-full"
         />
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 p-3 md:p-5">
+      <div className="flex-1 p-3 md:p-5 rounded-b-md" style={{ background: "var(--bg-card)" }}>
         {availableDims.map((dim) => {
           const bd = dimensions.find((d) => d.dimension === dim);
           if (!bd) return null;

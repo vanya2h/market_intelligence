@@ -12,6 +12,7 @@ import { StickyFooter } from "../components/StickyFooter";
 import { getLatestBriefByAsset } from "../lib/brief";
 import { getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
+import { ComponentProps } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -71,22 +72,22 @@ export default function Dashboard() {
             </span>
             <AssetSelector className="h-full" current={asset} />
           </div>
-          <div className="flex flex-col gap-4 md:max-w-3xl">
+          <div className="flex flex-col gap-4 py-4 md:max-w-3xl">
             {/* Brief section */}
-            <div className="p-4 md:p-6">
+            <Row>
               <BriefSection brief={brief} />
-            </div>
+            </Row>
 
             {/* Trade idea section */}
             {tradeIdea && (
-              <div className="px-4 pb-4 md:px-6 md:pb-6">
-                <TradeIdeaSection tradeIdea={tradeIdea} />
-              </div>
+              <Row>
+                <TradeIdeaSection tradeIdea={tradeIdea} compact />
+              </Row>
             )}
 
-            <div className="px-4 md:px-6">
+            <Row>
               <DimensionTabs dimensions={brief.dimensions} />
-            </div>
+            </Row>
           </div>
         </main>
       </div>
@@ -94,3 +95,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+const Row = (props: ComponentProps<"div">) => <div className="px-4 md:px-6" {...props} />;
