@@ -130,12 +130,19 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           }) as MetricSignal,
         },
         {
-          label: "Neg. Funding Cycles",
+          label: "Funding Pressure",
           group: "Funding",
-          value: safe(() => String(get(ctx, "signals.fundingNegativeCycles") as number)),
+          value: safe(() => {
+            const cycles = get(ctx, "signals.fundingPressureCycles") as number;
+            const side = get(ctx, "signals.fundingPressureSide") as string | null;
+            if (!cycles || !side) return "—";
+            return `${cycles} cycles (${side})`;
+          }),
           signal: safe(() => {
-            const c = get(ctx, "signals.fundingNegativeCycles") as number;
-            return c >= 3 ? "bearish" : "neutral";
+            const cycles = get(ctx, "signals.fundingPressureCycles") as number;
+            const side = get(ctx, "signals.fundingPressureSide") as string | null;
+            if (!cycles || cycles < 3 || !side) return "neutral";
+            return side === "LONG" ? "bearish" : "bullish";
           }) as MetricSignal,
         },
         {

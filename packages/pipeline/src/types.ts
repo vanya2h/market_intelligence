@@ -30,7 +30,8 @@ export interface AnalysisSignals {
   oiZScore30d: number; // (current − mean30d) / std30d
   priceReturn24h: number | null; // null when price data unavailable
   priceReturn7d: number | null;
-  fundingNegativeCycles: number; // consecutive negative funding intervals
+  fundingPressureCycles: number; // consecutive extreme-side funding cycles while OI elevated
+  fundingPressureSide: "LONG" | "SHORT" | null; // which side is paying
 }
 
 // Raw data as returned by the collector (mirrors CoinGlass response shape)

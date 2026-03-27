@@ -125,13 +125,60 @@ function buildLiquidationContext(
 
 // ─── Metric computation ───────────────────────────────────────────────────────
 
-function countNegativeFundingCycles(snapshot: DerivativesSnapshot): number {
-  let count = 0;
-  for (let i = snapshot.funding.history1m.length - 1; i >= 0; i--) {
-    if (snapshot.funding.history1m[i]!.value < 0) count++;
+/**
+ * Count consecutive funding cycles on the same extreme side of the median.
+ *
+ * "Extreme" = above 75th or below 25th percentile of the 30-day funding
+ * distribution. Walks backwards from the most recent cycle, stopping at
+ * the first cycle that is NOT extreme on the same side.
+ *
+ * Only meaningful when OI is elevated — returns { cycles: 0, side: null }
+ * when OI z-score ≤ 0.5 (the spring has no tension without open interest).
+ */
+function countExtremeFundingCycles(
+  snapshot: DerivativesSnapshot,
+  oiZScore30d: number,
+): { cycles: number; side: "LONG" | "SHORT" | null } {
+  // No pressure without elevated OI
+  if (oiZScore30d <= 0.5) return { cycles: 0, side: null };
+
+  const values = snapshot.funding.history1m.map((h) => h.value);
+  if (values.length < 4) return { cycles: 0, side: null };
+
+  // Compute median funding rate over the window
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0
+      ? (sorted[mid - 1]! + sorted[mid]!) / 2
+      : sorted[mid]!;
+
+  // Compute IQR-based thresholds (75th / 25th percentile)
+  const q75Idx = Math.floor(sorted.length * 0.75);
+  const q25Idx = Math.floor(sorted.length * 0.25);
+  const upperThresh = sorted[q75Idx]!;
+  const lowerThresh = sorted[q25Idx]!;
+
+  // Determine which side the most recent cycle is on
+  const latest = values[values.length - 1]!;
+  let side: "LONG" | "SHORT" | null = null;
+  if (latest > upperThresh) side = "LONG"; // longs paying shorts → crowded long
+  else if (latest < lowerThresh) side = "SHORT"; // shorts paying longs → crowded short
+  else return { cycles: 0, side: null }; // not extreme
+
+  // Count consecutive extreme cycles on the same side
+  const isExtreme =
+    side === "LONG"
+      ? (v: number) => v > median // above median = same side (relaxed from 75th for continuation)
+      : (v: number) => v < median; // below median = same side
+
+  let cycles = 0;
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (isExtreme(values[i]!)) cycles++;
     else break;
   }
-  return count;
+
+  return { cycles, side };
 }
 
 /** Compute all AnalysisSignals (spec §2) from a snapshot. */
@@ -159,7 +206,7 @@ function computeSignals(
     priceReturn7d  = computeChange(snapshot.price.history, priceCurrent, 7 * 24, nowMs);
   }
 
-  const fundingNegativeCycles = countNegativeFundingCycles(snapshot);
+  const pressure = countExtremeFundingCycles(snapshot, oiZScore30d);
 
   return {
     fundingPct1m,
@@ -170,7 +217,8 @@ function computeSignals(
     oiZScore30d,
     priceReturn24h,
     priceReturn7d,
-    fundingNegativeCycles,
+    fundingPressureCycles: pressure.cycles,
+    fundingPressureSide: pressure.side,
   };
 }
 
@@ -263,7 +311,8 @@ function classifyStress(
     oiChange24h,
     oiChange7d,
     priceReturn24h,
-    fundingNegativeCycles,
+    fundingPressureCycles,
+    fundingPressureSide,
   } = signals;
 
   // ── 1. CAPITULATION (highest priority) ────────────────────────────────────
@@ -315,13 +364,13 @@ function classifyStress(
   const dlvOi7dThresh   = inDlv ? -0.02 : -0.05;
   const dlvLiqCap       = inDlv ? 75   : 70; // must be below (no extreme liq)
 
-  const dlvCyclesFire = fundingNegativeCycles >= dlvCycleThresh;
+  const dlvCyclesFire = fundingPressureSide !== null && fundingPressureCycles >= dlvCycleThresh;
   const dlvOiFires    = oiChange24h < dlvOi24hThresh || oiChange7d < dlvOi7dThresh;
   const dlvNoLiqSpike = liqPct1m <= dlvLiqCap;
 
   if (dlvCyclesFire && dlvOiFires && dlvNoLiqSpike) {
     const triggers: string[] = [
-      `fundingNegativeCycles=${fundingNegativeCycles} ≥ ${dlvCycleThresh}`,
+      `fundingPressure=${fundingPressureCycles} cycles (${fundingPressureSide}) ≥ ${dlvCycleThresh}`,
       `oiChange24h=${pct(oiChange24h)} or oiChange7d=${pct(oiChange7d)} (gradual decline)`,
       `liqPct1m=${liqPct1m} ≤ ${dlvLiqCap} (no spike)`,
     ];

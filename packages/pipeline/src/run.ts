@@ -126,9 +126,11 @@ function printBrief(ctx: DerivativesContext, interpretation: string): void {
       `  ${label("Price")}       ${chalk.white(pct(ctx.signals.priceReturn24h))} 24h  ${chalk.dim("/")}  ${chalk.white(pct(ctx.signals.priceReturn7d!))} 7d`
     );
   }
-  console.log(
-    `  ${label("Neg.cycles")}  ${chalk.white(ctx.signals.fundingNegativeCycles.toString())}`
-  );
+  if (ctx.signals.fundingPressureCycles > 0) {
+    console.log(
+      `  ${label("Pressure")}    ${chalk.white.bold(ctx.signals.fundingPressureCycles.toString() + " cycles")}  ${chalk.dim(ctx.signals.fundingPressureSide ?? "")}`
+    );
+  }
 
   // ── Events ────────────────────────────────────────────────────────────────
   if (ctx.events.length > 0) {
