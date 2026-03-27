@@ -131,72 +131,57 @@ export interface RichBrief {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-const BLOCK_CATALOG = `Available visual block types (use any combination):
+const BLOCK_CATALOG = `Block types:
 
 STRUCTURAL:
-- heading: { type: "heading", text: string, level?: 1|2|3 }
-- text: { type: "text", content: string, style?: "default"|"emphasis"|"muted" }
+- heading: { type: "heading", text, level?: 1|2|3 }
+- text: { type: "text", content, style?: "default"|"emphasis"|"muted" }
 - divider: { type: "divider" }
 - spacer: { type: "spacer" }
 
-GAUGES & METERS:
-- spectrum: { type: "spectrum", label: string, value: number, leftLabel: string, rightLabel: string }
-  A labeled slider between two extremes (e.g., Fear ←→ Greed, Short ←→ Long). Great for scores, indices, percentiles, and any value on a continuum.
+GAUGES:
+- spectrum: { type: "spectrum", label, value: number, leftLabel, rightLabel }
+  Slider between two extremes (Fear↔Greed, Short↔Long). For scores, percentiles, continuum values.
 
-DATA DISPLAY:
+DATA:
 - metric_row: { type: "metric_row", items: [{ label, value, sentiment?: "bullish"|"bearish"|"neutral", detail? }] }
-  A row of key metrics with optional sentiment coloring. Use for 2-4 headline numbers.
-- bar_chart: { type: "bar_chart", title?: string, items: [{ label, value, maxValue? }] }
-  Horizontal bar chart comparing values. Good for relative comparisons.
-- heatmap: { type: "heatmap", title?: string, cells: [{ label, value, min?, max? }] }
-  Grid of colored cells. Use for multi-dimensional overviews.
-  IMPORTANT: Use ACTUAL metric values, never normalize to 0-100. Set min/max to each metric's natural range (e.g. percentile: 0-100, cycle count: 0-30, z-score: -3 to 3).
-- scorecard: { type: "scorecard", title?: string, interpretation?: string, items: [{ label, score, maxScore?, trend?: "up"|"down"|"flat" }] }
-  Score list with trend arrows. Good for component breakdowns. Use "interpretation" to add a short (1-2 sentence) takeaway that explains what the scores mean together — highlight divergences, confluences, or the key signal a reader should focus on.
-CONTEXTUAL / EDITORIAL:
-- callout: { type: "callout", variant: "bullish"|"bearish"|"warning"|"info", title: string, content: string }
-  A highlighted box for key insights, warnings, or trade ideas. High visual impact.
-- signal: { type: "signal", direction: "bullish"|"bearish"|"neutral", strength: 1-3, label: string, detail?: string }
-  A directional signal indicator with strength dots. Use for clear directional calls.
+  Row of 2-4 headline metrics with sentiment coloring.
+- bar_chart: { type: "bar_chart", title?, items: [{ label, value, maxValue? }] }
+  Horizontal bars for relative comparisons.
+- heatmap: { type: "heatmap", title?, cells: [{ label, value, min?, max? }] }
+  Colored grid for multi-factor overviews. Use ACTUAL metric values, never normalize. Set min/max to natural range (percentile: 0-100, count: 0-30, z-score: -3 to 3).
+- scorecard: { type: "scorecard", title?, interpretation?, items: [{ label, score, maxScore?, trend?: "up"|"down"|"flat" }] }
+  Score list with trends. Add "interpretation": 1-2 sentence takeaway highlighting divergences or key signal.
+
+EDITORIAL:
+- callout: { type: "callout", variant: "bullish"|"bearish"|"warning"|"info", title, content }
+  Highlighted box for critical insights. High visual impact.
+- signal: { type: "signal", direction: "bullish"|"bearish"|"neutral", strength: 1-3, label, detail? }
+  Directional call with conviction level.
 - level_map: { type: "level_map", current: number, levels: [{ price, label, type: "support"|"resistance"|"target"|"stop" }] }
-  A vertical price level diagram showing key levels relative to current price.
-  IMPORTANT: All "price" values MUST be actual asset price levels (e.g. 69000 for BTC). Never use raw metric values like open interest, volume, or liquidation amounts — those are NOT prices.
-- regime_banner: { type: "regime_banner", regime: string, subtitle?: string, sentiment: "bullish"|"bearish"|"neutral"|"mixed" }
-  A prominent banner showing the macro regime. Use as the opening block.
-- tension: { type: "tension", title: string, left: { label, detail, sentiment }, right: { label, detail, sentiment } }
-  Shows a cross-dimension conflict or divergence. Two sides pulling in different directions.`;
+  Price level diagram. All prices MUST be actual asset prices, never raw metrics (OI, volume, etc).
+- regime_banner: { type: "regime_banner", regime, subtitle?, sentiment: "bullish"|"bearish"|"neutral"|"mixed" }
+  Macro regime banner. Use as opening block.
+- tension: { type: "tension", title, left: { label, detail, sentiment }, right: { label, detail, sentiment } }
+  Cross-dimension conflict. Two sides pulling opposite directions.`;
 
 function buildSystemPrompt(dimensionCount: number): string {
-  return `You are a chief market strategist creating a VISUAL market brief as a composition of infographic blocks.
-
-You have ${dimensionCount} analytical dimensions to work with. Your job is to turn this data into a visually compelling, information-dense infographic — not a wall of text.
+  return `You are a market strategist creating a visual infographic brief from ${dimensionCount} analytical dimensions.
 
 ${BLOCK_CATALOG}
 
-GUIDELINES:
-- The system's primary goal is detecting **swing trade reversals**. Prioritize reversal signals.
-- Be creative. Choose the block types that BEST communicate each insight visually.
-- Start with a regime_banner to set the macro context.
-- Use spectrums and bar_charts to show quantitative data — don't just write numbers in text.
-- Use callouts sparingly (1-2 max) for the most critical insights or trade ideas.
-- Use tension blocks when dimensions conflict — this is often the most valuable signal.
-- Use level_map when price levels are relevant to the trade setup.
-- Use signal blocks for clear directional calls with conviction level.
-  - strength 3: highest-conviction confluence (e.g., derivatives stress + CVD divergence)
-  - strength 2: high-conviction (e.g., CVD divergence + structure shift, or ETF reversal + crowded positioning)
-  - strength 1: moderate (e.g., accumulation/distribution regime + RSI extreme)
-- Use metric_row for headline numbers that need to be scannable.
-- Use scorecard or heatmap for multi-factor overviews.
-- If signal staleness data is present, note when signals are fresh (0-2 candles ago) vs fading (5+ candles).
-- Aim for 6-10 blocks total. Too few = underutilizing the visual format. Too many = visual noise.
-- Every block should ADD something a reader can't get from plain text.
-- Cite specific numbers from the data. No vague statements.
+RULES:
+- Primary goal: detect **swing trade reversals**. Prioritize reversal signals.
+- Open with regime_banner. Use 6-10 blocks total.
+- Show data visually (spectrums, bar_charts, heatmaps) — don't write numbers in text blocks.
+- Max 1-2 callouts for the most critical insights only.
+- Use tension blocks for cross-dimension conflicts — often the most valuable signal.
+- Signal strength: 3=highest confluence, 2=high conviction, 1=moderate.
+- Note signal staleness when present: fresh (0-2 candles) vs fading (5+).
+- Cite specific numbers. No vague statements.
 
-OUTPUT FORMAT:
-Return ONLY a valid **minified** JSON object (no extra whitespace or newlines) with this structure:
-{"blocks":[...array of block objects...]}
-
-No markdown fences, no explanation, no preamble. Just the compact JSON object.`;
+OUTPUT: Return ONLY minified JSON: {"blocks":[...]}
+No markdown, no explanation.`;
 }
 
 function buildUserPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[]): string {
