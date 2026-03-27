@@ -20,6 +20,8 @@ import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
 import { processTradeIdea } from "./trade-idea/index.js";
 import type { HtfOutput } from "./types.js";
+import { postTweet } from "./twitter.js";
+import { synthesizeTweet } from "./twitter-synthesizer.js";
 
 // ─── Telegram API ────────────────────────────────────────────────────────────
 
@@ -90,28 +92,31 @@ export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   const webAppUrl = process.env.WEB_APP_URL;
+  const twitterEnabled = !!process.env.TWITTER_API_KEY;
 
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
   if (!chatId) throw new Error("TELEGRAM_CHAT_ID is not set");
 
+  const totalSteps = twitterEnabled ? 6 : 5;
+
   for (const asset of assets) {
-    step(1, 5, `Running all dimension pipelines (${asset})...`);
+    step(1, totalSteps, `Running all dimension pipelines (${asset})...`);
     const outputs = await runAllDimensions(asset);
     note(`${outputs.length} dimensions completed`);
 
-    step(2, 5, "Synthesizing market brief...");
+    step(2, totalSteps, "Synthesizing market brief...");
     const [brief, richBrief] = await Promise.all([
       synthesize(asset, outputs),
       synthesizeRich(asset, outputs),
     ]);
     if (richBrief) note("rich brief generated");
 
-    step(3, 5, "Saving to database...");
+    step(3, totalSteps, "Saving to database...");
     const briefId = await saveBrief(asset, brief, outputs, richBrief);
     const briefUrl = webAppUrl ? `${webAppUrl}/brief/${briefId}` : undefined;
     if (briefUrl) note(`brief URL: ${briefUrl}`);
 
-    step(4, 5, "Extracting trade idea...");
+    step(4, totalSteps, "Extracting trade idea...");
     const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
     if (htfOut) {
       await processTradeIdea(briefId, asset, brief, htfOut.context, outputs);
@@ -119,11 +124,20 @@ export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
       note("skipped — no HTF output available");
     }
 
-    step(5, 5, `Sending ${asset} to Telegram...`);
+    step(5, totalSteps, `Sending ${asset} to Telegram...`);
     const textMsg = buildTextMessage(asset, brief, briefUrl);
     note(`text: ${textMsg.length} chars`);
     await sendText(token, chatId, textMsg);
+    console.log(`      ${chalk.green.bold("✓")} sent to Telegram`);
 
-    console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent to Telegram`);
+    if (twitterEnabled && asset === "BTC") {
+      step(6, totalSteps, `Synthesizing Twitter/X post (${asset})...`);
+      const tweet = await synthesizeTweet(asset, outputs, briefUrl);
+      note(`tweet: ${tweet.length} chars`);
+      const tweetId = await postTweet(tweet);
+      console.log(`      ${chalk.green.bold("✓")} posted to Twitter/X (${tweetId})`);
+    }
+
+    console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent`);
   }
 }
