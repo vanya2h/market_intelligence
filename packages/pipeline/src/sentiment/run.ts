@@ -49,11 +49,11 @@ function regimeColor(regime: SentimentRegime): ChalkInstance {
   }
 }
 
-function zScoreColor(z: number): ChalkInstance {
-  if (z >= 0.8) return chalk.green.bold;
-  if (z <= -1.5) return chalk.red.bold;
-  return chalk.dim;
-}
+// function zScoreColor(z: number): ChalkInstance {
+//   if (z >= 0.8) return chalk.green.bold;
+//   if (z <= -1.5) return chalk.red.bold;
+//   return chalk.dim;
+// }
 
 /** Strip markdown and render **bold** with chalk */
 function renderMarkdown(text: string): string {
@@ -117,29 +117,32 @@ function printBrief(ctx: SentimentContext, interpretation: string): void {
   console.log(`\n  ${chalk.dim("── Components ───────────────────────────────────")}`);
   const c = m.components;
   const pad = (s: string) => s.padEnd(16);
-  console.log(`  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(30%)")}`);
-  console.log(`  ${chalk.dim(pad("Trend"))} ${componentBar(c.trend)} ${chalk.white(c.trend.toFixed(0).padStart(3))}  ${chalk.dim("(25%)")}`);
-  console.log(`  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(20%)")}`);
-  console.log(`  ${chalk.dim(pad("Expert Consns"))} ${componentBar(c.expertConsensus)} ${chalk.white(c.expertConsensus.toFixed(0).padStart(3))}  ${chalk.dim("(25%)")}`);
+  console.log(`  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(40%)")}`);
+  console.log(`  ${chalk.dim(pad("Trend"))} ${componentBar(c.trend)} ${chalk.white(c.trend.toFixed(0).padStart(3))}  ${chalk.dim("(15%)")}`);
+  console.log(`  ${chalk.dim(pad("Mom. Diverg."))} ${componentBar(c.momentumDivergence)} ${chalk.white(c.momentumDivergence.toFixed(0).padStart(3))}  ${chalk.dim("(10%)")}`);
+  console.log(`  ${chalk.dim(pad("Volatility"))} ${componentBar(c.volatility)} ${chalk.white(c.volatility.toFixed(0).padStart(3))}  ${chalk.dim("(5%)")}`);
+  console.log(`  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(30%)")}`);
+  // Expert consensus excluded while collecting more data
+  // console.log(`  ${chalk.dim(pad("Expert Consns"))} ${componentBar(c.expertConsensus)} ${chalk.white(c.expertConsensus.toFixed(0).padStart(3))}  ${chalk.dim("(25%)")}`);
 
-  // ── Expert consensus detail
-  console.log(`\n  ${chalk.dim("── Expert Consensus (unbias) ─────────────────────")}`);
-  console.log(`  ${label("Consensus")} ${chalk.white.bold(m.consensusIndex.toFixed(1))}  ${chalk.dim("(-100 to +100)")}`);
-  console.log(`  ${label("30d MA")} ${chalk.dim(m.consensusIndex30dMa.toFixed(1))}`);
-  const deltaFmt = m.consensusDelta7d >= 0
-    ? chalk.green(`+${m.consensusDelta7d.toFixed(1)}`)
-    : chalk.red(m.consensusDelta7d.toFixed(1));
-  console.log(`  ${label("7d Delta")} ${deltaFmt}  ${chalk.dim("pts")}`);
-  console.log(`  ${label("Z-Score")} ${zScoreColor(m.zScore)(`${m.zScore >= 0 ? "+" : ""}${m.zScore.toFixed(2)}`)}`);
-  console.log(`  ${label("Bullish")} ${chalk.green(`${Math.round(m.bullishRatio * 100)}%`)} ${chalk.dim(`of ${m.totalAnalysts} analysts`)}`);
+  // // ── Expert consensus detail
+  // console.log(`\n  ${chalk.dim("── Expert Consensus (unbias) ─────────────────────")}`);
+  // console.log(`  ${label("Consensus")} ${chalk.white.bold(m.consensusIndex.toFixed(1))}  ${chalk.dim("(-100 to +100)")}`);
+  // console.log(`  ${label("30d MA")} ${chalk.dim(m.consensusIndex30dMa.toFixed(1))}`);
+  // const deltaFmt = m.consensusDelta7d >= 0
+  //   ? chalk.green(`+${m.consensusDelta7d.toFixed(1)}`)
+  //   : chalk.red(m.consensusDelta7d.toFixed(1));
+  // console.log(`  ${label("7d Delta")} ${deltaFmt}  ${chalk.dim("pts")}`);
+  // console.log(`  ${label("Z-Score")} ${zScoreColor(m.zScore)(`${m.zScore >= 0 ? "+" : ""}${m.zScore.toFixed(2)}`)}`);
+  // console.log(`  ${label("Bullish")} ${chalk.green(`${Math.round(m.bullishRatio * 100)}%`)} ${chalk.dim(`of ${m.totalAnalysts} analysts`)}`);
 
-  if (m.divergence) {
-    console.log(`\n  ${chalk.dim("── Divergence ───────────────────────────────────")}`);
-    const desc = m.divergenceType === "experts_bullish_crowd_fearful"
-      ? chalk.yellow.bold("Experts BULLISH ↔ Crowd FEARFUL")
-      : chalk.yellow.bold("Experts BEARISH ↔ Crowd GREEDY");
-    console.log(`  ${label("Signal")} ${desc}`);
-  }
+  // if (m.divergence) {
+  //   console.log(`\n  ${chalk.dim("── Divergence ───────────────────────────────────")}`);
+  //   const desc = m.divergenceType === "experts_bullish_crowd_fearful"
+  //     ? chalk.yellow.bold("Experts BULLISH ↔ Crowd FEARFUL")
+  //     : chalk.yellow.bold("Experts BEARISH ↔ Crowd GREEDY");
+  //   console.log(`  ${label("Signal")} ${desc}`);
+  // }
 
   if (ctx.events.length > 0) {
     console.log(`\n  ${chalk.dim("── Events ───────────────────────────────────────")}`);
@@ -175,12 +178,12 @@ async function main(): Promise<void> {
 
   step(1, 4, `Collecting sentiment + cross-dimension data (${asset})...`);
   const snapshot = await collect(asset);
-  const latestConsensus = snapshot.consensus.at(0);
+  // const latestConsensus = snapshot.consensus.at(0);
   const cd = snapshot.crossDimensions;
-  note(
-    `${snapshot.consensus.length} consensus entries · ` +
-    `latest: ${latestConsensus?.date ?? "?"}`
-  );
+  // note(
+  //   `${snapshot.consensus.length} consensus entries · ` +
+  //   `latest: ${latestConsensus?.date ?? "?"}`
+  // );
   note(
     `cross-dims: derivatives=${cd.derivatives ? "✓" : "✗"}  ` +
     `etfs=${cd.etfs ? "✓" : "✗"}  ` +
@@ -199,10 +202,8 @@ async function main(): Promise<void> {
   const { context, nextState } = analyze(snapshot, prevState);
   note(
     `${regimeColor(context.regime)(context.regime)}  ` +
-    chalk.dim(
-      `composite=${context.metrics.compositeIndex.toFixed(1)}  ` +
-      `Δ7d=${context.metrics.consensusDelta7d >= 0 ? "+" : ""}${context.metrics.consensusDelta7d.toFixed(1)}`
-    )
+    chalk.dim(`composite=${context.metrics.compositeIndex.toFixed(1)}`)
+    // + `  Δ7d=${context.metrics.consensusDelta7d >= 0 ? "+" : ""}${context.metrics.consensusDelta7d.toFixed(1)}`
   );
   saveState(nextState);
 

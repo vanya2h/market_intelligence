@@ -1,13 +1,8 @@
 import { useState } from "react";
+import type { BriefDimension } from "@market-intel/api";
 import { DIMENSION_TABS, TAB_LABELS } from "./BriefSidebar";
 import { DimensionCard } from "./DimensionCard";
-
-interface BriefDimension {
-  dimension: string;
-  regime: string;
-  context: Record<string, unknown>;
-  interpretation: string;
-}
+import { TabBar } from "./TabBar";
 
 interface DimensionTabsProps {
   dimensions: BriefDimension[];
@@ -21,25 +16,13 @@ export function DimensionTabs({ dimensions }: DimensionTabsProps) {
   return (
     <>
       {/* Dimension tabs */}
-      <div
-        className="flex items-center gap-0 overflow-x-auto px-3 md:px-5"
-        style={{ borderBottom: "1px solid var(--border)" }}
-      >
-        {availableDims.map((dim) => {
-          const isActive = activeTab === dim;
-          return (
-            <button
-              key={dim}
-              onClick={() => setActiveTab(dim)}
-              className={`relative shrink-0 px-3 py-3 text-xs font-medium tracking-wide transition-colors md:px-4 ${isActive ? "tab-active" : ""}`}
-              style={{
-                color: isActive ? "var(--text-primary)" : "var(--text-muted)",
-              }}
-            >
-              {TAB_LABELS[dim]}
-            </button>
-          );
-        })}
+      <div style={{ borderBottom: "1px solid var(--border)" }}>
+        <TabBar
+          items={availableDims.map((dim) => ({ key: dim, label: TAB_LABELS[dim] }))}
+          activeKey={activeTab}
+          onSelect={setActiveTab}
+          className="overflow-x-auto px-3 md:px-5"
+        />
       </div>
 
       {/* Tab content */}

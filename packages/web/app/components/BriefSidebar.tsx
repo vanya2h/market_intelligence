@@ -1,8 +1,11 @@
+import { Link } from "react-router";
 import { SentimentGauge } from "./SentimentGauge";
 import { SectionBlock } from "./SectionBlock";
 import { Tooltip } from "./Tooltip";
-import { InfoCircledIcon } from "@radix-ui/react-icons";
-import { regimeColor } from "../lib/regime-colors";
+import { InfoCircledIcon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import { regimeColor, regimeLabel } from "../lib/regime-colors";
+import { formatDistanceToNowStrict } from "date-fns";
+import type { Brief } from "@market-intel/api";
 
 export const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
 export type DimensionTab = (typeof DIMENSION_TABS)[number];
@@ -16,55 +19,96 @@ export const TAB_LABELS: Record<DimensionTab, string> = {
 
 const REGIME_DESCRIPTIONS: Record<string, Record<string, string>> = {
   DERIVATIVES: {
-    CROWDED_LONG: "Persistently elevated funding + elevated OI + non-negative price trend. Longs are dominant and paying a premium; market is susceptible to a flush if sentiment shifts.",
-    CROWDED_SHORT: "Persistently negative funding + elevated OI + non-positive price trend. Shorts are dominant; market is susceptible to a squeeze if price rallies.",
-    HEATING_UP: "Mid-range funding with OI growing over the medium horizon. Positioning is building toward crowded but has not crossed the threshold yet.",
-    NEUTRAL: "No dominant directional crowding detected. Funding is neutral and OI is not meaningfully elevated in either direction.",
-    CAPITULATION: "Extreme liquidation event: liq percentile in the 90th+, paired with severe OI drop (≥10%) and significant price move (≥5%). Forced position unwind at scale.",
-    UNWINDING: "Elevated liquidations driving a meaningful OI drop (≥5% in 24h). Active deleveraging with visible forced exits, but not yet at extreme scale.",
-    DELEVERAGING: "Prolonged negative funding (3+ intervals) with gradual OI decline and no liquidation spike. Organic position reduction — slow bleed, not a flush.",
-    NONE: "No active stress signal detected. Positioning may still be crowded, but there is no measurable event-driven pressure at this time.",
+    CROWDED_LONG:
+      "Longs are dominant: elevated funding rates + high OI + positive price trend. Market is paying a premium to hold longs — susceptible to a flush if sentiment shifts. Contrarian bearish signal for swing traders.",
+    CROWDED_SHORT:
+      "Shorts are dominant: negative funding + elevated OI + negative price trend. Shorts are being paid to hold — susceptible to a squeeze if price rallies. Contrarian bullish signal.",
+    HEATING_UP:
+      "Positioning is building toward crowded but hasn't crossed the threshold. Funding mid-range with OI growing over the medium horizon. Watch for transition to CROWDED_LONG or CROWDED_SHORT.",
+    POSITIONING_NEUTRAL:
+      "No dominant directional crowding. Funding is neutral and OI is not meaningfully elevated. No contrarian edge from positioning — defer to other dimensions.",
+    SHORT_SQUEEZE:
+      "Rapid short covering event. Sharp price rally forcing shorts to close, driving further upside. Typically short-lived but can trigger trend acceleration.",
   },
   ETFS: {
-    STRONG_INFLOW: "Sustained institutional buying via spot ETFs. Multi-day inflow streak signals strong conviction.",
-    STRONG_OUTFLOW: "Sustained institutional selling via spot ETFs. Multi-day outflow streak signals cooling appetite.",
-    REVERSAL_TO_INFLOW: "ETF flows have flipped from outflows to inflows. Early sign of renewed institutional demand.",
-    REVERSAL_TO_OUTFLOW: "ETF flows have flipped from inflows to outflows. Early sign of institutional pullback.",
-    NEUTRAL: "ETF flows are balanced with no clear directional trend.",
-    MIXED: "Mixed ETF flow signals — no dominant pattern across funds.",
+    STRONG_INFLOW:
+      "Sustained institutional buying via spot ETFs (3+ consecutive inflow days). Strong conviction from traditional finance — supports bullish swing bias.",
+    STRONG_OUTFLOW:
+      "Sustained institutional selling via spot ETFs (3+ consecutive outflow days). Institutional appetite is cooling — supports bearish swing bias.",
+    REVERSAL_TO_INFLOW:
+      "ETF flows flipped from outflows to inflows. Early sign of renewed institutional demand. Watch for follow-through to confirm STRONG_INFLOW.",
+    REVERSAL_TO_OUTFLOW:
+      "ETF flows flipped from inflows to outflows. Early sign of institutional pullback. Watch for follow-through to confirm STRONG_OUTFLOW.",
+    ETF_NEUTRAL:
+      "ETF flows are balanced with no clear directional trend. No institutional edge — rely on other dimensions for swing direction.",
+    MIXED: "Mixed ETF flow signals — individual funds disagree on direction. No clear institutional consensus.",
   },
   HTF: {
-    MACRO_BULLISH: "Price above 200 DMA with bullish market structure (higher highs / higher lows).",
-    BULL_EXTENDED: "Macro bullish but weekly RSI > 70 — overbought risk. Trend intact but momentum stretched.",
-    MACRO_BEARISH: "Price below 200 DMA with bearish market structure (lower highs / lower lows).",
-    BEAR_EXTENDED: "Macro bearish with weekly RSI < 30 — capitulation zone. Trend down but may be exhausted.",
-    RECLAIMING: "Price between 50 DMA and 200 DMA, recovering. Potential trend reversal forming.",
-    RANGING: "Mixed signals, no clear directional bias. Market is consolidating.",
+    MACRO_BULLISH:
+      "Price above 200 DMA with bullish market structure (higher highs, higher lows). Macro trend supports long swing entries on pullbacks.",
+    BULL_EXTENDED:
+      "Macro bullish but daily RSI > 70 — overbought. Trend is intact but momentum is stretched. Avoid chasing longs; wait for a pullback or divergence.",
+    MACRO_BEARISH:
+      "Price below 200 DMA with bearish structure (lower highs, lower lows). Macro trend supports short swing entries on rallies.",
+    BEAR_EXTENDED:
+      "Macro bearish with daily RSI < 30 — oversold / capitulation zone. Trend is down but may be exhausted. Watch for bullish divergence as reversal signal.",
+    RECLAIMING:
+      "Price between 50 DMA and 200 DMA, recovering from below. Potential trend reversal forming — a close above 200 DMA would confirm bullish transition.",
+    RANGING:
+      "No clear directional bias. Price oscillating without trend. Best suited for range-bound strategies or waiting for breakout confirmation.",
+    ACCUMULATION:
+      "Futures CVD rising while price consolidates — smart money is quietly building positions. Bullish undercurrent despite sideways price action.",
+    DISTRIBUTION:
+      "Futures CVD declining while price holds up — smart money is quietly exiting. Bearish undercurrent despite stable prices. Watch for breakdown.",
   },
   SENTIMENT: {
-    EXTREME_FEAR: "Composite sentiment deeply negative. Historically a contrarian buy signal.",
-    FEAR: "Sentiment skews negative across inputs. Caution dominates but not at extremes.",
-    NEUTRAL: "Balanced sentiment — no strong directional conviction from crowd or experts.",
-    GREED: "Sentiment skews positive. Optimism rising but not yet at extremes.",
-    EXTREME_GREED: "Composite sentiment deeply positive. Historically a contrarian sell signal.",
-    CONSENSUS_BULLISH: "Expert analysts strongly agree on bullish outlook (z-score ≥ +0.8).",
-    CONSENSUS_BEARISH: "Expert analysts strongly agree on bearish outlook (z-score ≤ −1.5).",
-    SENTIMENT_DIVERGENCE: "Experts and crowd disagree — historically signals a turning point.",
+    EXTREME_FEAR:
+      "Composite F&G below 20. The crowd is capitulating — historically a strong contrarian buy signal. Wait for a technical trigger before entering long.",
+    FEAR: "Composite F&G 20–40. Sentiment skews negative. Risk/reward favors longs on pullbacks, but signal is not as strong as extreme fear.",
+    SENTIMENT_NEUTRAL:
+      "Composite F&G 40–60. Balanced sentiment — no actionable signal. Trade purely on technicals and structure.",
+    GREED:
+      "Composite F&G 60–80. Optimism rising. Tighten stops on longs, start scanning for short setups at resistance.",
+    EXTREME_GREED:
+      "Composite F&G above 80. The crowd is euphoric — historically a strong contrarian sell signal. Look for short entries or exit existing longs.",
+    CONSENSUS_BULLISH:
+      "Expert analysts are actively shifting bullish (consensus delta ≥ +10 pts/week) while composite is also greedy. Aligned bullish momentum across smart money and crowd.",
+    CONSENSUS_BEARISH:
+      "Expert analysts are actively shifting bearish (consensus delta ≤ -10 pts/week) while composite is also fearful. Aligned bearish momentum across smart money and crowd.",
+    SENTIMENT_DIVERGENCE:
+      "Experts and crowd disagree on direction. This is the highest-value signal — smart money diverging from crowd sentiment historically marks swing reversal points.",
   },
 };
 
-export interface BriefSidebarData {
-  compositeIndex: number | null;
-  compositeLabel: string | null;
-  dimensions: { dimension: string; regime: string }[];
-  positioning: number | null;
-  trend: number | null;
-  institutionalFlows: number | null;
-  expertConsensus: number | null;
+function stressColor(stress: string): string {
+  if (stress === "CAPITULATION") return "var(--red)";
+  if (stress === "UNWINDING") return "var(--red)";
+  if (stress === "DELEVERAGING") return "var(--amber)";
+  return "var(--text-muted)";
 }
 
-export function BriefSidebar({ brief }: { brief: BriefSidebarData }) {
-  const { compositeIndex, compositeLabel, dimensions, positioning, trend, institutionalFlows, expertConsensus } = brief;
+const STRESS_DESCRIPTIONS: Record<string, string> = {
+  CAPITULATION:
+    "Extreme liquidation cascade: liq percentile 90th+, OI dropped ≥10%, price moved ≥5%. Forced unwind at scale — often marks a local bottom. Watch for reversal setup once stress subsides.",
+  UNWINDING:
+    "Active deleveraging: elevated liquidations driving ≥5% OI drop in 24h. Forced exits are visible but not yet at capitulation scale. More downside possible before stabilization.",
+  DELEVERAGING:
+    "Slow organic position reduction: prolonged negative funding with gradual OI decline, no liquidation spike. A slow bleed rather than a flush — can persist for days.",
+  STRESS_NONE: "No active stress signal detected.",
+};
+
+export function BriefSidebar({ brief }: { brief: Brief }) {
+  const {
+    compositeIndex,
+    compositeLabel,
+    dimensions,
+    positioning,
+    trend,
+    institutionalFlows,
+    expertConsensus,
+    momentumDivergence,
+    volatility,
+  } = brief;
   return (
     <aside
       className="sticky top-19 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
@@ -81,6 +125,16 @@ export function BriefSidebar({ brief }: { brief: BriefSidebarData }) {
           tooltip="Proprietary Fear & Greed index (0–100) built from four crypto-native inputs: derivatives positioning (30%), HTF trend (25%), analyst consensus (25%), ETF institutional flows (20%). Avoids Alternative.me's opaque methodology."
         >
           <SentimentGauge value={compositeIndex} label={compositeLabel} />
+          <Link
+            to="/guide"
+            className="mt-2 inline-flex items-center gap-1 text-[12px] transition-colors"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+          >
+            <QuestionMarkCircledIcon width={12} height={12} />
+            How to read this index
+          </Link>
         </SectionBlock>
       )}
 
@@ -89,22 +143,55 @@ export function BriefSidebar({ brief }: { brief: BriefSidebarData }) {
           {DIMENSION_TABS.map((dim) => {
             const bd = dimensions.find((d) => d.dimension === dim);
             if (!bd) return null;
+
             const { color, arrow } = regimeColor(bd.regime);
+            const sinceDate = bd.since ? new Date(bd.since) : null;
+            const sinceLabel = sinceDate ? formatDistanceToNowStrict(sinceDate, { addSuffix: true }) : null;
             return (
               <div
                 key={dim}
-                className="flex items-center justify-between py-1.5"
+                className="flex flex-col gap-0.5 py-1.5"
                 style={{ borderBottom: "1px solid var(--border-subtle)" }}
               >
-                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {TAB_LABELS[dim]}
-                </span>
-                <Tooltip content={REGIME_DESCRIPTIONS[dim]?.[bd.regime] ?? bd.regime} side="right">
-                <span className="inline-flex cursor-default items-center gap-1 text-xs font-medium" style={{ color }}>
-                  {bd.regime} {arrow}
-                  <InfoCircledIcon width={11} height={11} style={{ color: "var(--text-muted)" }} />
-                </span>
-              </Tooltip>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {TAB_LABELS[dim]}
+                  </span>
+                  <Tooltip content={REGIME_DESCRIPTIONS[dim]?.[bd.regime] ?? bd.regime} side="right">
+                    <span
+                      className="inline-flex cursor-default items-center gap-1 text-xs font-medium"
+                      style={{ color }}
+                    >
+                      <InfoCircledIcon width={11} height={11} style={{ color: "var(--text-muted)" }} />
+                      {regimeLabel(bd.regime)} {arrow}
+                    </span>
+                  </Tooltip>
+                </div>
+                <div className="flex items-center justify-between">
+                  {bd.previousRegime && bd.previousRegime !== bd.regime ? (
+                    <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      was {regimeLabel(bd.previousRegime!)}
+                    </span>
+                  ) : (
+                    <span />
+                  )}
+                  {sinceLabel && (
+                    <span className="font-mono-jb text-[10px] tabular-nums" style={{ color: "var(--text-muted)" }}>
+                      changed {sinceLabel}
+                    </span>
+                  )}
+                </div>
+                {dim === "DERIVATIVES" && bd.stress && bd.stress !== "STRESS_NONE" && (
+                  <Tooltip content={STRESS_DESCRIPTIONS[bd.stress] ?? bd.stress} side="right">
+                    <span
+                      className="mt-0.5 inline-flex cursor-default items-center gap-1 self-start rounded px-1.5 py-0.5 text-[10px] font-medium"
+                      style={{ color: stressColor(bd.stress), background: "var(--bg-hover)" }}
+                    >
+                      STRESS: {bd.stress}
+                      <InfoCircledIcon width={10} height={10} style={{ color: "var(--text-muted)" }} />
+                    </span>
+                  </Tooltip>
+                )}
               </div>
             );
           })}
@@ -117,22 +204,38 @@ export function BriefSidebar({ brief }: { brief: BriefSidebarData }) {
             {
               label: "Positioning",
               value: positioning,
-              tooltip: "Derivatives positioning score (0–100). Derived from funding rates, long/short ratio, and open interest percentiles. High = crowded longs / greed. Low = crowded shorts / fear.",
+              tooltip:
+                "Derivatives positioning score (0–100). Derived from funding rates, long/short ratio, and open interest percentiles. High = crowded longs / greed. Low = crowded shorts / fear.",
             },
             {
               label: "Trend",
               value: trend,
-              tooltip: "HTF trend score (0–100). Derived from price vs 50/200 SMA, daily RSI, and market structure (HH/HL vs LH/LL). High = bullish macro structure.",
+              tooltip:
+                "HTF trend score (0–100). Derived from price vs 50/200 SMA, daily RSI, and market structure (HH/HL vs LH/LL). High = bullish macro structure.",
             },
             {
               label: "Inst. Flows",
               value: institutionalFlows,
-              tooltip: "Institutional flows score (0–100). Derived from spot ETF daily net flows and streak length. Multi-day inflow streaks signal conviction. Outflows signal cooling appetite.",
+              tooltip:
+                "Institutional flows score (0–100). Derived from spot ETF daily net flows and streak length. Multi-day inflow streaks signal conviction. Outflows signal cooling appetite.",
             },
             {
               label: "Expert Cons.",
               value: expertConsensus,
-              tooltip: "Expert consensus score (0–100). Derived from accuracy-weighted analyst consensus via unbias API. Z-score ≥ +0.8 = bullish conviction. Z-score ≤ −1.5 = bearish conviction.",
+              tooltip:
+                "Expert consensus score (0–100). Derived from accuracy-weighted analyst consensus via unbias API. Z-score ≥ +0.8 = bullish conviction. Z-score ≤ −1.5 = bearish conviction.",
+            },
+            {
+              label: "Momentum Div.",
+              value: momentumDivergence,
+              tooltip:
+                "Momentum divergence score (0–100). Derived from price-RSI divergence and CVD divergence signals. High = bullish divergence building.",
+            },
+            {
+              label: "Volatility",
+              value: volatility,
+              tooltip:
+                "Volatility score (0–100). Derived from ATR compression/expansion relative to 30d mean. Low = compressed (breakout brewing). High = expanded (trend in motion).",
             },
           ].map(({ label, value, tooltip }) => {
             if (value == null) return null;
@@ -144,7 +247,10 @@ export function BriefSidebar({ brief }: { brief: BriefSidebarData }) {
                 style={{ borderBottom: "1px solid var(--border-subtle)" }}
               >
                 <Tooltip content={tooltip} side="right">
-                  <span className="inline-flex cursor-default items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span
+                    className="inline-flex cursor-default items-center gap-1 text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     {label}
                     <InfoCircledIcon width={11} height={11} />
                   </span>

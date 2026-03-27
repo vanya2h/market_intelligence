@@ -15,8 +15,13 @@ interface FetcherData {
   briefs: BriefHistoryEntry[];
 }
 
-export function BriefHistoryDialog({ currentBriefId }: { currentBriefId?: string }) {
-  const [open, setOpen] = useState(false);
+interface BriefHistoryDialogProps {
+  currentBriefId?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function BriefHistoryDialog({ currentBriefId, open, onOpenChange }: BriefHistoryDialogProps) {
   const [asset, setAsset] = useState<Asset>("BTC");
 
   function handleAssetChange(value: string) {
@@ -34,18 +39,7 @@ export function BriefHistoryDialog({ currentBriefId }: { currentBriefId?: string
   const isLoading = fetcher.state === "loading";
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors"
-          style={{ color: "var(--text-secondary)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          History
-        </button>
-      </Dialog.Trigger>
-
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50" style={{ background: "rgba(0,0,0,0.4)" }} />
         <Dialog.Content
@@ -123,7 +117,7 @@ export function BriefHistoryDialog({ currentBriefId }: { currentBriefId?: string
                     <Link
                       key={brief.id}
                       to={`/brief/${brief.id}`}
-                      onClick={() => setOpen(false)}
+                      onClick={() => onOpenChange(false)}
                       className="flex items-center px-4 py-2.5 text-xs transition-colors"
                       style={{
                         color: isActive ? "var(--text-primary)" : "var(--text-secondary)",

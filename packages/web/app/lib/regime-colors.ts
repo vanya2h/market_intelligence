@@ -1,39 +1,84 @@
-export function regimeColor(regime: string): {
-  color: string;
-  arrow: string;
-} {
-  const lower = regime.toLowerCase();
+import type { Regime } from "@market-intel/api";
 
-  if (
-    lower.includes("bullish") ||
-    lower.includes("inflow") ||
-    lower.includes("greed") ||
-    lower.includes("squeeze")
-  ) {
-    return { color: "var(--green)", arrow: "\u2197" };
-  }
+type RegimeColor = { color: string; arrow: string };
 
-  if (
-    lower.includes("bearish") ||
-    lower.includes("outflow") ||
-    lower.includes("fear") ||
-    lower.includes("capitulation") ||
-    lower.includes("deleveraging")
-  ) {
-    return { color: "var(--red)", arrow: "\u2198" };
-  }
+const REGIME_LABELS: Record<Regime, string> = {
+  // Positioning
+  CROWDED_LONG: "Crowded Long",
+  CROWDED_SHORT: "Crowded Short",
+  HEATING_UP: "Heating Up",
+  POSITIONING_NEUTRAL: "Neutral",
+  // ETF
+  STRONG_INFLOW: "Strong Inflow",
+  STRONG_OUTFLOW: "Strong Outflow",
+  REVERSAL_TO_INFLOW: "Reversal to Inflow",
+  REVERSAL_TO_OUTFLOW: "Reversal to Outflow",
+  ETF_NEUTRAL: "Neutral",
+  MIXED: "Mixed",
+  // HTF
+  MACRO_BULLISH: "Macro Bullish",
+  BULL_EXTENDED: "Bull Extended",
+  MACRO_BEARISH: "Macro Bearish",
+  BEAR_EXTENDED: "Bear Extended",
+  RECLAIMING: "Reclaiming",
+  RANGING: "Ranging",
+  ACCUMULATION: "Accumulation",
+  DISTRIBUTION: "Distribution",
+  // Sentiment
+  EXTREME_FEAR: "Extreme Fear",
+  FEAR: "Fear",
+  SENTIMENT_NEUTRAL: "Neutral",
+  GREED: "Greed",
+  EXTREME_GREED: "Extreme Greed",
+  CONSENSUS_BULLISH: "Consensus Bullish",
+  CONSENSUS_BEARISH: "Consensus Bearish",
+  SENTIMENT_DIVERGENCE: "Divergence",
+};
 
-  if (
-    lower.includes("divergence") ||
-    lower.includes("heating") ||
-    lower.includes("unwinding") ||
-    lower.includes("crowded") ||
-    lower.includes("extended")
-  ) {
-    return { color: "var(--amber)", arrow: "\u2192" };
-  }
+const GREEN: RegimeColor = { color: "var(--green)", arrow: "\u2197" };
+const RED: RegimeColor = { color: "var(--red)", arrow: "\u2198" };
+const AMBER: RegimeColor = { color: "var(--amber)", arrow: "\u2192" };
+const NEUTRAL: RegimeColor = { color: "var(--text-secondary)", arrow: "\u2192" };
 
-  return { color: "var(--text-secondary)", arrow: "\u2192" };
+const REGIME_COLORS: Record<Regime, RegimeColor> = {
+  // Positioning
+  CROWDED_LONG: AMBER,
+  CROWDED_SHORT: AMBER,
+  HEATING_UP: AMBER,
+  POSITIONING_NEUTRAL: NEUTRAL,
+  // ETF
+  STRONG_INFLOW: GREEN,
+  STRONG_OUTFLOW: RED,
+  REVERSAL_TO_INFLOW: GREEN,
+  REVERSAL_TO_OUTFLOW: RED,
+  ETF_NEUTRAL: NEUTRAL,
+  MIXED: NEUTRAL,
+  // HTF
+  MACRO_BULLISH: GREEN,
+  BULL_EXTENDED: AMBER,
+  MACRO_BEARISH: RED,
+  BEAR_EXTENDED: AMBER,
+  RECLAIMING: GREEN,
+  RANGING: NEUTRAL,
+  ACCUMULATION: GREEN,
+  DISTRIBUTION: RED,
+  // Sentiment
+  EXTREME_FEAR: RED,
+  FEAR: RED,
+  SENTIMENT_NEUTRAL: NEUTRAL,
+  GREED: GREEN,
+  EXTREME_GREED: GREEN,
+  CONSENSUS_BULLISH: GREEN,
+  CONSENSUS_BEARISH: RED,
+  SENTIMENT_DIVERGENCE: AMBER,
+};
+
+export function regimeLabel(regime: Regime): string {
+  return REGIME_LABELS[regime];
+}
+
+export function regimeColor(regime: Regime): RegimeColor {
+  return REGIME_COLORS[regime];
 }
 
 export function sentimentColor(value: number): string {

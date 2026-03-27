@@ -180,15 +180,17 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
 export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<SentimentSnapshot> {
   console.log(`      Fetching sentiment data (${asset})...`);
 
-  const [consensus, crossDimensions] = await Promise.all([
-    fetchConsensus(asset),
-    fetchCrossDimensions(asset),
-  ]);
+  // Expert consensus (unbias API) excluded while collecting more data — re-enable later
+  // const [consensus, crossDimensions] = await Promise.all([
+  //   fetchConsensus(asset),
+  //   fetchCrossDimensions(asset),
+  // ]);
+  const crossDimensions = await fetchCrossDimensions(asset);
 
   return {
     timestamp: new Date().toISOString(),
     asset,
-    consensus,
+    consensus: [], // was: consensus
     crossDimensions,
   };
 }

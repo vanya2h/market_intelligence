@@ -288,23 +288,22 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
 
   const compositeIndex = computeComposite(components);
 
-  // Divergence: expert consensus momentum vs composite level
-  // Uses delta (momentum) rather than absolute z-score to avoid stale signals
-  const expertsShiftingBullish = expert.delta >= 10;
-  const expertsShiftingBearish = expert.delta <= -10;
-  const compositeFearful = compositeIndex < 30;
-  const compositeGreedy = compositeIndex > 70;
-
-  let divergence = false;
-  let divergenceType: SentimentMetrics["divergenceType"] = null;
-
-  if (expertsShiftingBullish && compositeFearful) {
-    divergence = true;
-    divergenceType = "experts_bullish_crowd_fearful";
-  } else if (expertsShiftingBearish && compositeGreedy) {
-    divergence = true;
-    divergenceType = "experts_bearish_crowd_greedy";
-  }
+  // Expert consensus divergence excluded while collecting more data — re-enable later
+  // const expertsShiftingBullish = expert.delta >= 10;
+  // const expertsShiftingBearish = expert.delta <= -10;
+  // const compositeFearful = compositeIndex < 30;
+  // const compositeGreedy = compositeIndex > 70;
+  //
+  // let divergence = false;
+  // let divergenceType: SentimentMetrics["divergenceType"] = null;
+  //
+  // if (expertsShiftingBullish && compositeFearful) {
+  //   divergence = true;
+  //   divergenceType = "experts_bullish_crowd_fearful";
+  // } else if (expertsShiftingBearish && compositeGreedy) {
+  //   divergence = true;
+  //   divergenceType = "experts_bearish_crowd_greedy";
+  // }
 
   return {
     compositeIndex,
@@ -316,22 +315,20 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
     bullishRatio,
     totalAnalysts,
     consensusDelta7d: expert.delta,
-    divergence,
-    divergenceType,
+    divergence: false,
+    divergenceType: null,
   };
 }
 
 // ─── State machine ────────────────────────────────────────────────────────────
 
 function determineRegime(metrics: SentimentMetrics): SentimentRegime {
-  const { consensusDelta7d: delta, divergence, compositeIndex } = metrics;
+  const { compositeIndex } = metrics;
 
-  // Divergence overrides everything — most actionable signal
-  if (divergence) return "SENTIMENT_DIVERGENCE";
-
-  // Consensus momentum + composite aligned at extremes
-  if (delta >= 10 && compositeIndex > 70) return "CONSENSUS_BULLISH";
-  if (delta <= -10 && compositeIndex < 30) return "CONSENSUS_BEARISH";
+  // Expert consensus regimes excluded while collecting more data — re-enable later
+  // if (divergence) return "SENTIMENT_DIVERGENCE";
+  // if (delta >= 10 && compositeIndex > 70) return "CONSENSUS_BULLISH";
+  // if (delta <= -10 && compositeIndex < 30) return "CONSENSUS_BEARISH";
 
   // Composite-driven regimes
   if (compositeIndex < 20) return "EXTREME_FEAR";
@@ -363,39 +360,39 @@ function detectEvents(metrics: SentimentMetrics, timestamp: string): SentimentEv
     });
   }
 
-  // Delta-based consensus events (week-over-week change in consensus index)
-  const delta = metrics.consensusDelta7d;
-  if (delta >= 10) {
-    events.push({
-      type: "consensus_bullish",
-      detail: `Expert consensus rising: +${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
-      at: timestamp,
-    });
-  } else if (delta <= -20) {
-    events.push({
-      type: "consensus_deteriorating_severe",
-      detail: `Expert consensus collapsing: ${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
-      at: timestamp,
-    });
-  } else if (delta <= -10) {
-    events.push({
-      type: "consensus_deteriorating",
-      detail: `Expert consensus dropping: ${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
-      at: timestamp,
-    });
-  }
-
-  if (metrics.divergence) {
-    const d = metrics.consensusDelta7d;
-    const desc = metrics.divergenceType === "experts_bullish_crowd_fearful"
-      ? `Experts shifting bullish (Δ${d > 0 ? "+" : ""}${d.toFixed(1)} pts/7d) while composite fearful (${metrics.compositeIndex.toFixed(1)})`
-      : `Experts shifting bearish (Δ${d.toFixed(1)} pts/7d) while composite greedy (${metrics.compositeIndex.toFixed(1)})`;
-    events.push({
-      type: "sentiment_divergence",
-      detail: desc,
-      at: timestamp,
-    });
-  }
+  // Expert consensus events excluded while collecting more data — re-enable later
+  // const delta = metrics.consensusDelta7d;
+  // if (delta >= 10) {
+  //   events.push({
+  //     type: "consensus_bullish",
+  //     detail: `Expert consensus rising: +${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
+  //     at: timestamp,
+  //   });
+  // } else if (delta <= -20) {
+  //   events.push({
+  //     type: "consensus_deteriorating_severe",
+  //     detail: `Expert consensus collapsing: ${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
+  //     at: timestamp,
+  //   });
+  // } else if (delta <= -10) {
+  //   events.push({
+  //     type: "consensus_deteriorating",
+  //     detail: `Expert consensus dropping: ${delta.toFixed(1)} pts over 7d (${metrics.totalAnalysts} analysts, ${Math.round(metrics.bullishRatio * 100)}% bullish)`,
+  //     at: timestamp,
+  //   });
+  // }
+  //
+  // if (metrics.divergence) {
+  //   const d = metrics.consensusDelta7d;
+  //   const desc = metrics.divergenceType === "experts_bullish_crowd_fearful"
+  //     ? `Experts shifting bullish (Δ${d > 0 ? "+" : ""}${d.toFixed(1)} pts/7d) while composite fearful (${metrics.compositeIndex.toFixed(1)})`
+  //     : `Experts shifting bearish (Δ${d.toFixed(1)} pts/7d) while composite greedy (${metrics.compositeIndex.toFixed(1)})`;
+  //   events.push({
+  //     type: "sentiment_divergence",
+  //     detail: desc,
+  //     at: timestamp,
+  //   });
+  // }
 
   return events;
 }

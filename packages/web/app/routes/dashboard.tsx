@@ -62,27 +62,15 @@ export default function Dashboard() {
         <BriefSidebar brief={brief} />
 
         {/* Main content */}
-        <main className="flex min-w-0 flex-1 flex-col md:max-w-3xl">
+        <main className="flex flex-col md:max-w-3xl">
           {/* Brief section */}
           <div className="p-4 md:p-6">
             <BriefSection brief={brief} />
           </div>
 
-          {/* Low-data disclaimer */}
-          <div
-            className="mx-3 mt-3 flex items-center gap-2 rounded px-3 py-2 text-xs md:mx-5 md:mt-4"
-            style={{
-              background: "var(--surface-secondary)",
-              color: "var(--text-muted)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <span>⚠</span>
-            <span>Limited data available — charts may not be fully representative yet.</span>
+          <div className="mt-4">
+            <DimensionTabs dimensions={brief.dimensions} />
           </div>
-
-          {/* Dimension tabs + content */}
-          <DimensionTabs dimensions={brief.dimensions} />
         </main>
       </div>
       <StickyFooter />

@@ -10,6 +10,8 @@
  */
 
 import { html, reactive } from "@arrow-js/core";
+import type { Regime } from "@market-intel/api";
+import { regimeLabel } from "../lib/regime-colors";
 import type {
   RichBlock,
   HeadingBlock,
@@ -356,7 +358,7 @@ function renderRegimeBanner(b: RegimeBannerBlock) {
   return html`<div style="${boxStyle}">
     <div style="${headerStyle}">
       <div style="${dotStyle}"></div>
-      <span style="${titleStyle}">${b.regime}</span>
+      <span style="${titleStyle}">${regimeLabel(b.regime as Regime)}</span>
     </div>
     ${b.subtitle ? html`<p style="${subtitleStyle}">${b.subtitle}</p>` : html``}
   </div>`;

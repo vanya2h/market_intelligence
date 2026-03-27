@@ -1,6 +1,7 @@
-import { regimeColor } from "../lib/regime-colors";
+import type { Regime } from "@market-intel/api";
+import { regimeColor, regimeLabel } from "../lib/regime-colors";
 
-export function RegimeBadge({ regime }: { regime: string }) {
+export function RegimeBadge({ regime }: { regime: Regime }) {
   const { color, arrow } = regimeColor(regime);
 
   return (
@@ -8,7 +9,7 @@ export function RegimeBadge({ regime }: { regime: string }) {
       className="inline-flex items-center gap-1 text-xs font-medium"
       style={{ color }}
     >
-      {regime}
+      {regimeLabel(regime)}
       <span className="text-[10px]">{arrow}</span>
     </span>
   );

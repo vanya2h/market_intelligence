@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { BriefHistoryDialog } from "./BriefHistoryDialog";
+import { TabBar } from "./TabBar";
 
 function LiveClock() {
   const [now, setNow] = useState(new Date());
@@ -18,9 +19,18 @@ function LiveClock() {
 }
 
 export function AppHeader({ children, currentBriefId }: { children?: ReactNode; currentBriefId?: string }) {
+  const { pathname } = useLocation();
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const activeKey = pathname.startsWith("/guide") ? "guide" : "home";
+
+  function handleTabSelect(key: string) {
+    if (key === "history") setHistoryOpen(true);
+  }
+
   return (
     <div className="sticky top-0 z-30" style={{ background: "var(--bg-card)" }}>
-      {/* Primary header: logo + clock + live */}
+      {/* Primary header: logo + nav + clock + live */}
       <nav
         className="flex h-10 items-center justify-between px-3 md:px-4"
         style={{ borderBottom: children ? "1px solid var(--border-subtle)" : "1px solid var(--border)" }}
@@ -35,7 +45,16 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
               Vanya2h's Intelligence System
             </span>
           </Link>
-          <BriefHistoryDialog currentBriefId={currentBriefId} />
+          <TabBar
+            items={[
+              { key: "home", label: "Home", to: "/" },
+              { key: "history", label: "History" },
+              { key: "guide", label: "Guide", to: "/guide" },
+            ]}
+            activeKey={activeKey}
+            onSelect={handleTabSelect}
+          />
+          <BriefHistoryDialog currentBriefId={currentBriefId} open={historyOpen} onOpenChange={setHistoryOpen} />
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline-flex items-center">

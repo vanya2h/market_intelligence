@@ -18,10 +18,17 @@ function contextCacheKey(ctx: SentimentContext): string {
     previousRegime: ctx.previousRegime,
     // Bucket to avoid cache misses on small changes
     compositeBucket: Math.round(ctx.metrics.compositeIndex / 5) * 5,   // 5-point buckets
-    consensusBucket: Math.round(ctx.metrics.consensusIndex / 5) * 5,  // 5-point buckets
-    zScoreBucket: Math.round(ctx.metrics.zScore * 4) / 4,            // 0.25 buckets
-    divergence: ctx.metrics.divergence,
-    divergenceType: ctx.metrics.divergenceType,
+    // Expert consensus excluded while collecting more data — re-enable later
+    // consensusBucket: Math.round(ctx.metrics.consensusIndex / 5) * 5,  // 5-point buckets
+    // zScoreBucket: Math.round(ctx.metrics.zScore * 4) / 4,            // 0.25 buckets
+    // divergence: ctx.metrics.divergence,
+    // divergenceType: ctx.metrics.divergenceType,
+    volatilityBucket: Math.round(ctx.metrics.components.volatility / 5) * 5,
+    // Expert consensus excluded while collecting more data — re-enable later
+    // consensusBucket: Math.round(ctx.metrics.consensusIndex / 5) * 5,  // 5-point buckets
+    // zScoreBucket: Math.round(ctx.metrics.zScore * 4) / 4,            // 0.25 buckets
+    // divergence: ctx.metrics.divergence,
+    // divergenceType: ctx.metrics.divergenceType,
     events: ctx.events.map((e) => e.type).sort(),
   };
   const hash = crypto
@@ -36,15 +43,26 @@ async function callClaude(ctx: SentimentContext): Promise<string> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const systemPrompt = `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, ETF flows, and accuracy-weighted expert consensus). Write a concise 2-4 sentence interpretation for a market brief.
+  // Expert consensus excluded while collecting more data — re-enable later
+  // const systemPrompt = `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, ETF flows, and accuracy-weighted expert consensus). Write a concise 2-4 sentence interpretation for a market brief.
+  //
+  // Focus on:
+  // - The composite F&G score and what the component breakdown reveals
+  // - Which components are driving the score — positioning, trend, flows, or expert consensus
+  // - Whether any component is diverging sharply from the others (internal divergence)
+  // - Contrarian implications at extremes
+  //
+  // Be direct and specific — cite the composite score, component scores, and z-score. Do not hedge or pad.`;
+
+  const systemPrompt = `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, momentum divergence, volatility compression, and ETF flows). Write a concise 2-4 sentence interpretation for a market brief.
 
 Focus on:
 - The composite F&G score and what the component breakdown reveals
-- Which components are driving the score — positioning, trend, flows, or expert consensus
+- Which components are driving the score — positioning, trend, momentum, volatility, or flows
 - Whether any component is diverging sharply from the others (internal divergence)
 - Contrarian implications at extremes
 
-Be direct and specific — cite the composite score, component scores, and z-score. Do not hedge or pad.`;
+Be direct and specific — cite the composite score and component scores. Do not hedge or pad.`;
 
   const userPrompt = `Analyze this ${ctx.asset} sentiment context:\n\n${JSON.stringify(ctx, null, 2)}`;
 
