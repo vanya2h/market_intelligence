@@ -16,6 +16,9 @@ export type {
   SentimentDimension,
   DimensionState,
   DimensionSnapshot,
+  TradeIdea,
+  TradeIdeaLevel,
+  TradeIdeaReturn,
 } from "./generated/prisma/client.js";
 
 // Prisma enums (exported as values + types)
@@ -27,6 +30,9 @@ export {
   HtfRegime as PrismaHtfRegime,
   MarketStructure as PrismaMarketStructure,
   SentimentRegime as PrismaSentimentRegime,
+  TradeDirection,
+  TradeOutcome,
+  LevelType,
 } from "./generated/prisma/client.js";
 
 // Derivatives

@@ -18,6 +18,8 @@ import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
 import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief } from "./persist.js";
+import { processTradeIdea } from "./trade-idea/index.js";
+import type { HtfOutput } from "./types.js";
 
 // ─── Telegram API ────────────────────────────────────────────────────────────
 
@@ -93,23 +95,31 @@ export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
   if (!chatId) throw new Error("TELEGRAM_CHAT_ID is not set");
 
   for (const asset of assets) {
-    step(1, 4, `Running all dimension pipelines (${asset})...`);
+    step(1, 5, `Running all dimension pipelines (${asset})...`);
     const outputs = await runAllDimensions(asset);
     note(`${outputs.length} dimensions completed`);
 
-    step(2, 4, "Synthesizing market brief...");
+    step(2, 5, "Synthesizing market brief...");
     const [brief, richBrief] = await Promise.all([
       synthesize(asset, outputs),
       synthesizeRich(asset, outputs),
     ]);
     if (richBrief) note("rich brief generated");
 
-    step(3, 4, "Saving to database...");
+    step(3, 5, "Saving to database...");
     const briefId = await saveBrief(asset, brief, outputs, richBrief);
     const briefUrl = webAppUrl ? `${webAppUrl}/brief/${briefId}` : undefined;
     if (briefUrl) note(`brief URL: ${briefUrl}`);
 
-    step(4, 4, `Sending ${asset} to Telegram...`);
+    step(4, 5, "Extracting trade idea...");
+    const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
+    if (htfOut) {
+      await processTradeIdea(briefId, asset, brief, htfOut.context, outputs);
+    } else {
+      note("skipped — no HTF output available");
+    }
+
+    step(5, 5, `Sending ${asset} to Telegram...`);
     const textMsg = buildTextMessage(asset, brief, briefUrl);
     note(`text: ${textMsg.length} chars`);
     await sendText(token, chatId, textMsg);

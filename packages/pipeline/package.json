@@ -15,6 +15,7 @@
     "brief": "tsx src/orchestrator/run.bin.ts",
     "notify": "tsx src/orchestrator/notify.bin.ts",
     "schedule": "tsx src/orchestrator/scheduler.ts",
+    "check-outcomes": "tsx src/orchestrator/trade-idea/check.bin.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "typecheck": "tsc --noEmit"

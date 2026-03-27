@@ -15,14 +15,17 @@ import "../env.js";
 import cron from "node-cron";
 import chalk from "chalk";
 import { runNotify } from "./notify.js";
+import { checkOutcomes } from "./trade-idea/outcome-checker.js";
 
 const BRIEF_CRON = process.env.BRIEF_CRON ?? "0 0,8,12,15,18,21 * * *";
+const OUTCOME_CRON = process.env.OUTCOME_CRON ?? "0 6,18 * * *"; // 2x/day at 06:00 and 18:00 UTC
 const ASSETS: ("BTC" | "ETH")[] = ["BTC", "ETH"];
 
 let running = false;
+let runningOutcomes = false;
 let shuttingDown = false;
 
-// ─── Run wrapper ─────────────────────────────────────────────────────────────
+// ─── Run wrappers ────────────────────────────────────────────────────────────
 
 async function tick(): Promise<void> {
   if (running) {
@@ -47,6 +50,29 @@ async function tick(): Promise<void> {
   }
 }
 
+async function outcomeTick(): Promise<void> {
+  if (runningOutcomes) {
+    console.log(chalk.yellow("Outcome check still in progress, skipping"));
+    return;
+  }
+
+  runningOutcomes = true;
+  const start = Date.now();
+  console.log(`\n${chalk.bold.white("━".repeat(62))}`);
+  console.log(chalk.bold.white(`  OUTCOME CHECK  ${new Date().toUTCString()}`));
+  console.log(chalk.bold.white("━".repeat(62)));
+
+  try {
+    await checkOutcomes();
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    console.log(chalk.green.bold(`\n✓ Outcome check completed in ${elapsed}s`));
+  } catch (err) {
+    console.error(chalk.red.bold("\n✗ Outcome check failed:"), err);
+  } finally {
+    runningOutcomes = false;
+  }
+}
+
 // ─── Startup validation ─────────────────────────────────────────────────────
 
 function validateEnv(): void {
@@ -68,7 +94,8 @@ function validateEnv(): void {
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 
-let task: cron.ScheduledTask;
+let briefTask!: cron.ScheduledTask;
+let outcomeTask!: cron.ScheduledTask;
 
 function shutdown(signal: string): void {
   console.log(chalk.yellow(`\n${signal} received`));
@@ -76,7 +103,8 @@ function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
 
-  task.stop();
+  briefTask.stop();
+  outcomeTask.stop();
 
   if (running) {
     console.log(chalk.yellow("Waiting for in-flight run to finish..."));
@@ -103,11 +131,13 @@ if (!cron.validate(BRIEF_CRON)) {
 }
 
 console.log(chalk.bold.cyan("\n  Market Intel Scheduler"));
-console.log(chalk.dim(`  cron: ${BRIEF_CRON}`));
+console.log(chalk.dim(`  brief cron:   ${BRIEF_CRON}`));
+console.log(chalk.dim(`  outcome cron: ${OUTCOME_CRON}`));
 console.log(chalk.dim(`  assets: ${ASSETS.join(", ")}`));
 console.log(chalk.dim(`  started: ${new Date().toUTCString()}\n`));
 
-task = cron.schedule(BRIEF_CRON, () => { tick(); }, { timezone: "UTC" });
+briefTask = cron.schedule(BRIEF_CRON, () => { tick(); }, { timezone: "UTC" });
+outcomeTask = cron.schedule(OUTCOME_CRON, () => { outcomeTick(); }, { timezone: "UTC" });
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));

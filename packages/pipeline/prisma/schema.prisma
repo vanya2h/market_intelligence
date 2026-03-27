@@ -134,6 +134,7 @@ model Brief {
     etfs        EtfsDimension?
     htf         HtfDimension?
     sentiment   SentimentDimension?
+    tradeIdea   TradeIdea?
 
     @@index([asset, timestamp])
     @@map("briefs")
@@ -202,4 +203,75 @@ model SentimentDimension {
     interpretation     String
 
     @@map("brief_sentiment")
+}
+
+// ─── Trade Idea Enums ────────────────────────────────────────────────────────
+
+enum TradeDirection {
+    LONG
+    SHORT
+    FLAT
+}
+
+enum TradeOutcome {
+    OPEN
+    WIN
+    LOSS
+}
+
+enum LevelType {
+    INVALIDATION
+    TARGET
+}
+
+// ─── Trade Idea Tracking ─────────────────────────────────────────────────────
+
+model TradeIdea {
+    id              String         @id @default(cuid())
+    briefId         String         @unique
+    brief           Brief          @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    asset           Asset
+    direction       TradeDirection
+    entryPrice      Float
+    compositeTarget Float
+    confluence      Json?          // { derivatives: 1|-1|0, etfs: ..., htf: ..., sentiment: ... }
+    createdAt       DateTime       @default(now())
+
+    levels          TradeIdeaLevel[]
+    returns         TradeIdeaReturn[]
+
+    @@index([asset, createdAt])
+    @@map("trade_ideas")
+}
+
+model TradeIdeaLevel {
+    id             String       @id @default(cuid())
+    tradeIdeaId    String
+    tradeIdea      TradeIdea    @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
+    type           LevelType    // INVALIDATION (stop loss) or TARGET (take profit)
+    label          String       // e.g. "1:3" for invalidation, "T1" / "T2" / "T3" for target
+    price          Float        // the price level (or distance for FLAT ideas)
+    outcome        TradeOutcome @default(OPEN)
+    qualityScore   Float?
+    resolvedAt     DateTime?
+
+    @@unique([tradeIdeaId, type, label])
+    @@index([tradeIdeaId])
+    @@index([outcome])
+    @@index([type, outcome])
+    @@map("trade_idea_levels")
+}
+
+model TradeIdeaReturn {
+    id             String    @id @default(cuid())
+    tradeIdeaId    String
+    tradeIdea      TradeIdea @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
+    hoursAfter     Int
+    price          Float
+    returnPct      Float
+    qualityAtPoint Float
+
+    @@unique([tradeIdeaId, hoursAfter])
+    @@index([tradeIdeaId])
+    @@map("trade_idea_returns")
 }
