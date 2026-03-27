@@ -396,10 +396,10 @@ export function analyze(
   // Classify stress with priority ordering (spec §4)
   const stress = classifyStress(signals, prevState?.stress ?? null);
 
-  // Track duration since either dimension last changed
+  // Track duration since positioning last changed (stress is shown separately in UI)
   const positioningChanged = prevState?.positioning !== positioning.state;
   const stressChanged      = prevState?.stress      !== stress.state;
-  const since = positioningChanged || stressChanged
+  const since = positioningChanged
     ? snapshot.timestamp
     : (prevState?.since ?? snapshot.timestamp);
 

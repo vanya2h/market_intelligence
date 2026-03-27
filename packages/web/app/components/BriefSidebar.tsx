@@ -219,12 +219,12 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
               tooltip:
                 "Institutional flows score (0–100). Derived from spot ETF daily net flows and streak length. Multi-day inflow streaks signal conviction. Outflows signal cooling appetite.",
             },
-            {
-              label: "Expert Cons.",
-              value: expertConsensus,
-              tooltip:
-                "Expert consensus score (0–100). Derived from accuracy-weighted analyst consensus via unbias API. Z-score ≥ +0.8 = bullish conviction. Z-score ≤ −1.5 = bearish conviction.",
-            },
+            // {
+            //   label: "Expert Cons.",
+            //   value: expertConsensus,
+            //   tooltip:
+            //     "Expert consensus score (0–100). Derived from accuracy-weighted analyst consensus via unbias API. Z-score ≥ +0.8 = bullish conviction. Z-score ≤ −1.5 = bearish conviction.",
+            // },
             {
               label: "Momentum Div.",
               value: momentumDivergence,

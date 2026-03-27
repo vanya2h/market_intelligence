@@ -21,7 +21,7 @@ import { collect as collectHtf } from "../htf/collector.js";
 import { analyze as analyzeHtf } from "../htf/analyzer.js";
 import type { DerivativesState } from "../types.js";
 import type { EtfState } from "../etfs/types.js";
-import type { HtfState } from "../htf/types.js";
+import type { HtfState, Candle } from "../htf/types.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -135,25 +135,29 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
     const snapshot = await collectHtf(asset);
     const prevState = loadDimState<HtfState>("htf_state.json", asset);
     const { context } = analyzeHtf(snapshot, prevState);
-    // Compute ATR ratio (current vs 30d mean) for volatility compression detection
-    // Use daily candles to get a rolling ATR for the ratio
+    // Compute ATR ratio (current daily vs 30d-ago daily) for volatility compression
     const dailyCandles = snapshot.dailyCandles;
     let atrRatio = 1;
-    if (dailyCandles.length >= 44 && context.atr > 0) {
-      // Compute ATR-14 on the candles ending 30 days ago as the baseline
-      const older = dailyCandles.slice(0, -30);
-      if (older.length >= 15) {
+    if (dailyCandles.length >= 44) {
+      const computeDailyAtr14 = (candles: Candle[]): number => {
+        if (candles.length < 15) return 0;
         const trs: number[] = [];
-        for (let i = 1; i < older.length; i++) {
-          const c = older[i]!;
-          const pc = older[i - 1]!.close;
+        for (let i = 1; i < candles.length; i++) {
+          const c = candles[i]!;
+          const pc = candles[i - 1]!.close;
           trs.push(Math.max(c.high - c.low, Math.abs(c.high - pc), Math.abs(c.low - pc)));
         }
-        let olderAtr = trs.slice(0, 14).reduce((s, v) => s + v, 0) / 14;
+        let atr = trs.slice(0, 14).reduce((s, v) => s + v, 0) / 14;
         for (let i = 14; i < trs.length; i++) {
-          olderAtr = (olderAtr * 13 + trs[i]!) / 14;
+          atr = (atr * 13 + trs[i]!) / 14;
         }
-        if (olderAtr > 0) atrRatio = parseFloat((context.atr / olderAtr).toFixed(3));
+        return atr;
+      };
+
+      const currentAtr = computeDailyAtr14(dailyCandles);
+      const olderAtr = computeDailyAtr14(dailyCandles.slice(0, -30));
+      if (olderAtr > 0 && currentAtr > 0) {
+        atrRatio = parseFloat((currentAtr / olderAtr).toFixed(3));
       }
     }
 

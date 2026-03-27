@@ -358,7 +358,7 @@ function renderRegimeBanner(b: RegimeBannerBlock) {
   return html`<div style="${boxStyle}">
     <div style="${headerStyle}">
       <div style="${dotStyle}"></div>
-      <span style="${titleStyle}">${regimeLabel(b.regime as Regime)}</span>
+      <span style="${titleStyle}">${b.regime}</span>
     </div>
     ${b.subtitle ? html`<p style="${subtitleStyle}">${b.subtitle}</p>` : html``}
   </div>`;
