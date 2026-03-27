@@ -32,7 +32,12 @@ import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
 import { runAgent as runSentimentAgent } from "../sentiment/agent.js";
 import type { SentimentState } from "../sentiment/types.js";
 
-import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput } from "./types.js";
+import { collect as collectExchangeFlows } from "../exchange_flows/collector.js";
+import { analyze as analyzeExchangeFlows } from "../exchange_flows/analyzer.js";
+import { runAgent as runExchangeFlowsAgent } from "../exchange_flows/agent.js";
+import type { ExchangeFlowsState } from "../exchange_flows/types.js";
+
+import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput, ExchangeFlowsOutput } from "./types.js";
 
 // ─── State helpers ───────────────────────────────────────────────────────────
 
@@ -143,12 +148,35 @@ async function runSentimentDim(asset: "BTC" | "ETH"): Promise<SentimentOutput | 
       positioning: context.metrics.components.positioning,
       trend: context.metrics.components.trend,
       institutionalFlows: context.metrics.components.institutionalFlows,
+      exchangeFlows: context.metrics.components.exchangeFlows,
       expertConsensus: null, // hidden while collecting delta-based data (re-enable ~2026-04-02)
       context,
       interpretation,
     };
   } catch (e) {
     console.log(`      ${chalk.red("✗")} sentiment: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+async function runExchangeFlowsDim(asset: "BTC" | "ETH"): Promise<ExchangeFlowsOutput | null> {
+  try {
+    console.log(`      ${chalk.cyan("▸")} exchange flows (${asset})...`);
+    const snapshot = await collectExchangeFlows(asset);
+    const prevState = loadJsonState<ExchangeFlowsState>("exchange_flows_state.json", asset);
+    const { context, nextState } = analyzeExchangeFlows(snapshot, prevState);
+    saveJsonState("exchange_flows_state.json", asset, nextState);
+    const interpretation = await runExchangeFlowsAgent(context);
+    return {
+      dimension: "EXCHANGE_FLOWS",
+      regime: context.regime,
+      previousRegime: context.previousRegime,
+      since: context.since,
+      context,
+      interpretation,
+    };
+  } catch (e) {
+    console.log(`      ${chalk.red("✗")} exchange flows: ${(e as Error).message}`);
     return null;
   }
 }
@@ -160,7 +188,13 @@ async function runSentimentDim(asset: "BTC" | "ETH"): Promise<SentimentOutput | 
  * Returns only successful outputs (failed dimensions are logged and skipped).
  */
 export async function runAllDimensions(asset: "BTC" | "ETH"): Promise<DimensionOutput[]> {
-  const results = await Promise.all([runDerivatives(asset), runEtfs(asset), runHtf(asset), runSentimentDim(asset)]);
+  const results = await Promise.all([
+    runDerivatives(asset),
+    runEtfs(asset),
+    runHtf(asset),
+    runExchangeFlowsDim(asset),
+    runSentimentDim(asset),
+  ]);
 
   return results.filter((r): r is DimensionOutput => r !== null);
 }

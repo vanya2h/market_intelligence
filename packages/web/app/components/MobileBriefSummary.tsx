@@ -57,6 +57,7 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
               { label: "Positioning", value: brief.positioning },
               { label: "Trend", value: brief.trend },
               { label: "Inst. Flows", value: brief.institutionalFlows },
+              { label: "Exch. Flows", value: brief.exchangeFlows },
               { label: "Expert Cons.", value: brief.expertConsensus },
               { label: "Mom. Div.", value: brief.momentumDivergence },
               { label: "Volatility", value: brief.volatility },

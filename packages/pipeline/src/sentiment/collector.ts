@@ -19,9 +19,12 @@ import { collect as collectEtfs } from "../etfs/collector.js";
 import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
 import { collect as collectHtf } from "../htf/collector.js";
 import { analyze as analyzeHtf } from "../htf/analyzer.js";
+import { collect as collectExchangeFlows } from "../exchange_flows/collector.js";
+import { analyze as analyzeExchangeFlows } from "../exchange_flows/analyzer.js";
 import type { DerivativesState } from "../types.js";
 import type { EtfState } from "../etfs/types.js";
 import type { HtfState, Candle } from "../htf/types.js";
+import type { ExchangeFlowsState } from "../exchange_flows/types.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -96,6 +99,7 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
     derivatives: null,
     etfs: null,
     htf: null,
+    exchangeFlows: null,
   };
 
   // Derivatives
@@ -174,6 +178,24 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
     };
   } catch (e) {
     console.log(`      ⚠ HTF data unavailable: ${(e as Error).message}`);
+  }
+
+  // Exchange Flows
+  try {
+    const snapshot = await collectExchangeFlows(asset);
+    const prevState = loadDimState<ExchangeFlowsState>("exchange_flows_state.json", asset);
+    const { context } = analyzeExchangeFlows(snapshot, prevState);
+    inputs.exchangeFlows = {
+      reserveChange7dPct: context.metrics.reserveChange7dPct,
+      reserveChange30dPct: context.metrics.reserveChange30dPct,
+      balanceTrend: context.metrics.balanceTrend,
+      todaySigma: context.metrics.todaySigma,
+      isAt30dLow: context.metrics.isAt30dLow,
+      isAt30dHigh: context.metrics.isAt30dHigh,
+      regime: context.regime,
+    };
+  } catch (e) {
+    console.log(`      ⚠ Exchange flows data unavailable: ${(e as Error).message}`);
   }
 
   return inputs;

@@ -74,7 +74,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "What components make up the composite score?",
-        a: "Six components, each scored 0–100 independently, combined with fixed weights: Positioning (40%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (30%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Trend (15%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence (10%) from HTF technicals — price-RSI disagreement amplified by CVD divergence. Volatility (5%) from HTF technicals — ATR compression/expansion ratio. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data.",
+        a: "Seven components, each scored 0–100 independently, combined with fixed weights: Positioning (35%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (20%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Exchange Flows (15%) from on-chain data — coins moving on/off exchanges, reserve trends, and 30-day extremes. Trend (15%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence (10%) from HTF technicals — price-RSI disagreement amplified by CVD divergence. Volatility (5%) from HTF technicals — ATR compression/expansion ratio. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data.",
       },
       {
         q: "When is a reading of 45 vs 55 meaningful?",
@@ -99,7 +99,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "Where does the data come from?",
-        a: "Four sources. CoinGlass API provides derivatives data (funding rates at 8-hour resolution over 30 days, open interest at 4-hour resolution over 30 days, liquidation volumes at 8-hour resolution over 90 days, Coinbase premium) and ETF flow data (daily net flows, GBTC premium). Binance Spot provides 4H and daily OHLCV candles (300 4H, 104 daily) for technical indicators. Binance Futures provides 4H candles for CVD analysis. The Unbias API provides accuracy-weighted analyst consensus (currently collecting baseline data).",
+        a: "Four sources. CoinGlass API provides derivatives data (funding rates at 8-hour resolution over 30 days, open interest at 4-hour resolution over 30 days, liquidation volumes at 8-hour resolution over 90 days, Coinbase premium), ETF flow data (daily net flows, GBTC premium), and exchange balance data (historical balances per exchange with 1d/7d/30d changes). Binance Spot provides 4H and daily OHLCV candles (300 4H, 104 daily) for technical indicators. Binance Futures provides 4H candles for CVD analysis. The Unbias API provides accuracy-weighted analyst consensus (currently collecting baseline data).",
       },
       {
         q: "How is the Positioning score calculated?",
@@ -108,6 +108,10 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       {
         q: "How is the Institutional Flows score calculated?",
         a: "The classifier tracks consecutive inflow/outflow streaks — 3+ days of the same direction triggers a strong signal. Flow magnitude is measured as sigma (standard deviations from the 30-day mean) to catch outsized days. Reversal detection fires when 2+ days of opposite flow appear after a streak, with magnitude at least 20% of the prior phase. States: STRONG_INFLOW, STRONG_OUTFLOW, REVERSAL_TO_INFLOW, REVERSAL_TO_OUTFLOW, and MIXED.",
+      },
+      {
+        q: "How is the Exchange Flows score calculated?",
+        a: "Exchange flows track coins moving on and off exchanges across 20+ exchanges. Coins leaving exchanges (outflow) signal accumulation — investors moving to self-custody with no intent to sell. Coins entering exchanges (inflow) signal distribution — positioning to sell. The score maps 7-day reserve change to a 0–100 scale (outflow = bullish/high, inflow = bearish/low), boosted by trend confirmation (falling reserves = bullish), 30-day extremes (reserves at 30d low = strong accumulation), and regime state. States: ACCUMULATION, DISTRIBUTION, EF_NEUTRAL, HEAVY_INFLOW, HEAVY_OUTFLOW.",
       },
       {
         q: "How are the technical indicators computed?",
@@ -128,11 +132,11 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "Why is this system optimized for swing trading specifically?",
-        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 40% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Trend only gets 15% because trend-following signals lag at reversal points. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
+        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 35% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Institutional and exchange flows together get 35% because capital flow direction (both on-chain and via ETFs) is a strong leading indicator. Trend only gets 15% because trend-following signals lag at reversal points. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
       },
       {
         q: "Why does Positioning get 40% while Trend only gets 15%?",
-        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Momentum Divergence (10%) is added specifically because it's reversal-predictive.",
+        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Exchange Flows (15%) captures on-chain supply pressure — a distinct signal from ETF-based institutional flows. Momentum Divergence (10%) is added specifically because it's reversal-predictive.",
       },
       {
         q: "What is the two-dimensional derivatives model?",
@@ -144,7 +148,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How does confluence work as a swing filter?",
-        a: "Each dimension (Derivatives, ETFs, HTF, Sentiment) scores +1 (agrees with direction), 0 (neutral), or -1 (disagrees). When all four align, the signal has genuine predictive power. When only one or two agree, the edge is marginal. This keeps you out of choppy, low-conviction setups and in high-conviction swing trades where multiple independent data sources confirm the same directional bias.",
+        a: "Each dimension (Derivatives, ETFs, Exchange Flows, HTF, Sentiment) scores +1 (agrees with direction), 0 (neutral), or -1 (disagrees). When all five align, the signal has genuine predictive power. When only one or two agree, the edge is marginal. This keeps you out of choppy, low-conviction setups and in high-conviction swing trades where multiple independent data sources confirm the same directional bias.",
       },
     ],
   },
@@ -173,7 +177,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "Will the system change over time?",
-        a: "Yes, by design. The current weights and thresholds are a starting hypothesis. As outcome data accumulates, the system recalibrates based on what's actually predictive — not what seemed like it should be. Additional data dimensions (on-chain metrics, macro indicators, prediction markets, stablecoin flows) are planned and will be integrated as they prove additive to signal quality. Expert Consensus is the first example: it's included in the architecture but disabled at 0% weight until enough delta data exists to calibrate it properly.",
+        a: "Yes, by design. The current weights and thresholds are a starting hypothesis. As outcome data accumulates, the system recalibrates based on what's actually predictive — not what seemed like it should be. Exchange Flows was recently added as the fifth dimension, capturing on-chain supply pressure that ETF flows alone don't cover. Additional data dimensions (options/IV, macro indicators, prediction markets, stablecoin flows) are planned and will be integrated as they prove additive to signal quality. Expert Consensus is included in the architecture but disabled at 0% weight until enough delta data exists to calibrate it properly.",
       },
     ],
   },

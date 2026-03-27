@@ -19,6 +19,7 @@ export async function saveBrief(
   const etfOut = outputs.find((o) => o.dimension === "ETFS");
   const htfOut = outputs.find((o) => o.dimension === "HTF");
   const sentOut = outputs.find((o) => o.dimension === "SENTIMENT");
+  const efOut = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
   const record = await prisma.brief.create({
     data: {
@@ -75,9 +76,21 @@ export async function saveBrief(
               positioning: sentOut.positioning,
               trend: sentOut.trend,
               institutionalFlows: sentOut.institutionalFlows,
+              exchangeFlows: sentOut.exchangeFlows,
               expertConsensus: sentOut.expertConsensus,
               context: JSON.parse(JSON.stringify(sentOut.context)) as Prisma.InputJsonValue,
               interpretation: sentOut.interpretation,
+            },
+          }
+        : undefined,
+      exchangeFlows: efOut
+        ? {
+            create: {
+              regime: efOut.regime,
+              previousRegime: efOut.previousRegime,
+              since: new Date(efOut.since),
+              context: JSON.parse(JSON.stringify(efOut.context)) as Prisma.InputJsonValue,
+              interpretation: efOut.interpretation,
             },
           }
         : undefined,

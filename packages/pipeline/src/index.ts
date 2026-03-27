@@ -14,6 +14,7 @@ export type {
   EtfsDimension,
   HtfDimension,
   SentimentDimension,
+  ExchangeFlowsDimension,
   DimensionState,
   DimensionSnapshot,
   TradeIdea,
@@ -30,6 +31,7 @@ export {
   HtfRegime as PrismaHtfRegime,
   MarketStructure as PrismaMarketStructure,
   SentimentRegime as PrismaSentimentRegime,
+  ExchangeFlowsRegime as PrismaExchangeFlowsRegime,
   TradeDirection,
   TradeOutcome,
   LevelType,
@@ -55,6 +57,9 @@ export type { HtfContext, HtfRegime, MarketStructure, MaContext, RsiContext } fr
 
 // Sentiment
 export type { SentimentContext, SentimentRegime, SentimentMetrics, FearGreedComponents } from "./sentiment/types.js";
+
+// Exchange Flows
+export type { ExchangeFlowsContext, ExchangeFlowsRegime, ExchangeFlowsMetrics } from "./exchange_flows/types.js";
 
 // Orchestrator
 export type { DimensionOutput, AssetBrief } from "./orchestrator/types.js";

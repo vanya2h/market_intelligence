@@ -19,6 +19,7 @@ enum Dimension {
     ETFS
     HTF
     SENTIMENT
+    EXCHANGE_FLOWS
 }
 
 // ─── Per-Dimension Regime Enums ──────────────────────────────────────────────
@@ -70,6 +71,14 @@ enum OiSignal {
     ELEVATED
     OI_NORMAL
     DEPRESSED
+}
+
+enum ExchangeFlowsRegime {
+    ACCUMULATION
+    DISTRIBUTION
+    EF_NEUTRAL
+    HEAVY_INFLOW
+    HEAVY_OUTFLOW
 }
 
 enum SentimentRegime {
@@ -130,11 +139,12 @@ model Brief {
     dimensions Dimension[]
 
     // Relations to per-dimension models
-    derivatives DerivativesDimension?
-    etfs        EtfsDimension?
-    htf         HtfDimension?
-    sentiment   SentimentDimension?
-    tradeIdea   TradeIdea?
+    derivatives    DerivativesDimension?
+    etfs           EtfsDimension?
+    htf            HtfDimension?
+    sentiment      SentimentDimension?
+    exchangeFlows  ExchangeFlowsDimension?
+    tradeIdea      TradeIdea?
 
     @@index([asset, timestamp])
     @@map("briefs")
@@ -198,11 +208,25 @@ model SentimentDimension {
     positioning        Float?
     trend              Float?
     institutionalFlows Float?
+    exchangeFlows      Float?
     expertConsensus    Float?
     context            Json
     interpretation     String
 
     @@map("brief_sentiment")
+}
+
+model ExchangeFlowsDimension {
+    id             String              @id @default(cuid())
+    briefId        String              @unique
+    brief          Brief               @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    regime         ExchangeFlowsRegime
+    previousRegime ExchangeFlowsRegime?
+    since          DateTime
+    context        Json
+    interpretation String
+
+    @@map("brief_exchange_flows")
 }
 
 // ─── Trade Idea Enums ────────────────────────────────────────────────────────

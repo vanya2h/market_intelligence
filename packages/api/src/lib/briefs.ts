@@ -6,13 +6,15 @@ export type Regime =
   | $Enums.PositioningRegime
   | $Enums.EtfRegime
   | $Enums.HtfRegime
-  | $Enums.SentimentRegime;
+  | $Enums.SentimentRegime
+  | $Enums.ExchangeFlowsRegime;
 
 export const briefInclude = {
   derivatives: true,
   etfs: true,
   htf: true,
   sentiment: true,
+  exchangeFlows: true,
 } as const satisfies Prisma.BriefInclude;
 
 export type BriefRaw = Prisma.BriefGetPayload<{
@@ -45,6 +47,7 @@ export type Brief = {
   positioning: number | null;
   trend: number | null;
   institutionalFlows: number | null;
+  exchangeFlows: number | null;
   expertConsensus: number | null;
   momentumDivergence: number | null;
   volatility: number | null;
@@ -113,6 +116,18 @@ export function parseBrief(raw: Jsonify<BriefRaw>): Brief {
       interpretation: raw.sentiment.interpretation,
     });
   }
+  if (raw.exchangeFlows) {
+    dimensions.push({
+      dimension: "EXCHANGE_FLOWS",
+      regime: raw.exchangeFlows.regime,
+      previousRegime: raw.exchangeFlows.previousRegime,
+      since: raw.exchangeFlows.since as string,
+      stress: null,
+      oiSignal: null,
+      context: raw.exchangeFlows.context as Record<string, unknown>,
+      interpretation: raw.exchangeFlows.interpretation,
+    });
+  }
 
   return {
     id: raw.id,
@@ -125,6 +140,7 @@ export function parseBrief(raw: Jsonify<BriefRaw>): Brief {
     positioning: raw.sentiment?.positioning ?? null,
     trend: raw.sentiment?.trend ?? null,
     institutionalFlows: raw.sentiment?.institutionalFlows ?? null,
+    exchangeFlows: sentimentComponent(raw.sentiment, "exchangeFlows"),
     expertConsensus: raw.sentiment?.expertConsensus ?? null,
     momentumDivergence: sentimentComponent(raw.sentiment, "momentumDivergence"),
     volatility: sentimentComponent(raw.sentiment, "volatility"),

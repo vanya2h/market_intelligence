@@ -24,6 +24,10 @@ const REGIME_LABELS: Record<Regime, string> = {
   RANGING: "Ranging",
   ACCUMULATION: "Accumulation",
   DISTRIBUTION: "Distribution",
+  // Exchange Flows
+  EF_NEUTRAL: "Neutral",
+  HEAVY_INFLOW: "Heavy Inflow",
+  HEAVY_OUTFLOW: "Heavy Outflow",
   // Sentiment
   EXTREME_FEAR: "Extreme Fear",
   FEAR: "Fear",
@@ -62,6 +66,10 @@ const REGIME_COLORS: Record<Regime, RegimeColor> = {
   RANGING: NEUTRAL,
   ACCUMULATION: GREEN,
   DISTRIBUTION: RED,
+  // Exchange Flows
+  EF_NEUTRAL: NEUTRAL,
+  HEAVY_INFLOW: RED, // inflow to exchanges = bearish (selling pressure)
+  HEAVY_OUTFLOW: GREEN, // outflow from exchanges = bullish (accumulation)
   // Sentiment
   EXTREME_FEAR: RED,
   FEAR: RED,

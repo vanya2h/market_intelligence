@@ -7,7 +7,7 @@
 | 01 | Derivatives Structure | **Implemented** |
 | 02 | Options & Implied Volatility | Planned |
 | 03 | Institutional Flows (ETFs) | **Implemented** |
-| 04 | Exchange Flows & Liquidity | Planned |
+| 04 | Exchange Flows & Liquidity | **Implemented** |
 | 05 | Whale Activity | Planned |
 | 06 | Market Sentiment (Composite F&G) | **Implemented** (expert consensus disabled until ~2026-04-02) |
 | 07 | HTF Technical Structure | **Implemented** |
@@ -45,7 +45,7 @@ Each dimension is an independent analytical lens on the market. Every dimension 
 
 ## Pipeline Execution
 
-The orchestrator runs all 4 implemented dimensions in parallel per asset:
+The orchestrator runs all 5 implemented dimensions in parallel per asset:
 
 ```
 Collector (fetch raw data)
@@ -180,27 +180,43 @@ Captures what's happening to positioning. Evaluated in strict priority order:
 
 ---
 
-## 04 — Exchange Flows & Liquidity 🔲
+## 04 — Exchange Flows & Liquidity ✅
 
-> **Status: Planned — not yet implemented**
-
-**What it watches:** Exchange balances (net deposits/withdrawals), exchange netflow, reserve changes over 7d/30d
+**What it watches:** Exchange balances (aggregate + per-exchange), net deposits/withdrawals, reserve changes over 1d/7d/30d
 
 **Why it matters:** Coins moving off exchanges = accumulation (less sell pressure). Coins moving onto exchanges = distribution (preparing to sell). Long-term trends in exchange reserves are one of the most reliable on-chain signals.
 
-**Data model:** State machine with multi-timeframe context. Collected hourly.
+**Data model:** State machine with statistical context. Collected with 1h cache TTL.
 
 **Regime states:**
-`ACCUMULATION` · `DISTRIBUTION` · `NEUTRAL` · `HEAVY_INFLOW` · `HEAVY_OUTFLOW`
+`ACCUMULATION` · `DISTRIBUTION` · `EF_NEUTRAL` · `HEAVY_INFLOW` · `HEAVY_OUTFLOW`
 
-**Transition rules (deterministic):**
+**Transition rules (deterministic, priority-ordered):**
 
-- 7d net outflow + reserve declining → `ACCUMULATION`
-- 7d net inflow + reserve rising → `DISTRIBUTION`
-- single-hour inflow > percentile(1m) 95 → `HEAVY_INFLOW` event
-- reserve at 3m+ low → `ACCUMULATION` (strengthened)
+1. daily flow ≥ 95th percentile(1m) + ≥ 2σ → `HEAVY_INFLOW`
+2. daily flow ≤ 5th percentile(1m) + ≤ -2σ → `HEAVY_OUTFLOW`
+3. 7d net outflow + balance trend falling → `ACCUMULATION`
+4. 7d net inflow + balance trend rising → `DISTRIBUTION`
+5. 30d low + 30d net outflow → `ACCUMULATION` (strengthened)
+6. 30d high + 30d net inflow → `DISTRIBUTION` (strengthened)
+7. default → `EF_NEUTRAL`
 
-**Source:** CoinGlass — exchange balances, on-chain flows
+**Key metrics computed:**
+
+- Net flow over 1d, 7d, 30d (derived from balance deltas)
+- Reserve change % over 1d, 7d, 30d
+- Daily flow mean, σ, and today's σ-score (vs 30d distribution)
+- Flow percentile (1m)
+- Balance trend direction (rising/falling/flat)
+- 30d extreme detection (low/high)
+- Top 5 exchanges by balance with 7d change
+
+**Events:**
+
+- `heavy_inflow` / `heavy_outflow` — daily balance change > 2σ from 30d mean
+- `reserve_low` / `reserve_high` — total balance at 30d low/high
+
+**Source:** CoinGlass API v4 — `/api/exchange/balance/chart` (historical balance + price per exchange), `/api/exchange/balance/list` (current balances with 1d/7d/30d % changes)
 
 ---
 
@@ -226,7 +242,7 @@ Captures what's happening to positioning. Evaluated in strict priority order:
 
 ## 06 — Market Sentiment (Composite Fear & Greed) ✅
 
-**What it watches:** Composite Fear & Greed index computed from five active components — derivatives positioning (Dim 01), HTF trend (Dim 07), momentum divergence (Dim 07), volatility compression (Dim 07), and institutional flows (Dim 03). Expert consensus (unbias API) is integrated but currently disabled while collecting delta-based data (~re-enable 2026-04-02).
+**What it watches:** Composite Fear & Greed index computed from six active components — derivatives positioning (Dim 01), institutional flows (Dim 03), exchange flows (Dim 04), HTF trend (Dim 07), momentum divergence (Dim 07), and volatility compression (Dim 07). Expert consensus (unbias API) is integrated but currently disabled while collecting delta-based data (~re-enable 2026-04-02).
 
 **Why it matters:** Traditional Fear & Greed indices (Alternative.me, CNN) use opaque methodology and produce unreliable readings — during testing, Alternative.me showed 14 (Extreme Fear) while actual market conditions (derivatives, trend, expert consensus) all indicated neutral-to-mild-greed territory. Our composite uses crypto-native inputs we control and understand.
 
@@ -236,8 +252,9 @@ Captures what's happening to positioning. Evaluated in strict priority order:
 
 | Component | Weight | Source | What it measures |
 |-----------|--------|--------|-----------------|
-| Positioning | 40% | Dim 01 (derivatives) | Funding percentile (35%), Coinbase premium percentile (25%), OI percentile (25%), bias-adjusted liquidations (15%) |
-| Institutional flows | 30% | Dim 03 (ETF flows) | Flow streaks, σ magnitude, regime |
+| Positioning | 35% | Dim 01 (derivatives) | Funding percentile (35%), Coinbase premium percentile (25%), OI percentile (25%), bias-adjusted liquidations (15%) |
+| Institutional flows | 20% | Dim 03 (ETF flows) | Flow streaks, σ magnitude, regime |
+| Exchange flows | 15% | Dim 04 (exchange flows) | Reserve change direction, balance trend, 30d extremes, regime |
 | Trend | 15% | Dim 07 (HTF technicals) | Price vs 50/200 SMA, RSI, market structure |
 | Momentum divergence | 10% | Dim 07 (HTF technicals) | Price-RSI divergence + CVD divergence |
 | Volatility compression | 5% | Dim 07 (HTF technicals) | ATR compression/expansion |

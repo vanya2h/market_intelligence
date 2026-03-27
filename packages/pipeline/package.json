@@ -12,6 +12,7 @@
     "etfs": "tsx src/etfs/run.bin.ts",
     "htf": "tsx src/htf/run.bin.ts",
     "sentiment": "tsx src/sentiment/run.bin.ts",
+    "exchange-flows": "tsx src/exchange_flows/run.bin.ts",
     "brief": "tsx src/orchestrator/run.bin.ts",
     "notify": "tsx src/orchestrator/notify.bin.ts",
     "schedule": "tsx src/orchestrator/scheduler.ts",

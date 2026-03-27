@@ -314,6 +314,12 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           signal: numSignal(flows, 60, 40),
         },
         {
+          label: "Exch. Flows",
+          group: "Components",
+          value: safe(() => formatNumber(get(ctx, "metrics.components.exchangeFlows") as number, 0)),
+          signal: numSignal(get(ctx, "metrics.components.exchangeFlows") as number, 60, 40),
+        },
+        {
           label: "Mom. Divergence",
           group: "Components",
           value: safe(() => formatNumber(get(ctx, "metrics.components.momentumDivergence") as number, 0)),
@@ -388,6 +394,104 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
     extractChartValue: (ctx) => (get(ctx, "metrics.compositeIndex") as number) ?? null,
     extractEvents: extractEventsFromCtx,
     chartLabel: "Composite F&G",
+  },
+
+  EXCHANGE_FLOWS: {
+    key: "EXCHANGE_FLOWS",
+    label: "Exchange Flows & Liquidity",
+    extractMetrics: (ctx) => {
+      const netFlow1d = get(ctx, "metrics.netFlow1d") as number;
+      const netFlow7d = get(ctx, "metrics.netFlow7d") as number;
+      const netFlow30d = get(ctx, "metrics.netFlow30d") as number;
+      const totalBalance = get(ctx, "metrics.totalBalance") as number;
+      const totalBalanceUsd = get(ctx, "metrics.totalBalanceUsd") as number;
+      const reserveChange7dPct = get(ctx, "metrics.reserveChange7dPct") as number;
+      const reserveChange30dPct = get(ctx, "metrics.reserveChange30dPct") as number;
+      const todaySigma = get(ctx, "metrics.todaySigma") as number;
+      const flowPercentile = get(ctx, "metrics.flowPercentile1m") as number;
+      const balanceTrend = get(ctx, "metrics.balanceTrend") as string;
+      const asset = get(ctx, "asset") as string;
+
+      // For exchange flows: outflow (negative) = bullish, inflow (positive) = bearish
+      const flowSignal = (v: number): MetricSignal => (v < 0 ? "bullish" : v > 0 ? "bearish" : "neutral");
+
+      const topExchanges = (get(ctx, "metrics.topExchanges") as { exchange: string; balance: number; changePct7d: number }[]) ?? [];
+
+      return [
+        {
+          label: "1d Net Flow",
+          group: "Flows",
+          value: safe(() => `${netFlow1d >= 0 ? "+" : ""}${formatCompact(netFlow1d)} ${asset}`),
+          signal: flowSignal(netFlow1d),
+        },
+        {
+          label: "7d Net Flow",
+          group: "Flows",
+          value: safe(() => `${netFlow7d >= 0 ? "+" : ""}${formatCompact(netFlow7d)} ${asset}`),
+          signal: flowSignal(netFlow7d),
+        },
+        {
+          label: "30d Net Flow",
+          group: "Flows",
+          value: safe(() => `${netFlow30d >= 0 ? "+" : ""}${formatCompact(netFlow30d)} ${asset}`),
+          signal: flowSignal(netFlow30d),
+        },
+        {
+          label: "Today Sigma",
+          group: "Flows",
+          value: safe(() => formatNumber(todaySigma)),
+          signal: todaySigma <= -2 ? "bullish" : todaySigma >= 2 ? "bearish" : "neutral",
+        },
+        {
+          label: "Flow Percentile (1m)",
+          group: "Flows",
+          value: safe(() => `${flowPercentile}th`),
+        },
+        {
+          label: "Total Reserve",
+          group: "Reserves",
+          value: safe(() => `${formatCompact(totalBalance)} ${asset}`),
+        },
+        {
+          label: "Reserve Value",
+          group: "Reserves",
+          value: safe(() => formatUsd(totalBalanceUsd)),
+        },
+        {
+          label: "7d Change",
+          group: "Reserves",
+          value: safe(() => formatPercent(reserveChange7dPct)),
+          signal: reserveChange7dPct < 0 ? "bullish" : reserveChange7dPct > 0 ? "bearish" : "neutral",
+        },
+        {
+          label: "30d Change",
+          group: "Reserves",
+          value: safe(() => formatPercent(reserveChange30dPct)),
+          signal: reserveChange30dPct < 0 ? "bullish" : reserveChange30dPct > 0 ? "bearish" : "neutral",
+        },
+        {
+          label: "Trend",
+          group: "Reserves",
+          value: safe(() => balanceTrend),
+          signal: balanceTrend === "FALLING" ? "bullish" : balanceTrend === "RISING" ? "bearish" : "neutral",
+        },
+        ...(get(ctx, "metrics.isAt30dLow") === true
+          ? [{ label: "30d Low", group: "Reserves", value: "Yes — at 30d reserve low", signal: "bullish" as MetricSignal }]
+          : []),
+        ...(get(ctx, "metrics.isAt30dHigh") === true
+          ? [{ label: "30d High", group: "Reserves", value: "Yes — at 30d reserve high", signal: "bearish" as MetricSignal }]
+          : []),
+        ...topExchanges.slice(0, 5).map((ex) => ({
+          label: ex.exchange,
+          group: "Top Exchanges",
+          value: safe(() => `${formatCompact(ex.balance)} ${asset}`),
+          signal: (ex.changePct7d < -1 ? "bullish" : ex.changePct7d > 1 ? "bearish" : "neutral") as MetricSignal,
+        })),
+      ];
+    },
+    extractChartValue: (ctx) => (get(ctx, "metrics.netFlow7d") as number) ?? null,
+    extractEvents: extractEventsFromCtx,
+    chartLabel: "7d Net Flow",
   },
 
   HTF: {

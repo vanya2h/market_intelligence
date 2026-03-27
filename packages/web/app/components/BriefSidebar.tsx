@@ -7,12 +7,13 @@ import { regimeColor, regimeLabel } from "../lib/regime-colors";
 import { RelativeTime } from "./RelativeTime";
 import type { Brief } from "@market-intel/api";
 
-export const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
+export const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "EXCHANGE_FLOWS", "SENTIMENT", "HTF"] as const;
 export type DimensionTab = (typeof DIMENSION_TABS)[number];
 
 export const TAB_LABELS: Record<DimensionTab, string> = {
   DERIVATIVES: "Derivatives",
   ETFS: "ETFs",
+  EXCHANGE_FLOWS: "Exchange Flows",
   SENTIMENT: "Sentiment",
   HTF: "HTF Structure",
 };
@@ -42,6 +43,18 @@ const REGIME_DESCRIPTIONS: Record<string, Record<string, string>> = {
     ETF_NEUTRAL:
       "ETF flows are balanced with no clear directional trend. No institutional edge — rely on other dimensions for swing direction.",
     MIXED: "Mixed ETF flow signals — individual funds disagree on direction. No clear institutional consensus.",
+  },
+  EXCHANGE_FLOWS: {
+    ACCUMULATION:
+      "Coins flowing off exchanges — investors withdrawing to self-custody. Less supply available for selling, reducing sell pressure. Bullish signal for swing traders.",
+    DISTRIBUTION:
+      "Coins flowing onto exchanges — investors depositing to sell. More supply available for selling, increasing sell pressure. Bearish signal for swing traders.",
+    EF_NEUTRAL:
+      "No clear directional trend in exchange flows. Reserve levels are stable. No edge from on-chain flows — defer to other dimensions.",
+    HEAVY_INFLOW:
+      "Extreme single-day inflow to exchanges (>2σ from 30d mean). Large amount of coins deposited — potential imminent sell pressure. Watch for follow-through.",
+    HEAVY_OUTFLOW:
+      "Extreme single-day outflow from exchanges (>2σ from 30d mean). Large withdrawal to self-custody — strong accumulation signal. Bullish.",
   },
   HTF: {
     MACRO_BULLISH:
@@ -105,6 +118,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
     positioning,
     trend,
     institutionalFlows,
+    exchangeFlows,
     expertConsensus,
     momentumDivergence,
     volatility,
@@ -122,7 +136,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
         <SectionBlock
           title="Composite Fear & Greed Index"
           className="mb-6"
-          tooltip="Proprietary Fear & Greed index (0–100) built from four crypto-native inputs: derivatives positioning (30%), HTF trend (25%), analyst consensus (25%), ETF institutional flows (20%). Avoids Alternative.me's opaque methodology."
+          tooltip="Proprietary Fear & Greed index (0–100) built from six crypto-native inputs: derivatives positioning (35%), institutional flows (20%), exchange flows (15%), HTF trend (15%), momentum divergence (10%), volatility (5%). Avoids Alternative.me's opaque methodology."
         >
           <SentimentGauge value={compositeIndex} label={compositeLabel} />
           <Link
@@ -217,6 +231,12 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
               value: institutionalFlows,
               tooltip:
                 "Institutional flows score (0–100). Derived from spot ETF daily net flows and streak length. Multi-day inflow streaks signal conviction. Outflows signal cooling appetite.",
+            },
+            {
+              label: "Exch. Flows",
+              value: exchangeFlows,
+              tooltip:
+                "Exchange flows score (0–100). Derived from on-chain exchange balance changes. Outflows (coins leaving exchanges) = accumulation/bullish. Inflows = distribution/bearish.",
             },
             // {
             //   label: "Expert Cons.",

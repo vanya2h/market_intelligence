@@ -226,19 +226,54 @@ function scoreExpertConsensus(consensus: UnbiasConsensusEntry[]): {
   return { score, delta };
 }
 
+/**
+ * Exchange flows score from on-chain data.
+ * Outflows from exchanges (negative reserve change) = bullish (accumulation).
+ * Inflows to exchanges (positive reserve change) = bearish (distribution).
+ */
+function scoreExchangeFlows(ef: CrossDimensionInputs["exchangeFlows"]): number {
+  if (!ef) return 50;
+
+  // 7d reserve change: -3% → 80 (strong accumulation), +3% → 20 (strong distribution)
+  // Clamped to ±5% to avoid outliers
+  const change7d = Math.max(-5, Math.min(5, ef.reserveChange7dPct));
+  const changeScore = clamp(50 - change7d * 10);
+
+  // Trend confirmation
+  let trendBonus = 0;
+  if (ef.balanceTrend === "FALLING") trendBonus = 8;    // outflows = bullish
+  else if (ef.balanceTrend === "RISING") trendBonus = -8; // inflows = bearish
+
+  // 30d extremes
+  let extremeBonus = 0;
+  if (ef.isAt30dLow) extremeBonus = 10;   // reserves depleted = bullish
+  if (ef.isAt30dHigh) extremeBonus = -10;  // reserves elevated = bearish
+
+  // Regime adjustment
+  let regimeBonus = 0;
+  if (ef.regime === "ACCUMULATION") regimeBonus = 5;
+  else if (ef.regime === "DISTRIBUTION") regimeBonus = -5;
+  else if (ef.regime === "HEAVY_OUTFLOW") regimeBonus = 10;
+  else if (ef.regime === "HEAVY_INFLOW") regimeBonus = -10;
+
+  return clamp(changeScore + trendBonus + extremeBonus + regimeBonus);
+}
+
 // ─── Composite F&G ───────────────────────────────────────────────────────────
 
-// Weights rebalanced for reversal detection:
-// - Trend reduced from 30% to 15% (lagging at reversal points)
-// - Momentum divergence added at 10% (explicitly reversal-predictive)
-// - Volatility added at 5% (compression precedes reversals)
+// Weights rebalanced with exchange flows integration:
+// - Positioning reduced 40% → 35% (slight trim)
+// - Institutional flows reduced 30% → 20% (exchange flows captures broader flow signal)
+// - Exchange flows added at 15% (on-chain supply pressure)
+// - Trend, momentum divergence, volatility unchanged
 // Expert consensus temporarily excluded while we collect delta-based data (re-enable ~2026-04-02)
 const WEIGHTS = {
-  positioning: 0.40,
+  positioning: 0.35,
   trend: 0.15,
   momentumDivergence: 0.10,
   volatility: 0.05,
-  institutionalFlows: 0.30,
+  institutionalFlows: 0.20,
+  exchangeFlows: 0.15,
   expertConsensus: 0,
 };
 
@@ -249,6 +284,7 @@ function computeComposite(components: FearGreedComponents): number {
     components.momentumDivergence * WEIGHTS.momentumDivergence +
     components.volatility * WEIGHTS.volatility +
     components.institutionalFlows * WEIGHTS.institutionalFlows +
+    components.exchangeFlows * WEIGHTS.exchangeFlows +
     components.expertConsensus * WEIGHTS.expertConsensus;
 
   return clamp(Math.round(raw * 10) / 10);
@@ -283,6 +319,7 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
     momentumDivergence: scoreMomentumDivergence(cd.htf),
     volatility: scoreVolatility(cd.htf),
     institutionalFlows: scoreInstitutionalFlows(cd.etfs),
+    exchangeFlows: scoreExchangeFlows(cd.exchangeFlows),
     expertConsensus: expert.score,
   };
 

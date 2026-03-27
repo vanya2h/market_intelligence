@@ -1,10 +1,11 @@
 // ─── Orchestrator Types ───────────────────────────────────────────────────────
 
-import type { PositioningRegime, StressLevel, OiSignal, EtfRegime, HtfRegime, MarketStructure, SentimentRegime } from "../generated/prisma/client.js";
+import type { PositioningRegime, StressLevel, OiSignal, EtfRegime, HtfRegime, MarketStructure, SentimentRegime, ExchangeFlowsRegime } from "../generated/prisma/client.js";
 import type { DerivativesContext } from "../types.js";
 import type { EtfContext } from "../etfs/types.js";
 import type { SentimentContext } from "../sentiment/types.js";
 import type { HtfContext } from "../htf/types.js";
+import type { ExchangeFlowsContext } from "../exchange_flows/types.js";
 
 /** Output from the derivatives dimension pipeline */
 export interface DerivativesOutput {
@@ -52,13 +53,24 @@ export interface SentimentOutput {
   positioning: number | null;
   trend: number | null;
   institutionalFlows: number | null;
+  exchangeFlows: number | null;
   expertConsensus: number | null;
   context: SentimentContext;
   interpretation: string;
 }
 
+/** Output from the exchange flows dimension pipeline */
+export interface ExchangeFlowsOutput {
+  dimension: "EXCHANGE_FLOWS";
+  regime: ExchangeFlowsRegime;
+  previousRegime: ExchangeFlowsRegime | null;
+  since: string;
+  context: ExchangeFlowsContext;
+  interpretation: string;
+}
+
 /** Discriminated union of all dimension outputs */
-export type DimensionOutput = DerivativesOutput | EtfsOutput | HtfOutput | SentimentOutput;
+export type DimensionOutput = DerivativesOutput | EtfsOutput | HtfOutput | SentimentOutput | ExchangeFlowsOutput;
 
 /** Human-readable labels for each dimension */
 export const DIMENSION_LABELS: Record<DimensionOutput["dimension"], string> = {
@@ -66,6 +78,7 @@ export const DIMENSION_LABELS: Record<DimensionOutput["dimension"], string> = {
   ETFS: "Institutional Flows (ETFs)",
   HTF: "HTF Technical Structure",
   SENTIMENT: "Market Sentiment (Composite F&G)",
+  EXCHANGE_FLOWS: "Exchange Flows & Liquidity",
 };
 
 /** Full pipeline output for one asset */

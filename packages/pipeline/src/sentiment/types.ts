@@ -56,6 +56,15 @@ export interface CrossDimensionInputs {
     atrRatio: number;              // current ATR / 30d-mean ATR — compression detection
     cvdDivergence: string;         // futures CVD divergence: BULLISH, BEARISH, NONE
   } | null;
+  exchangeFlows: {
+    reserveChange7dPct: number;    // negative = outflow = bullish
+    reserveChange30dPct: number;
+    balanceTrend: string;          // "RISING" | "FALLING" | "FLAT"
+    todaySigma: number;
+    isAt30dLow: boolean;
+    isAt30dHigh: boolean;
+    regime: string;
+  } | null;
 }
 
 // ─── Analyzer types ──────────────────────────────────────────────────────────
@@ -67,6 +76,7 @@ export interface FearGreedComponents {
   momentumDivergence: number; // from HTF: price-RSI divergence + CVD divergence
   volatility: number;         // from HTF: ATR compression/expansion
   institutionalFlows: number; // from ETFs: flow streaks, magnitude
+  exchangeFlows: number;      // from exchange flows: on-chain supply pressure
   expertConsensus: number;    // from unbias: consensus index, z-score
 }
 
