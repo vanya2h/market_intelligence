@@ -187,7 +187,7 @@ function FaqEntry({ q, a }: FaqItem) {
         style={{ color: "var(--text-primary)" }}
       >
         <span
-          className="flex h-4 w-4 shrink-0 items-center justify-center text-[10px] transition-transform group-open:rotate-90"
+          className="flex h-4 w-4 shrink-0 items-center justify-center text-[0.625rem] transition-transform group-open:rotate-90"
           style={{ color: "var(--text-muted)" }}
         >
           ▶

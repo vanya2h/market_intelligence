@@ -1,7 +1,7 @@
 export function StickyFooter() {
   return (
     <footer
-      className="sticky bottom-0 z-30 flex items-center justify-between gap-4 px-3 py-2 text-[11px] md:px-4"
+      className="sticky bottom-0 z-30 flex items-center justify-between gap-4 px-3 py-2 text-[0.6875rem] md:px-4"
       style={{
         background: "var(--bg-card)",
         borderTop: "1px solid var(--border)",

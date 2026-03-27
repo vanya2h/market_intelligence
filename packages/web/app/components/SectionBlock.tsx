@@ -16,14 +16,14 @@ export function SectionBlock({
   return (
     <div className={className}>
       <div
-        className="mb-2 flex items-center gap-1 text-[10px] font-medium uppercase tracking-widest"
+        className="mb-2 flex items-center gap-1 text-[0.625rem] font-medium uppercase tracking-widest"
         style={{ color: "var(--text-muted)" }}
       >
         {title}
         {tooltip && (
           <Tooltip content={tooltip} side="right">
             <span className="inline-flex cursor-default">
-              <InfoCircledIcon width={11} height={11} />
+              <InfoCircledIcon />
             </span>
           </Tooltip>
         )}

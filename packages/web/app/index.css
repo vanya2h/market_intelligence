@@ -23,20 +23,22 @@
 }
 
 html {
+  /* 16px at 375px viewport, scales linearly to 22px at 1440px */
+  font-size: clamp(16px, 14.89px + 0.56vw, 22px);
   color-scheme: dark;
 }
 
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 0.375rem;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -54,7 +56,7 @@ body {
   position: relative;
 }
 .tab-active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -1px;
   left: 0;
@@ -66,8 +68,13 @@ body {
 
 /* Pulse animation for live indicator */
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 .live-dot {
   animation: pulse-dot 2s ease-in-out infinite;
@@ -107,6 +114,6 @@ body {
   /* Tension block: stack vertically on mobile */
   .rich-brief-container div[style*="grid-template-columns: 1fr auto 1fr"] {
     grid-template-columns: 1fr !important;
-    gap: 4px !important;
+    gap: 0.25rem !important;
   }
 }

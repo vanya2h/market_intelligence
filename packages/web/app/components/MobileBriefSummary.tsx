@@ -32,17 +32,17 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
                   style={{ borderBottom: "1px solid var(--border-subtle)" }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                    <span className="text-[0.6875rem]" style={{ color: "var(--text-secondary)" }}>
                       {TAB_LABELS[dim]}
                     </span>
-                    <span className="text-[11px] font-medium" style={{ color }}>
+                    <span className="text-[0.6875rem] font-medium" style={{ color }}>
                       {regimeLabel(bd.regime)} {arrow}
                     </span>
                   </div>
                   {sinceDate && (
                     <RelativeTime
                       date={sinceDate}
-                      className="font-mono-jb text-[9px] tabular-nums"
+                      className="font-mono-jb text-[0.5625rem] tabular-nums"
                       style={{ color: "var(--text-muted)" }}
                     />
                   )}
@@ -69,10 +69,10 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
                   className="flex items-center justify-between py-1"
                   style={{ borderBottom: "1px solid var(--border-subtle)" }}
                 >
-                  <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  <span className="text-[0.6875rem]" style={{ color: "var(--text-muted)" }}>
                     {label}
                   </span>
-                  <span className="font-mono-jb text-[11px] font-medium tabular-nums" style={{ color }}>
+                  <span className="font-mono-jb text-[0.6875rem] font-medium tabular-nums" style={{ color }}>
                     {Math.round(value)}
                   </span>
                 </div>

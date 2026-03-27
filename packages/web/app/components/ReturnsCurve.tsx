@@ -25,7 +25,7 @@ export function ReturnsCurve({
   if (returns.length < 2) {
     return (
       <div
-        className="flex h-48 items-center justify-center text-[10px] uppercase tracking-wider"
+        className="flex h-48 items-center justify-center text-[0.625rem] uppercase tracking-wider"
         style={{ color: "var(--text-muted)" }}
       >
         Awaiting price data
@@ -53,13 +53,13 @@ export function ReturnsCurve({
           <XAxis
             dataKey="hoursAfter"
             tickFormatter={formatHours}
-            tick={{ fontSize: 9, fill: "var(--text-muted)" }}
+            tick={{ fontSize: "0.5625rem", fill: "var(--text-muted)" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             tickFormatter={(v: number) => `${v.toFixed(1)}%`}
-            tick={{ fontSize: 9, fill: "var(--text-muted)" }}
+            tick={{ fontSize: "0.5625rem", fill: "var(--text-muted)" }}
             axisLine={false}
             tickLine={false}
             width={42}
@@ -70,11 +70,11 @@ export function ReturnsCurve({
               background: "var(--bg-surface)",
               border: "1px solid var(--border)",
               borderRadius: 4,
-              fontSize: 11,
+              fontSize: "0.6875rem",
               fontFamily: "JetBrains Mono, monospace",
-              padding: "6px 10px",
+              padding: "0.375rem 0.625rem",
             }}
-            labelStyle={{ color: "var(--text-muted)", fontSize: 10 }}
+            labelStyle={{ color: "var(--text-muted)", fontSize: "0.625rem" }}
             itemStyle={{ color: "var(--text-primary)" }}
             formatter={(v: number) => [`${v.toFixed(2)}%`, "Return"]}
             labelFormatter={(h: number) => formatHours(h)}
@@ -97,7 +97,7 @@ export function ReturnsCurve({
           {resolvedLevels.map((l) => (
             <span
               key={`${l.type}-${l.label}`}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium font-mono-jb"
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5625rem] font-medium font-mono-jb"
               style={{
                 background: l.outcome === "WIN" ? "var(--green-dim)" : "var(--red-dim)",
                 color: l.outcome === "WIN" ? "var(--green)" : "var(--red)",

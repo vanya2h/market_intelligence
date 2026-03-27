@@ -34,7 +34,7 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
       {entries.map(([dim, score]) => (
         <span
           key={dim}
-          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium"
+          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[0.625rem] font-medium"
           style={{
             color: scoreColor(score),
             background: scoreBg(score),
@@ -46,7 +46,7 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
         </span>
       ))}
       <span
-        className="text-[10px] font-medium font-mono-jb tabular-nums"
+        className="text-[0.625rem] font-medium font-mono-jb tabular-nums"
         style={{ color: "var(--text-muted)" }}
       >
         {aligned}/4

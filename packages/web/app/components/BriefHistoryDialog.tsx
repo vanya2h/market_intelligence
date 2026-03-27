@@ -99,13 +99,13 @@ export function BriefHistoryDialog({ currentBriefId, open, onOpenChange }: Brief
           <div className="flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex h-20 items-center justify-center">
-                <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                <span className="text-[0.6875rem]" style={{ color: "var(--text-muted)" }}>
                   Loading…
                 </span>
               </div>
             ) : briefs.length === 0 ? (
               <div className="flex h-20 items-center justify-center">
-                <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                <span className="text-[0.6875rem]" style={{ color: "var(--text-muted)" }}>
                   No briefs found
                 </span>
               </div>

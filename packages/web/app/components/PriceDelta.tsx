@@ -50,18 +50,18 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
     return (
       <div
         style={{
-          padding: "10px 14px",
+          padding: "0.625rem 0.875rem",
           background: "var(--bg-surface)",
           borderRadius: "6px",
           border: "1px solid var(--border-subtle)",
           display: "flex",
           alignItems: "center",
-          gap: "8px",
+          gap: "0.5rem",
         }}
       >
         <span
           style={{
-            fontSize: "10px",
+            fontSize: "0.625rem",
             color: "var(--text-muted)",
             textTransform: "uppercase",
             letterSpacing: "0.05em",
@@ -69,10 +69,10 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
         >
           Brief price
         </span>
-        <UsdValue value={snapshotPrice} style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }} />
+        <UsdValue value={snapshotPrice} style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--text-primary)" }} />
         <RelativeTime
           date={new Date(timestamp)}
-          style={{ fontSize: "10px", color: "var(--text-muted)" }}
+          style={{ fontSize: "0.625rem", color: "var(--text-muted)" }}
         />
       </div>
     );
@@ -88,21 +88,21 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
   return (
     <div
       style={{
-        padding: "10px 14px",
+        padding: "0.625rem 0.875rem",
         background: "var(--bg-surface)",
         borderRadius: "6px",
         border: "1px solid var(--border-subtle)",
         display: "flex",
         alignItems: "center",
-        gap: "6px",
+        gap: "0.375rem",
         flexWrap: "wrap",
       }}
     >
       {/* Snapshot price */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
         <span
           style={{
-            fontSize: "10px",
+            fontSize: "0.625rem",
             color: "var(--text-muted)",
             textTransform: "uppercase",
             letterSpacing: "0.05em",
@@ -110,14 +110,14 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
         >
           Brief
         </span>
-        <UsdValue value={snapshotPrice} style={{ fontSize: "13px", color: "var(--text-secondary)" }} />
+        <UsdValue value={snapshotPrice} style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }} />
       </div>
 
       {/* Arrow separator */}
       <span
         style={{
-          margin: "0 4px",
-          fontSize: "12px",
+          margin: "0 0.25rem",
+          fontSize: "0.75rem",
           color: "var(--text-muted)",
         }}
       >
@@ -125,10 +125,10 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
       </span>
 
       {/* Live price */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
         <span
           style={{
-            fontSize: "10px",
+            fontSize: "0.625rem",
             color: "var(--text-muted)",
             textTransform: "uppercase",
             letterSpacing: "0.05em",
@@ -136,28 +136,28 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
         >
           Now
         </span>
-        <UsdValue value={livePrice} style={{ fontSize: "13px", color: "var(--text-secondary)" }} />
+        <UsdValue value={livePrice} style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }} />
       </div>
 
       {/* Delta badge */}
       <div
         style={{
           marginLeft: "0",
-          padding: "3px 8px",
+          padding: "0.1875rem 0.5rem",
           background: deltaBg,
           borderRadius: "4px",
           display: "flex",
           alignItems: "center",
-          gap: "4px",
+          gap: "0.25rem",
         }}
       >
-        <span style={{ fontSize: "11px", color: deltaColor }}>{arrow}</span>
-        <span style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }}>{isPositive ? "+" : "-"}</span>
-        <UsdValue value={Math.abs(delta)} style={{ fontSize: "12px", fontWeight: 600, color: deltaColor }} />
+        <span style={{ fontSize: "0.6875rem", color: deltaColor }}>{arrow}</span>
+        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: deltaColor }}>{isPositive ? "+" : "-"}</span>
+        <UsdValue value={Math.abs(delta)} style={{ fontSize: "0.75rem", fontWeight: 600, color: deltaColor }} />
         <span
           className="font-mono-jb"
           style={{
-            fontSize: "11px",
+            fontSize: "0.6875rem",
             color: deltaColor,
             opacity: 0.8,
           }}
@@ -171,7 +171,7 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
       <span
         style={{
           marginLeft: "auto",
-          fontSize: "10px",
+          fontSize: "0.625rem",
           color: "var(--text-muted)",
         }}
       >

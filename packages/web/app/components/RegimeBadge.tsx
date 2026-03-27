@@ -10,7 +10,7 @@ export function RegimeBadge({ regime }: { regime: Regime }) {
       style={{ color }}
     >
       {regimeLabel(regime)}
-      <span className="text-[10px]">{arrow}</span>
+      <span className="text-[0.625rem]">{arrow}</span>
     </span>
   );
 }

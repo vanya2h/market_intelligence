@@ -22,16 +22,16 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
       {/* Header row: direction + entry + target */}
       <div className="flex items-center gap-3 flex-wrap mb-3">
         <span
-          className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold font-mono-jb"
+          className="inline-flex items-center rounded px-2 py-0.5 text-[0.6875rem] font-bold font-mono-jb"
           style={{ color: dir.color, background: dir.bg, border: `1px solid ${dir.color}33` }}
         >
           {dir.label}
         </span>
-        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+        <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
           Entry{" "}
           <UsdValue value={tradeIdea.entryPrice} style={{ color: "var(--text-primary)", fontSize: 11 }} />
         </span>
-        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+        <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
           Target{" "}
           <UsdValue value={tradeIdea.compositeTarget} style={{ color: "var(--text-primary)", fontSize: 11 }} />
         </span>
@@ -45,7 +45,7 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
       )}
 
       {/* Main content: levels + chart */}
-      <div className={compact ? "" : "grid gap-4 md:grid-cols-[220px_1fr]"}>
+      <div className={compact ? "" : "grid gap-4 md:grid-cols-[13.75rem_1fr]"}>
         <LevelStatus
           levels={tradeIdea.levels}
           entryPrice={tradeIdea.entryPrice}
@@ -60,7 +60,7 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
             }}
           >
             <div
-              className="mb-2 text-[9px] font-medium uppercase tracking-widest"
+              className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
               style={{ color: "var(--text-muted)" }}
             >
               Returns Curve

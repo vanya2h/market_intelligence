@@ -42,7 +42,7 @@ export function LevelStatus({
 
   return (
     <div
-      className="rounded-md text-[11px]"
+      className="rounded-md text-[0.6875rem]"
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border-subtle)",
@@ -69,11 +69,11 @@ export function LevelStatus({
                   color: "var(--text-primary)",
                 }}
               >
-                <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                <span className="text-[0.5625rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   Entry
                 </span>
                 <span className="grow" />
-                <UsdValue value={entryPrice} style={{ fontSize: 11 }} />
+                <UsdValue value={entryPrice} style={{ fontSize: "0.6875rem" }} />
               </div>
             )}
             <div
@@ -84,7 +84,7 @@ export function LevelStatus({
             >
               {/* Type badge */}
               <span
-                className="rounded px-1 py-px text-[8px] font-bold uppercase tracking-wider"
+                className="rounded px-1 py-px text-[0.5rem] font-bold uppercase tracking-wider"
                 style={{
                   color: typeColor(level.type),
                   background: level.type === "TARGET" ? "var(--green-dim)" : "var(--red-dim)",
@@ -102,7 +102,7 @@ export function LevelStatus({
 
               {/* Price */}
               {direction !== "FLAT" ? (
-                <UsdValue value={level.price} style={{ color: "var(--text-primary)", fontSize: 11 }} />
+                <UsdValue value={level.price} style={{ color: "var(--text-primary)", fontSize: "0.6875rem" }} />
               ) : (
                 <span className="font-mono-jb tabular-nums" style={{ color: "var(--text-primary)" }}>
                   {"\u00B1"}{level.price.toFixed(0)}
@@ -130,11 +130,11 @@ export function LevelStatus({
             color: "var(--text-primary)",
           }}
         >
-          <span className="text-[9px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          <span className="text-[0.5625rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
             Entry
           </span>
           <span className="grow" />
-          <UsdValue value={entryPrice} style={{ fontSize: 11 }} />
+          <UsdValue value={entryPrice} style={{ fontSize: "0.6875rem" }} />
         </div>
       )}
     </div>

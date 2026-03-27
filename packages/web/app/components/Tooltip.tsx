@@ -18,8 +18,8 @@ export function Tooltip({ children, content, side = "top", delayDuration = 200 }
             sideOffset={6}
             className="tooltip-content"
             style={{
-              padding: "6px 10px",
-              fontSize: "11px",
+              padding: "0.375rem 0.625rem",
+              fontSize: "0.6875rem",
               lineHeight: 1.4,
               color: "var(--text-primary)",
               background: "var(--bg-surface)",

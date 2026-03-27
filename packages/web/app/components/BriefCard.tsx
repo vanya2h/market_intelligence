@@ -21,7 +21,7 @@ function ComponentBar({ label, value }: { label: string; value: number | null })
   return (
     <div className="flex items-center gap-3">
       <span
-        className="w-24 shrink-0 text-[11px]"
+        className="w-24 shrink-0 text-[0.6875rem]"
         style={{ color: "var(--text-muted)" }}
       >
         {label}
@@ -36,7 +36,7 @@ function ComponentBar({ label, value }: { label: string; value: number | null })
         />
       </div>
       <span
-        className="font-mono-jb w-6 text-right text-[11px] tabular-nums"
+        className="font-mono-jb w-6 text-right text-[0.6875rem] tabular-nums"
         style={{ color }}
       >
         {Math.round(value)}
@@ -60,10 +60,10 @@ function renderBriefText(text: string) {
       return (
         <li
           key={i}
-          className="ml-3 text-[13px] leading-relaxed"
+          className="ml-3 text-[0.8125rem] leading-relaxed"
           style={{ color: "var(--text-secondary)", listStyleType: "none" }}
           dangerouslySetInnerHTML={{
-            __html: `<span style="color: var(--text-muted); margin-right: 6px">&#8250;</span>${rendered.replace(/^-\s*/, "")}`,
+            __html: `<span style="color: var(--text-muted); margin-right: 0.375rem">&#8250;</span>${rendered.replace(/^-\s*/, "")}`,
           }}
         />
       );
@@ -72,7 +72,7 @@ function renderBriefText(text: string) {
     return (
       <p
         key={i}
-        className="text-[13px] leading-relaxed"
+        className="text-[0.8125rem] leading-relaxed"
         style={{ color: "var(--text-secondary)" }}
         dangerouslySetInnerHTML={{ __html: rendered }}
       />
@@ -99,12 +99,12 @@ export function BriefCard({
     <div>
       <div className="mb-4 flex items-center gap-3">
         <span
-          className="text-[10px] font-medium uppercase tracking-widest"
+          className="text-[0.625rem] font-medium uppercase tracking-widest"
           style={{ color: "var(--text-muted)" }}
         >
           Market Brief
         </span>
-        <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+        <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
           {asset} &middot; Generated{" "}
           <RelativeTime date={new Date(timestamp)} />
         </span>
@@ -124,7 +124,7 @@ export function BriefCard({
           }}
         >
           <div
-            className="text-[9px] font-medium uppercase tracking-widest"
+            className="text-[0.5625rem] font-medium uppercase tracking-widest"
             style={{ color: "var(--text-muted)" }}
           >
             Fear &amp; Greed Components

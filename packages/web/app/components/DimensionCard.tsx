@@ -84,7 +84,7 @@ export function DimensionCard({
   return (
     <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+        <span className="text-[0.625rem] font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
           {config.label}
         </span>
         <RegimeBadge regime={regime} />
@@ -96,7 +96,7 @@ export function DimensionCard({
           {events.map((evt, i) => (
             <span
               key={`${evt.type}-${i}`}
-              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium"
+              className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[0.625rem] font-medium"
               style={{
                 color: eventColor(evt.type),
                 background: "var(--bg-hover)",

@@ -17,7 +17,7 @@ export function MiniChart({
   if (data.length < 2) {
     return (
       <div
-        className="flex h-20 items-center justify-center text-[10px] uppercase tracking-wider"
+        className="flex h-20 items-center justify-center text-[0.625rem] uppercase tracking-wider"
         style={{ color: "var(--text-muted)" }}
       >
         Insufficient data
@@ -41,11 +41,11 @@ export function MiniChart({
               background: "var(--bg-surface)",
               border: "1px solid var(--border)",
               borderRadius: 4,
-              fontSize: 11,
+              fontSize: "0.6875rem",
               fontFamily: "JetBrains Mono, monospace",
-              padding: "6px 10px",
+              padding: "0.375rem 0.625rem",
             }}
-            labelStyle={{ color: "var(--text-muted)", fontSize: 10 }}
+            labelStyle={{ color: "var(--text-muted)", fontSize: "0.625rem" }}
             itemStyle={{ color: "var(--text-primary)" }}
             formatter={(v: number) => [v.toFixed(4), label]}
             labelFormatter={(l: string) =>

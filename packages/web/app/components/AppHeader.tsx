@@ -12,10 +12,10 @@ function LiveClock() {
     return () => clearInterval(id);
   }, []);
 
-  if (!now) return <span className="font-mono-jb text-[11px] tabular-nums">&nbsp;</span>;
+  if (!now) return <span className="font-mono-jb text-[0.6875rem] tabular-nums">&nbsp;</span>;
 
   return (
-    <span className="font-mono-jb text-[11px] tabular-nums">
+    <span className="font-mono-jb text-[0.6875rem] tabular-nums">
       {now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
     </span>
   );
@@ -70,7 +70,7 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
 
           <div className="flex items-center gap-1.5">
             <div className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--green)" }} />
-            <span className="text-[11px] font-medium font-mono-jb" style={{ color: "var(--green)" }}>
+            <span className="text-[0.6875rem] font-medium font-mono-jb" style={{ color: "var(--green)" }}>
               LIVE
             </span>
           </div>

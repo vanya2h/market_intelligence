@@ -30,7 +30,7 @@ export function SentimentGauge({ value, label }: { value: number; label: string 
         {[0, 25, 50, 75, 100].map((tick) => (
           <span
             key={tick}
-            className="font-mono-jb text-[9px] tabular-nums"
+            className="font-mono-jb text-[0.5625rem] tabular-nums"
             style={{ color: "var(--text-muted)" }}
           >
             {tick}

@@ -127,7 +127,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
           <SentimentGauge value={compositeIndex} label={compositeLabel} />
           <Link
             to="/faq"
-            className="mt-2 inline-flex items-center gap-1 text-[12px] transition-colors"
+            className="mt-2 inline-flex items-center gap-1 text-[0.75rem] transition-colors"
             style={{ color: "var(--text-muted)" }}
             onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
             onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
@@ -161,21 +161,21 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
                       className="inline-flex cursor-default items-center gap-1 text-xs font-medium"
                       style={{ color }}
                     >
-                      <InfoCircledIcon width={11} height={11} style={{ color: "var(--text-muted)" }} />
+                      <InfoCircledIcon style={{ color: "var(--text-muted)" }} />
                       {regimeLabel(bd.regime)} {arrow}
                     </span>
                   </Tooltip>
                 </div>
                 <div className="flex items-center justify-between">
                   {bd.previousRegime && bd.previousRegime !== bd.regime ? (
-                    <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
                       was {regimeLabel(bd.previousRegime!)}
                     </span>
                   ) : (
                     <span />
                   )}
                   {sinceDate && (
-                    <span className="font-mono-jb text-[10px] tabular-nums" style={{ color: "var(--text-muted)" }}>
+                    <span className="font-mono-jb text-[0.625rem] tabular-nums" style={{ color: "var(--text-muted)" }}>
                       changed <RelativeTime date={sinceDate} />
                     </span>
                   )}
@@ -183,11 +183,11 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
                 {dim === "DERIVATIVES" && bd.stress && bd.stress !== "STRESS_NONE" && (
                   <Tooltip content={STRESS_DESCRIPTIONS[bd.stress] ?? bd.stress} side="right">
                     <span
-                      className="mt-0.5 inline-flex cursor-default items-center gap-1 self-start rounded px-1.5 py-0.5 text-[10px] font-medium"
+                      className="mt-0.5 inline-flex cursor-default items-center gap-1 self-start rounded px-1.5 py-0.5 text-[0.625rem] font-medium"
                       style={{ color: stressColor(bd.stress), background: "var(--bg-hover)" }}
                     >
                       STRESS: {bd.stress}
-                      <InfoCircledIcon width={10} height={10} style={{ color: "var(--text-muted)" }} />
+                      <InfoCircledIcon style={{ color: "var(--text-muted)" }} />
                     </span>
                   </Tooltip>
                 )}
@@ -251,7 +251,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
                     style={{ color: "var(--text-muted)" }}
                   >
                     {label}
-                    <InfoCircledIcon width={11} height={11} />
+                    <InfoCircledIcon />
                   </span>
                 </Tooltip>
                 <span className="font-mono-jb text-xs font-medium tabular-nums" style={{ color }}>
