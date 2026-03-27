@@ -161,13 +161,9 @@ function printBrief(ctx: HtfContext, interpretation: string): void {
   console.log(`\n${sep}\n`);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  const asset = process.argv.includes("--asset")
-    ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
-    : "BTC";
-
+export async function runHtf(asset: "BTC" | "ETH"): Promise<void> {
   step(1, 4, `Collecting HTF candles (${asset})...`);
   const snapshot = await collect(asset);
 
@@ -196,8 +192,3 @@ async function main(): Promise<void> {
 
   printBrief(context, interpretation);
 }
-
-main().catch((err) => {
-  console.error(chalk.red.bold("Fatal error:"), err);
-  process.exit(1);
-});

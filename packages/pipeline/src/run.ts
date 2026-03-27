@@ -157,11 +157,9 @@ function printBrief(ctx: DerivativesContext, interpretation: string): void {
   console.log(`\n${sep}\n`);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  const asset = (process.argv.find((a) => a === "ETH") ? "ETH" : "BTC") as "BTC" | "ETH";
-
+export async function runDerivatives(asset: "BTC" | "ETH"): Promise<void> {
   step(1, 5, `Collecting ${asset} snapshot...`);
   const snapshot = await collect(asset);
 
@@ -192,8 +190,3 @@ async function main(): Promise<void> {
 
   printBrief(context, interpretation);
 }
-
-main().catch((err) => {
-  console.error(chalk.red.bold("Fatal error:"), err);
-  process.exit(1);
-});

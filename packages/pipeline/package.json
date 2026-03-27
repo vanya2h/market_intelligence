@@ -8,12 +8,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "derivatives": "tsx src/run.ts",
-    "etfs": "tsx src/etfs/run.ts",
-    "htf": "tsx src/htf/run.ts",
-    "sentiment": "tsx src/sentiment/run.ts",
-    "brief": "tsx src/orchestrator/run.ts",
-    "notify": "tsx src/orchestrator/notify.ts",
+    "derivatives": "tsx src/run.bin.ts",
+    "etfs": "tsx src/etfs/run.bin.ts",
+    "htf": "tsx src/htf/run.bin.ts",
+    "sentiment": "tsx src/sentiment/run.bin.ts",
+    "brief": "tsx src/orchestrator/run.bin.ts",
+    "notify": "tsx src/orchestrator/notify.bin.ts",
     "schedule": "tsx src/orchestrator/scheduler.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

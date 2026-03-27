@@ -10,10 +10,6 @@
  *   TELEGRAM_BOT_TOKEN  — from @BotFather
  *   TELEGRAM_CHAT_ID    — channel or chat ID (e.g. @yourchannel)
  *   WEB_APP_URL         — base URL of the web app (e.g. https://app.example.com)
- *
- * Usage:
- *   pnpm notify
- *   pnpm notify --asset ETH
  */
 
 import "../env.js";
@@ -121,18 +117,3 @@ export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
     console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent to Telegram`);
   }
 }
-
-// ─── CLI entry point ─────────────────────────────────────────────────────────
-
-async function main(): Promise<void> {
-  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
-    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
-    : ["BTC", "ETH"];
-
-  await runNotify(assets);
-}
-
-main().catch((err) => {
-  console.error(chalk.red.bold("Fatal error:"), err);
-  process.exit(1);
-});

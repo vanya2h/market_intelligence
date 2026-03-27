@@ -146,13 +146,9 @@ function printBrief(ctx: EtfContext, interpretation: string, latestDay: string):
   console.log(`\n${sep}\n`);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  const asset = process.argv.includes("--asset")
-    ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
-    : "BTC";
-
+export async function runEtfs(asset: "BTC" | "ETH"): Promise<void> {
   step(1, 4, `Collecting ETF data (${asset})...`);
   const snapshot = await collect(asset);
   const latestDay = snapshot.flowHistory
@@ -187,8 +183,3 @@ async function main(): Promise<void> {
 
   printBrief(context, interpretation, latestDay);
 }
-
-main().catch((err) => {
-  console.error(chalk.red.bold("Fatal error:"), err);
-  process.exit(1);
-});

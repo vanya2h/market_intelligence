@@ -110,13 +110,9 @@ function printBrief(asset: string, outputs: DimensionOutput[], brief: string): v
   console.log(`\n${sep}\n`);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
-    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
-    : ["BTC", "ETH"];
-
+export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
   for (const asset of assets) {
     const totalSteps = 3;
 
@@ -141,8 +137,3 @@ async function main(): Promise<void> {
     printBrief(asset, outputs, brief);
   }
 }
-
-main().catch((err) => {
-  console.error(chalk.red.bold("Fatal error:"), err);
-  process.exit(1);
-});
