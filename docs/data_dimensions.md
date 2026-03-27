@@ -242,7 +242,7 @@ Captures what's happening to positioning. Evaluated in strict priority order:
 
 ## 06 — Market Sentiment (Composite Fear & Greed) ✅
 
-**What it watches:** Composite Fear & Greed index computed from six active components — derivatives positioning (Dim 01), institutional flows (Dim 03), exchange flows (Dim 04), HTF trend (Dim 07), momentum divergence (Dim 07), and volatility compression (Dim 07). Expert consensus (unbias API) is integrated but currently disabled while collecting delta-based data (~re-enable 2026-04-02).
+**What it watches:** Composite Fear & Greed index computed from five active components — derivatives positioning (Dim 01, 37.5%), institutional flows (Dim 03, 20%), exchange flows (Dim 04, 17.5%), HTF trend (Dim 07, 15%), and momentum divergence (Dim 07, 10%). Expert consensus (unbias API) is integrated but currently disabled while collecting delta-based data (~re-enable 2026-04-02). ATR volatility compression is excluded from the composite (it measures trade setup potential, not sentiment) but remains available as contextual data for the LLM synthesizer.
 
 **Why it matters:** Traditional Fear & Greed indices (Alternative.me, CNN) use opaque methodology and produce unreliable readings — during testing, Alternative.me showed 14 (Extreme Fear) while actual market conditions (derivatives, trend, expert consensus) all indicated neutral-to-mild-greed territory. Our composite uses crypto-native inputs we control and understand.
 

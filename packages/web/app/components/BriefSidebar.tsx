@@ -121,7 +121,6 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
     exchangeFlows,
     expertConsensus,
     momentumDivergence,
-    volatility,
   } = brief;
   return (
     <aside
@@ -136,7 +135,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
         <SectionBlock
           title="Composite Fear & Greed Index"
           className="mb-6"
-          tooltip="Proprietary Fear & Greed index (0–100) built from six crypto-native inputs: derivatives positioning (35%), institutional flows (20%), exchange flows (15%), HTF trend (15%), momentum divergence (10%), volatility (5%). Avoids Alternative.me's opaque methodology."
+          tooltip="Proprietary Fear & Greed index (0–100) built from five crypto-native inputs: derivatives positioning (37.5%), institutional flows (20%), exchange flows (17.5%), HTF trend (15%), momentum divergence (10%). Avoids Alternative.me's opaque methodology."
         >
           <SentimentGauge value={compositeIndex} label={compositeLabel} />
           <Link
@@ -249,12 +248,6 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
               value: momentumDivergence,
               tooltip:
                 "Momentum divergence score (0–100). Derived from price-RSI divergence and CVD divergence signals. High = bullish divergence building.",
-            },
-            {
-              label: "Volatility",
-              value: volatility,
-              tooltip:
-                "Volatility score (0–100). Derived from ATR compression/expansion relative to 30d mean. Low = compressed (breakout brewing). High = expanded (trend in motion).",
             },
           ].map(({ label, value, tooltip }) => {
             if (value == null) return null;

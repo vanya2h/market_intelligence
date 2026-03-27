@@ -1,16 +1,21 @@
 /**
  * Market Sentiment — Deterministic Analyzer (Dimension 06)
  *
- * Computes a composite Fear & Greed index (0–100) from three active components
+ * Computes a composite Fear & Greed index (0–100) from five active components
  * (expert consensus temporarily disabled while collecting delta-based data):
  *
- *   Component           | Weight | Source
+ *   Component             | Weight | Source
  *   ─────────────────────────────────────────────────
- *   Positioning          40%      Dim 01 (derivatives: funding, OI,
- *                                   coinbase premium, bias-adjusted liqs)
- *   Trend                30%      Dim 07 (HTF technicals)
- *   Institutional flows  30%      Dim 03 (ETF flows)
- *   Expert consensus      0%      unbias API 7d delta (collecting data, re-enable ~2026-04-02)
+ *   Positioning            37.5%    Dim 01 (derivatives: funding, OI,
+ *                                     coinbase premium, bias-adjusted liqs)
+ *   Institutional flows    20%      Dim 03 (ETF flows)
+ *   Exchange flows         17.5%    Dim 08 (on-chain reserve changes)
+ *   Trend                  15%      Dim 07 (HTF technicals)
+ *   Momentum divergence    10%      Dim 07 (price-RSI + CVD divergence)
+ *   Expert consensus        0%      unbias API 7d delta (collecting data, re-enable ~2026-04-02)
+ *
+ * Volatility (ATR compression) removed from composite — it measures trade setup
+ * potential, not sentiment. ATR data still flows through for the LLM synthesizer.
  *
  * Regime is determined from the composite score, with divergence overrides.
  */
@@ -139,33 +144,6 @@ function scoreMomentumDivergence(h: CrossDimensionInputs["htf"]): number {
 }
 
 /**
- * Volatility score — reversals often follow compression.
- *
- * Uses ATR ratio (current ATR / 30d mean ATR):
- *   ratio < 0.7 → compressed → high reversal potential (score toward extremes)
- *   ratio > 1.3 → expanded → trend continuation likely (score toward 50)
- *
- * Direction comes from price position: compressed below SMAs = fearful,
- * compressed above SMAs = greedy (both signal potential reversal energy).
- */
-function scoreVolatility(h: CrossDimensionInputs["htf"]): number {
-  if (!h || h.atrRatio === 0) return 50;
-
-  // Compression score: how much is volatility compressed vs normal
-  // ratio 0.5 → 100% compressed, ratio 1.0 → 0% compressed, ratio 1.5 → -50% (expanded)
-  const compression = clamp((1 - h.atrRatio) * 100 + 50);
-
-  // Direction: compressed + above SMAs = greedy energy, compressed + below = fearful energy
-  if (h.priceVsSma200Pct > 0) {
-    // Above 200 SMA: compression = building bullish energy
-    return clamp(50 + (compression - 50) * 0.6);
-  } else {
-    // Below 200 SMA: compression = building bearish energy (or capitulation bottom)
-    return clamp(50 - (compression - 50) * 0.6);
-  }
-}
-
-/**
  * Institutional flows score from ETF data.
  * Sustained inflows = greedy. Sustained outflows = fearful.
  */
@@ -261,19 +239,15 @@ function scoreExchangeFlows(ef: CrossDimensionInputs["exchangeFlows"]): number {
 
 // ─── Composite F&G ───────────────────────────────────────────────────────────
 
-// Weights rebalanced with exchange flows integration:
-// - Positioning reduced 40% → 35% (slight trim)
-// - Institutional flows reduced 30% → 20% (exchange flows captures broader flow signal)
-// - Exchange flows added at 15% (on-chain supply pressure)
-// - Trend, momentum divergence, volatility unchanged
+// Weights rebalanced after removing volatility (ATR compression) from composite:
+// - Volatility's 5% redistributed: +2.5% to positioning, +2.5% to exchange flows
 // Expert consensus temporarily excluded while we collect delta-based data (re-enable ~2026-04-02)
 const WEIGHTS = {
-  positioning: 0.35,
+  positioning: 0.375,
   trend: 0.15,
   momentumDivergence: 0.10,
-  volatility: 0.05,
   institutionalFlows: 0.20,
-  exchangeFlows: 0.15,
+  exchangeFlows: 0.175,
   expertConsensus: 0,
 };
 
@@ -282,7 +256,6 @@ function computeComposite(components: FearGreedComponents): number {
     components.positioning * WEIGHTS.positioning +
     components.trend * WEIGHTS.trend +
     components.momentumDivergence * WEIGHTS.momentumDivergence +
-    components.volatility * WEIGHTS.volatility +
     components.institutionalFlows * WEIGHTS.institutionalFlows +
     components.exchangeFlows * WEIGHTS.exchangeFlows +
     components.expertConsensus * WEIGHTS.expertConsensus;
@@ -317,7 +290,6 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
     positioning: scorePositioning(cd.derivatives),
     trend: scoreTrend(cd.htf),
     momentumDivergence: scoreMomentumDivergence(cd.htf),
-    volatility: scoreVolatility(cd.htf),
     institutionalFlows: scoreInstitutionalFlows(cd.etfs),
     exchangeFlows: scoreExchangeFlows(cd.exchangeFlows),
     expertConsensus: expert.score,

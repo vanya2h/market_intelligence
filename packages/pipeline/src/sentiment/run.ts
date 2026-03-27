@@ -117,11 +117,10 @@ function printBrief(ctx: SentimentContext, interpretation: string): void {
   console.log(`\n  ${chalk.dim("── Components ───────────────────────────────────")}`);
   const c = m.components;
   const pad = (s: string) => s.padEnd(16);
-  console.log(`  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(40%)")}`);
+  console.log(`  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(37.5%)")}`);
   console.log(`  ${chalk.dim(pad("Trend"))} ${componentBar(c.trend)} ${chalk.white(c.trend.toFixed(0).padStart(3))}  ${chalk.dim("(15%)")}`);
   console.log(`  ${chalk.dim(pad("Mom. Diverg."))} ${componentBar(c.momentumDivergence)} ${chalk.white(c.momentumDivergence.toFixed(0).padStart(3))}  ${chalk.dim("(10%)")}`);
-  console.log(`  ${chalk.dim(pad("Volatility"))} ${componentBar(c.volatility)} ${chalk.white(c.volatility.toFixed(0).padStart(3))}  ${chalk.dim("(5%)")}`);
-  console.log(`  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(30%)")}`);
+  console.log(`  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(20%)")}`);
   // Expert consensus excluded while collecting more data
   // console.log(`  ${chalk.dim(pad("Expert Consns"))} ${componentBar(c.expertConsensus)} ${chalk.white(c.expertConsensus.toFixed(0).padStart(3))}  ${chalk.dim("(25%)")}`);
 

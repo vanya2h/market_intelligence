@@ -325,12 +325,6 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           value: safe(() => formatNumber(get(ctx, "metrics.components.momentumDivergence") as number, 0)),
           signal: numSignal(get(ctx, "metrics.components.momentumDivergence") as number, 60, 40),
         },
-        {
-          label: "Volatility",
-          group: "Components",
-          value: safe(() => formatNumber(get(ctx, "metrics.components.volatility") as number, 0)),
-          signal: numSignal(get(ctx, "metrics.components.volatility") as number, 60, 40),
-        },
         // {
         //   label: "Consensus Index",
         //   group: "Unbias Consensus",

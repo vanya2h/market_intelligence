@@ -18,25 +18,16 @@ function contextCacheKey(ctx: SentimentContext): string {
     regime: ctx.regime,
     previousRegime: ctx.previousRegime,
     // Bucket to avoid cache misses on small changes
-    compositeBucket: Math.round(ctx.metrics.compositeIndex / 5) * 5,   // 5-point buckets
+    compositeBucket: Math.round(ctx.metrics.compositeIndex / 5) * 5, // 5-point buckets
     // Expert consensus excluded while collecting more data — re-enable later
     // consensusBucket: Math.round(ctx.metrics.consensusIndex / 5) * 5,  // 5-point buckets
     // zScoreBucket: Math.round(ctx.metrics.zScore * 4) / 4,            // 0.25 buckets
     // divergence: ctx.metrics.divergence,
     // divergenceType: ctx.metrics.divergenceType,
-    volatilityBucket: Math.round(ctx.metrics.components.volatility / 5) * 5,
-    // Expert consensus excluded while collecting more data — re-enable later
-    // consensusBucket: Math.round(ctx.metrics.consensusIndex / 5) * 5,  // 5-point buckets
-    // zScoreBucket: Math.round(ctx.metrics.zScore * 4) / 4,            // 0.25 buckets
-    // divergence: ctx.metrics.divergence,
-    // divergenceType: ctx.metrics.divergenceType,
+
     events: ctx.events.map((e) => e.type).sort(),
   };
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(fingerprint))
-    .digest("hex")
-    .slice(0, 12);
+  const hash = crypto.createHash("sha256").update(JSON.stringify(fingerprint)).digest("hex").slice(0, 12);
   return `agent-sentiment-${ctx.asset.toLowerCase()}-${hash}`;
 }
 
@@ -53,11 +44,11 @@ async function callClaude(ctx: SentimentContext): Promise<string> {
   // Be direct and specific — cite the composite score, component scores, and z-score. Do not hedge or pad.`;
 
   const res = await callLlm({
-    system: `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, momentum divergence, volatility compression, and ETF flows). Write a concise 2-4 sentence interpretation for a market brief.
+    system: `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, momentum divergence, institutional ETF flows, and on-chain exchange flows). Write a concise 2-4 sentence interpretation for a market brief.
 
 Focus on:
 - The composite F&G score and what the component breakdown reveals
-- Which components are driving the score — positioning, trend, momentum, volatility, or flows
+- Which components are driving the score — positioning, trend, momentum, or flows
 - Whether any component is diverging sharply from the others (internal divergence)
 - Contrarian implications at extremes
 

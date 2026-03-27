@@ -181,19 +181,16 @@ async function main() {
     console.log(`  ⚠ HTF data unavailable — using neutral (50)`);
   }
 
-  // ─── Volatility (5%) ───
-  console.log("\n─── Volatility (5%) ──────────────────────────────");
-  console.log(`  Score: ${bar(m.components.volatility)}`);
+  // ─── ATR Volatility (informational — not in composite) ───
+  console.log("\n─── ATR Volatility (not in composite) ────────────");
   if (cd.htf) {
     const h = cd.htf;
-    console.log(`  Inputs:`);
     console.log(`    ATR-14 (4h)           : ${h.atr}`);
-    console.log(`    ATR ratio             : ${h.atrRatio}  ⚠ cross-TF bug (4h/daily)`);
-    console.log(`    Price vs SMA-200      : ${h.priceVsSma200Pct.toFixed(2)}%`);
+    console.log(`    ATR ratio             : ${h.atrRatio}`);
     const compression = clamp((1 - h.atrRatio) * 100 + 50);
     console.log(`    Compression           : ${compression.toFixed(1)}`);
   } else {
-    console.log(`  ⚠ HTF data unavailable — using neutral (50)`);
+    console.log(`  ⚠ HTF data unavailable`);
   }
 
   // ─── Expert Consensus (0% — disabled) ───
@@ -215,19 +212,19 @@ async function main() {
   // ─── Weighted contribution table ───
   console.log("\n─── Weighted contributions ───────────────────────");
   const weights = {
-    positioning: 0.40,
-    institutionalFlows: 0.30,
+    positioning: 0.375,
+    institutionalFlows: 0.20,
+    exchangeFlows: 0.175,
     trend: 0.15,
     momentumDivergence: 0.10,
-    volatility: 0.05,
     expertConsensus: 0,
   };
   const components = [
     ["Positioning", m.components.positioning, weights.positioning],
     ["Inst. Flows", m.components.institutionalFlows, weights.institutionalFlows],
+    ["Exch. Flows", m.components.exchangeFlows, weights.exchangeFlows],
     ["Trend", m.components.trend, weights.trend],
     ["Mom. Divergence", m.components.momentumDivergence, weights.momentumDivergence],
-    ["Volatility", m.components.volatility, weights.volatility],
     ["Expert Consensus", m.components.expertConsensus, weights.expertConsensus],
   ] as const;
 

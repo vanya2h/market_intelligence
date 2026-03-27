@@ -74,7 +74,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "What components make up the composite score?",
-        a: "Seven components, each scored 0–100 independently, combined with fixed weights: Positioning (35%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (20%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Exchange Flows (15%) from on-chain data — coins moving on/off exchanges, reserve trends, and 30-day extremes. Trend (15%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence (10%) from HTF technicals — price-RSI disagreement amplified by CVD divergence. Volatility (5%) from HTF technicals — ATR compression/expansion ratio. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data.",
+        a: "Five active components, each scored 0–100 independently, combined with fixed weights: Positioning (37.5%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (20%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Exchange Flows (17.5%) from on-chain data — coins moving on/off exchanges, reserve trends, and 30-day extremes. Trend (15%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence (10%) from HTF technicals — price-RSI disagreement amplified by CVD divergence. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data. ATR volatility compression is not part of the composite score but is available to the LLM synthesizer as a contextual trade-setup signal.",
       },
       {
         q: "When is a reading of 45 vs 55 meaningful?",
@@ -132,11 +132,11 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "Why is this system optimized for swing trading specifically?",
-        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 35% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Institutional and exchange flows together get 35% because capital flow direction (both on-chain and via ETFs) is a strong leading indicator. Trend only gets 15% because trend-following signals lag at reversal points. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
+        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 37.5% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Institutional and exchange flows together get 37.5% because capital flow direction (both on-chain and via ETFs) is a strong leading indicator. Trend only gets 15% because trend-following signals lag at reversal points. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
       },
       {
-        q: "Why does Positioning get 40% while Trend only gets 15%?",
-        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Exchange Flows (15%) captures on-chain supply pressure — a distinct signal from ETF-based institutional flows. Momentum Divergence (10%) is added specifically because it's reversal-predictive.",
+        q: "Why does Positioning get 37.5% while Trend only gets 15%?",
+        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Exchange Flows (17.5%) captures on-chain supply pressure — a distinct signal from ETF-based institutional flows. Momentum Divergence (10%) is added specifically because it's reversal-predictive.",
       },
       {
         q: "What is the two-dimensional derivatives model?",

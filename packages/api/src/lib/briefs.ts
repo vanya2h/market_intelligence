@@ -50,7 +50,6 @@ export type Brief = {
   exchangeFlows: number | null;
   expertConsensus: number | null;
   momentumDivergence: number | null;
-  volatility: number | null;
   timestamp: Date;
   dimensions: BriefDimension[];
 };
@@ -143,7 +142,6 @@ export function parseBrief(raw: Jsonify<BriefRaw>): Brief {
     exchangeFlows: sentimentComponent(raw.sentiment, "exchangeFlows"),
     expertConsensus: raw.sentiment?.expertConsensus ?? null,
     momentumDivergence: sentimentComponent(raw.sentiment, "momentumDivergence"),
-    volatility: sentimentComponent(raw.sentiment, "volatility"),
     timestamp: new Date(raw.timestamp),
     dimensions: dimensions,
   };
