@@ -5,7 +5,7 @@
  * that need historical candles without the HTF collector's caching layer.
  */
 
-import { $Enums } from "../generated/prisma/client.js";
+import type { $Enums } from "../generated/prisma/client.js";
 import type { Candle } from "../htf/types.js";
 
 const BINANCE_SPOT = "https://api.binance.com";
