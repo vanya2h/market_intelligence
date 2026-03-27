@@ -1,5 +1,28 @@
 # Data Dimensions
 
+## Implementation Status
+
+| Dimension | Name | Status |
+|-----------|------|--------|
+| 01 | Derivatives Structure | **Implemented** |
+| 02 | Options & Implied Volatility | Planned |
+| 03 | Institutional Flows (ETFs) | **Implemented** |
+| 04 | Exchange Flows & Liquidity | Planned |
+| 05 | Whale Activity | Planned |
+| 06 | Market Sentiment (Composite F&G) | **Implemented** (expert consensus disabled until ~2026-04-02) |
+| 07 | HTF Technical Structure | **Implemented** |
+| 08 | LTF Technical Structure | Planned |
+| 09 | Macro Environment | Planned |
+| 10 | Geopolitics & News | Planned |
+| 11 | Cross-Market Correlations | Planned |
+| 12 | Prediction Markets | Planned |
+| 13 | Stablecoin Flows | Planned |
+| 14 | DeFi Activity | Planned |
+| 15 | Token Unlocks & Supply Events | Planned |
+| 16 | BTC Mining Activity | Planned |
+| 17 | ETH Staking & Network Activity | Planned |
+| 18 | Equities Market Structure | Planned |
+
 ## Assets
 
 This system covers **BTC** and **ETH**. Each asset gets its own pipeline run — all dimensions are evaluated per-asset.
@@ -18,120 +41,88 @@ Each dimension is an independent analytical lens on the market. Every dimension 
 
 - A **collector** that fetches raw data from APIs
 - A **deterministic analyzer** that applies threshold rules and labels regimes
-- An **LLM agent** that interprets what the data means in context
+- An **LLM agent** (Claude 3.5 Sonnet, cached 24h by content-hash fingerprint) that interprets what the data means in context
+
+## Pipeline Execution
+
+The orchestrator runs all 4 implemented dimensions in parallel per asset:
+
+```
+Collector (fetch raw data)
+    ↓
+Analyzer (compute metrics, classify regime)
+    ↓
+Agent (Claude — cached 24h)
+    ↓
+Store state (JSON + DB)
+```
+
+State is persisted to both JSON files (`data/{dimension}_state.json`, keyed by asset) and PostgreSQL via Prisma.
 
 ## Data Structure Model
 
-### Two-tier collection
-
-| Tier       | Frequency       | Dimensions                                                               | Why                                             |
-| ---------- | --------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
-| Continuous | 1h              | Derivatives (01), Options (02), Exchange flows (04), LTF technicals (08) | Intraday context needed for meaningful analysis |
-| Periodic   | 3x/day or daily | All others                                                               | Data itself changes slowly or is event-driven   |
-| Historical | Daily (batch)   | Derivatives (01), Whale activity (05)                                    | Hydromancer Reservoir — wallet-level Hyperliquid data via S3 parquet, enriches real-time sources |
-
 ### State machine + multi-timeframe context
 
-High-frequency dimensions (especially derivatives) use a **state machine** model instead of raw time-series. The deterministic analyzer maintains a current regime state and logs transitions:
+Dimensions use a **state machine** model instead of raw time-series. The deterministic analyzer maintains a current regime state and logs transitions.
 
-**Regime states** (derivatives example):
+Multi-timeframe context (percentiles over 1m/3m windows) lets the agent judge _scale_ — "funding at 0.045 feels high but is only 61st percentile over 3 months" — without needing raw historical data in the prompt.
 
-```
-NEUTRAL → HEATING_UP → CROWDED_LONG → UNWINDING → CAPITULATION → NEUTRAL
-                     → CROWDED_SHORT → SHORT_SQUEEZE →
-```
-
-**What the LLM agent receives** (computed entirely in code):
-
-```typescript
-{
-  // Current regime from state machine
-  regime: "CROWDED_LONG",
-  since: "2026-03-15T17:00Z",
-  duration: "35h",
-  previousRegime: "HEATING_UP",
-
-  // Multi-timeframe highs/lows for each metric
-  funding: {
-    current: 0.045,
-    highs: { "1w": 0.052, "1m": 0.078, "3m": 0.12, "6m": 0.15, "1y": 0.23 },
-    lows:  { "1w": 0.008, "1m": -0.03, "3m": -0.08, "6m": -0.12, "1y": -0.15 },
-    percentile: { "1m": 82, "3m": 61, "1y": 45 },
-  },
-  openInterest: {
-    current: 18.2e9,
-    highs: { "1w": 18.5e9, "1m": 19.1e9, "3m": 22.4e9, "6m": 22.4e9, "1y": 24.1e9 },
-    lows:  { "1w": 17.1e9, "1m": 15.8e9, "3m": 12.3e9, "6m": 10.1e9, "1y": 8.2e9 },
-    percentile: { "1m": 74, "3m": 52, "1y": 38 },
-  },
-  liquidations: {
-    current8h: 47e6,
-    bias: "75% long",
-    highs: { "1w": 120e6, "1m": 340e6, "3m": 890e6, "6m": 1.2e9, "1y": 2.1e9 },
-    percentile: { "1m": 15, "3m": 8, "1y": 4 },
-  },
-  longShortRatio: {
-    current: 2.1,
-    highs: { "1w": 2.3, "1m": 2.8, "3m": 3.1, "6m": 3.5, "1y": 4.2 },
-    lows:  { "1w": 1.4, "1m": 0.7, "3m": 0.5, "6m": 0.4, "1y": 0.3 },
-    percentile: { "1m": 71, "3m": 55, "1y": 42 },
-  },
-
-  // Notable events since last brief
-  events: [
-    { type: "oi_spike", change: "+3.2%", window: "1h", at: "14:00" },
-    { type: "funding_flip", direction: "negative_to_positive", at: "08:00" }
-  ]
-}
-```
-
-The multi-timeframe context (week/month/3m/6m/9m/year highs and lows + percentiles) lets the agent judge _scale_ — "funding at 0.045 feels high but is only 61st percentile over 3 months" — without needing raw historical data in the prompt.
-
-Longer timeframe windows (3m+) can be seeded from CoinGlass historical endpoints and updated incrementally. Shorter windows (1w, 1m) are computed from hourly collection.
+Timeframe windows are computed from CoinGlass historical endpoints (30d–90d resolution) and updated incrementally.
 
 ---
 
-## 01 — Derivatives Structure
+## 01 — Derivatives Structure ✅
 
-**What it watches:** Funding rates, open interest, liquidations, long/short ratio, taker buy/sell volume
+**What it watches:** Funding rates, open interest, liquidations, Coinbase premium
 
 **Why it matters:** Shows leverage buildup, crowding, and positioning. Funding extremes precede reversals. OI divergence from price signals new position building. Liquidation cascades accelerate moves.
 
-**Data model:** State machine with regime transitions + multi-timeframe highs/lows (see above). Collected hourly.
+**Data model:** Two independent classifiers (positioning + stress) with an orthogonal OI signal modifier. This replaces the single-regime model from the original design — separating "who is positioned" from "what's happening to them" produces cleaner signals.
 
-**Regime states:**
-`NEUTRAL` · `HEATING_UP` · `CROWDED_LONG` · `CROWDED_SHORT` · `UNWINDING` · `SHORT_SQUEEZE` · `CAPITULATION` · `DELEVERAGING`
+### Positioning classifier (structural, slow-moving)
 
-**Transition rules (deterministic):**
+Captures who is crowded/trapped.
 
-- funding percentile(1m) > 80 + L/S > 2.0 → `CROWDED_LONG`
-- funding percentile(1m) < 20 + L/S < 0.8 → `CROWDED_SHORT`
-- OI dropping > 5% in 24h + liquidations percentile(1m) > 70 → `UNWINDING`
-- funding negative 3+ cycles + OI declining → `DELEVERAGING`
-- liquidations > percentile(3m) 90 + OI dropping sharply → `CAPITULATION`
+**States:** `POSITIONING_NEUTRAL` · `HEATING_UP` · `CROWDED_LONG` · `CROWDED_SHORT`
 
-**Source:** CoinGlass — funding rates, OI (OHLC + aggregated), liquidation history/heatmap, L/S ratio, taker volume
+**Transition rules (with hysteresis):**
 
-**Source (Hyperliquid-specific):** Hydromancer Reservoir — wallet-level position snapshots, tick-level fills and liquidations, leverage distribution. Enriches CoinGlass aggregates with granular on-chain data.
+- funding percentile(1m) > 80 + OI elevated → `CROWDED_LONG` (exit threshold: 75)
+- funding percentile(1m) < 20 + OI elevated → `CROWDED_SHORT` (exit threshold: 25)
+- funding percentile(1m) 40–70 + OI change(7d) > +2% → `HEATING_UP`
+- All transitions require ≥2 confirming signals
 
-**Hyperliquid enrichment (from Hydromancer Reservoir):**
+### Stress classifier (event-driven, fast)
 
-Hydromancer provides wallet-level Hyperliquid data via S3 parquet files (`s3://hydromancer-reservoir`, requester-pays, DuckDB-queryable). This adds a layer of granularity on top of CoinGlass aggregates:
+Captures what's happening to positioning. Evaluated in strict priority order:
 
-- **Crowding analysis** — daily position snapshots contain every open position (user, market, size, notional, entry_price, leverage, leverage_type). Compute OI concentration in top N wallets, leverage distribution across the market, and long/short positioning by account size tier.
-- **Liquidation microstructure** — tick-level liquidation fills include the liquidated wallet address, mark price at liquidation, liquidation method (cross/isolated), and position size before liquidation. Detect cascade patterns (clusters of liquidations within short time windows) that CoinGlass aggregates obscure.
-- **L/S ratio from positions** — compute true long/short ratio from position snapshots by summing positive vs negative `size` values, weighted by notional. More accurate than exchange-reported ratios which may only cover top traders.
-- **Leverage distribution** — histogram of leverage multipliers across all open positions. Detect when the market is over-leveraged (median leverage rising) even before funding reacts.
+**States (priority-ordered):** `CAPITULATION` > `UNWINDING` > `DELEVERAGING` > `STRESS_NONE`
 
-**Additional transition rules (Hyperliquid-specific):**
+**Transition rules:**
 
-- top 10 wallets hold > 40% of OI → `CROWDED_LONG` or `CROWDED_SHORT` (concentrated risk)
-- median leverage rising > 20% over 7d → `HEATING_UP` (strengthened)
-- liquidation cluster: > 50 liquidations within 5 minutes → `CAPITULATION` event signal
+1. `CAPITULATION` — liquidation percentile(3m) > 85–90 + 2+ of: extreme liquidation spike, OI drop ≥ -10%, price move ≥ 5%
+2. `UNWINDING` — OI change(24h) ≤ -3% to -5% AND liquidation percentile(1m) > 60–70
+3. `DELEVERAGING` — 2–3+ negative funding cycles + gradual OI decline + no extreme liquidation spike
+4. `STRESS_NONE` — default
+
+### OI signal (orthogonal modifier)
+
+**States:** `EXTREME` · `ELEVATED` · `OI_NORMAL` · `DEPRESSED`
+
+- OI percentile(1m) > 90 → `EXTREME`
+- OI percentile(1m) > 70 → `ELEVATED`
+- OI percentile(1m) 30–70 → `OI_NORMAL`
+- OI percentile(1m) < 30 → `DEPRESSED`
+
+**Source:** CoinGlass API v4 — funding rates (current + 30d history at 8h resolution), OI history (30d at 4h resolution), aggregated liquidation history (90d at 8h resolution), Coinbase premium index (30d at 4h resolution)
+
+**Source (planned, not yet implemented):** Hydromancer Reservoir — wallet-level Hyperliquid position snapshots, tick-level fills and liquidations, leverage distribution. Would enrich CoinGlass aggregates with granular on-chain data.
 
 ---
 
-## 02 — Options & Implied Volatility
+## 02 — Options & Implied Volatility 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Max pain, put/call ratio, IV skew, OI by strike, term structure
 
@@ -153,23 +144,45 @@ Hydromancer provides wallet-level Hyperliquid data via S3 parquet files (`s3://h
 
 ---
 
-## 03 — Institutional Flows (ETFs)
+## 03 — Institutional Flows (ETFs) ✅
 
-**What it watches:** Daily net flows for BTC and ETH spot ETFs, Grayscale premiums/discounts
+**What it watches:** Daily net flows for BTC and ETH spot ETFs, GBTC premium/discount, total AUM
 
 **Why it matters:** Direct measure of institutional demand. Multi-day flow trends signal conviction shifts. Grayscale premium/discount reflects arbitrage and sentiment.
 
-**Key signals:**
+**Data model:** State machine with streak-based regime detection and reversal logic. Collected daily with 1h cache TTL.
 
-- 3+ consecutive days of outflows → institutional appetite cooling
-- Single-day flow > 2σ from mean → notable event
-- Grayscale discount widening → bearish institutional signal
+**Regime states:**
+`STRONG_INFLOW` · `STRONG_OUTFLOW` · `REVERSAL_TO_INFLOW` · `REVERSAL_TO_OUTFLOW` · `ETF_NEUTRAL` · `MIXED`
 
-**Source:** CoinGlass — ETF flows (BTC, ETH), Grayscale holdings/premiums
+**Transition rules (deterministic):**
+
+- 3+ consecutive inflow days → `STRONG_INFLOW`
+- 3+ consecutive outflow days → `STRONG_OUTFLOW`
+- 2+ inflow days after outflow phase + reversal magnitude ≥ 20% of prior streak → `REVERSAL_TO_INFLOW`
+- 2+ outflow days after inflow phase + reversal magnitude ≥ 20% of prior streak → `REVERSAL_TO_OUTFLOW`
+- Mixed/no clear pattern → `ETF_NEUTRAL`
+
+**Key metrics computed:**
+
+- Consecutive inflow/outflow day count
+- 7-day & 30-day cumulative flow
+- Flow volatility (σ from 30d mean)
+- Reversal ratio (current streak magnitude / prior opposite streak magnitude)
+- GBTC premium/discount tracking
+
+**Events:**
+
+- `sigma_inflow` / `sigma_outflow` — single-day flow > 2σ from 30d mean
+- `gbtc_premium` / `gbtc_discount` — GBTC at ± 3% premium/discount
+
+**Source:** CoinGlass API v4 — BTC ETF flow history, BTC ETF list (AUM), GBTC holdings/premiums, ETH ETF flow history, ETH ETF net assets history
 
 ---
 
-## 04 — Exchange Flows & Liquidity
+## 04 — Exchange Flows & Liquidity 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Exchange balances (net deposits/withdrawals), exchange netflow, reserve changes over 7d/30d
 
@@ -191,7 +204,9 @@ Hydromancer provides wallet-level Hyperliquid data via S3 parquet files (`s3://h
 
 ---
 
-## 05 — Whale Activity
+## 05 — Whale Activity 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Large transactions (>$1M), whale accumulation/distribution patterns, notable address movements
 
@@ -205,67 +220,44 @@ Hydromancer provides wallet-level Hyperliquid data via S3 parquet files (`s3://h
 
 **Source:** CoinGlass — whale transfers, large order tracking, Hyperliquid whale positions
 
-**Source (Hyperliquid-specific):** Hydromancer Reservoir — daily position snapshots, account values, builder/TWAP fills
-
-**Hyperliquid enrichment (from Hydromancer Reservoir):**
-
-Hydromancer transforms whale tracking from CoinGlass's curated alerts into a systematic, wallet-level dataset:
-
-- **Whale position tracker** — daily snapshots of every wallet's positions. Filter by `notional > $1M` (or any threshold) to build a whale watchlist. Track day-over-day changes in position size, entry price, and leverage for each whale.
-- **Account value distribution** — `account_values` dataset gives total equity per wallet per day. Track capital concentration (top 50 accounts as % of total), identify new large accounts entering, and detect capital flight (large accounts shrinking).
-- **Smart money execution patterns** — `builder_fills` reveal which frontend/aggregator routed each trade. `twap_fills` show institutional-style TWAP executions. High TWAP volume in a market suggests sophisticated accumulation/distribution.
-- **Whale realized PnL** — fills include `realized_pnl` per trade per wallet. Track whether whales are taking profit or cutting losses — a leading signal for directional conviction.
-
-**Key signals (Hyperliquid-specific):**
-
-- Top 20 accounts increasing BTC long notional > 10% in 24h → whale accumulation
-- New wallet enters top 50 by account value → capital inflow from new participant
-- TWAP fill volume > 2x daily average → institutional-scale execution underway
-- Top whale wallets net reducing positions → smart money de-risking
+**Source (planned):** Hydromancer Reservoir — daily position snapshots, account values, builder/TWAP fills
 
 ---
 
-## 06 — Market Sentiment (Composite Fear & Greed)
+## 06 — Market Sentiment (Composite Fear & Greed) ✅
 
-**What it watches:** Composite Fear & Greed index computed from four components — derivatives positioning (Dim 01), HTF trend (Dim 07), institutional flows (Dim 03), and accuracy-weighted expert consensus (unbias API).
+**What it watches:** Composite Fear & Greed index computed from five active components — derivatives positioning (Dim 01), HTF trend (Dim 07), momentum divergence (Dim 07), volatility compression (Dim 07), and institutional flows (Dim 03). Expert consensus (unbias API) is integrated but currently disabled while collecting delta-based data (~re-enable 2026-04-02).
 
 **Why it matters:** Traditional Fear & Greed indices (Alternative.me, CNN) use opaque methodology and produce unreliable readings — during testing, Alternative.me showed 14 (Extreme Fear) while actual market conditions (derivatives, trend, expert consensus) all indicated neutral-to-mild-greed territory. Our composite uses crypto-native inputs we control and understand.
 
 **Data model:** State machine driven by composite score (0–100). Collected 3x/day (aligns with brief schedule).
 
-**Component weights:**
+**Component weights (current):**
 
 | Component | Weight | Source | What it measures |
 |-----------|--------|--------|-----------------|
-| Positioning | 30% | Dim 01 (derivatives) | Funding rates, L/S ratio, OI percentiles, regime |
-| Trend | 25% | Dim 07 (HTF technicals) | Price vs 50/200 SMA, RSI, market structure |
-| Institutional flows | 20% | Dim 03 (ETF flows) | Flow streaks, σ magnitude, regime |
-| Expert consensus | 25% | unbias API | Accuracy-weighted analyst consensus, z-score |
+| Positioning | 40% | Dim 01 (derivatives) | Funding percentile (35%), Coinbase premium percentile (25%), OI percentile (25%), bias-adjusted liquidations (15%) |
+| Institutional flows | 30% | Dim 03 (ETF flows) | Flow streaks, σ magnitude, regime |
+| Trend | 15% | Dim 07 (HTF technicals) | Price vs 50/200 SMA, RSI, market structure |
+| Momentum divergence | 10% | Dim 07 (HTF technicals) | Price-RSI divergence + CVD divergence |
+| Volatility compression | 5% | Dim 07 (HTF technicals) | ATR compression/expansion |
+| Expert consensus | 0% | unbias API | **Disabled** — collecting delta-based data, re-enable ~2026-04-02 |
 
 **Regime states:**
-`EXTREME_FEAR` · `FEAR` · `NEUTRAL` · `GREED` · `EXTREME_GREED` · `CONSENSUS_BULLISH` · `CONSENSUS_BEARISH` · `SENTIMENT_DIVERGENCE`
+`EXTREME_FEAR` · `FEAR` · `SENTIMENT_NEUTRAL` · `GREED` · `EXTREME_GREED` · `CONSENSUS_BULLISH` · `CONSENSUS_BEARISH` · `SENTIMENT_DIVERGENCE`
 
 **Transition rules (deterministic):**
 
 - composite < 20 → `EXTREME_FEAR`
-- composite > 80 → `EXTREME_GREED`
 - composite 20–40 → `FEAR`
+- composite 40–60 → `SENTIMENT_NEUTRAL`
 - composite 60–80 → `GREED`
-- composite 40–60 → `NEUTRAL`
-- unbias z-score ≥ +0.8 + composite > 70 → `CONSENSUS_BULLISH` (experts and data aligned bullish)
-- unbias z-score ≤ -1.5 + composite < 30 → `CONSENSUS_BEARISH` (experts and data aligned bearish)
-- unbias z-score ≥ +0.8 + composite < 30, or z-score ≤ -1.5 + composite > 70 → `SENTIMENT_DIVERGENCE` (experts vs data disagree — most actionable)
+- composite > 80 → `EXTREME_GREED`
+- _(Disabled)_ unbias z-score ≥ +0.8 + composite > 70 → `CONSENSUS_BULLISH`
+- _(Disabled)_ unbias z-score ≤ -1.5 + composite < 30 → `CONSENSUS_BEARISH`
+- _(Disabled)_ unbias z-score ≥ +0.8 + composite < 30, or z-score ≤ -1.5 + composite > 70 → `SENTIMENT_DIVERGENCE`
 
-**Key signals:**
-
-- Composite < 20 → extreme fear across all inputs
-- Composite > 80 → extreme greed across all inputs
-- unbias z-score ≥ +0.8 → analyst consensus bullish
-- unbias z-score ≤ -1.5 → analyst consensus bearish
-- Internal component divergence (one component >70 while another <30) → mixed regime, watch for resolution
-- `SENTIMENT_DIVERGENCE` → experts and composite disagree, historically highest-probability contrarian signal
-
-**Source:** unbias API (analyst consensus — free tier: 100 req/day, daily granularity), cross-dimension data from Dims 01, 03, 07
+**Source:** Cross-dimension data from Dims 01, 03, 07. unbias API (analyst consensus — free tier: 100 req/day, daily granularity, currently disabled).
 
 **unbias API details:**
 
@@ -278,24 +270,53 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 07 — HTF Technical Structure
+## 07 — HTF Technical Structure ✅
 
-**What it watches:** Weekly/daily chart structure — key support/resistance, trend direction, RSI, moving averages (50/200 DMA), market structure (HH/HL/LH/LL)
+**What it watches:** 4H and daily chart structure — moving averages (50/200 SMA on 4H), RSI (14-period on daily + 4H), market structure (HH/HL/LH/LL), CVD (cumulative volume delta) with dual-window analysis, VWAP (weekly + monthly anchored), ATR (14-period on 4H)
 
-**Why it matters:** Defines the macro regime. Are we in a trend or range? Where are the structural levels that matter? HTF structure overrides LTF noise.
+**Why it matters:** Defines the macro regime. Are we in a trend or range? Where are the structural levels that matter? HTF structure overrides LTF noise. CVD adds volume-conviction context that pure price structure misses.
 
-**Key signals:**
+**Data model:** State machine with 8 regime states. Collected with 1h/4h cache TTL.
 
-- Price below 200 DMA → macro bearish regime
-- Weekly RSI > 70 → overbought on high timeframe
-- Break of major structure level → trend change confirmation
-- Golden/death cross → trend momentum shift
+**Regime states:**
+`MACRO_BULLISH` · `BULL_EXTENDED` · `MACRO_BEARISH` · `BEAR_EXTENDED` · `RECLAIMING` · `RANGING` · `ACCUMULATION` · `DISTRIBUTION`
 
-**Source:** CoinGlass (indicators), CCXT (OHLCV data for custom calculation)
+**Transition rules (deterministic):**
+
+- price > 200 SMA + daily RSI ≤ 70 → `MACRO_BULLISH`
+- price > 200 SMA + daily RSI > 70 → `BULL_EXTENDED`
+- 50 SMA < price < 200 SMA → `RECLAIMING`
+- price < both SMAs + daily RSI < 30 → `BEAR_EXTENDED`
+- price < both SMAs + structure LH_LL → `MACRO_BEARISH`
+- price < both SMAs + futures CVD long-window rising → `ACCUMULATION`
+- price < both SMAs + futures CVD long-window declining → `DISTRIBUTION`
+- price < both SMAs (default) → `RANGING`
+
+**Technical indicators computed:**
+
+- **SMAs:** 50 & 200-period on 4H candles (300 candle history)
+- **RSI-14:** Daily (trend bias, 104 candle history) + 4H (momentum)
+- **CVD (Cumulative Volume Delta):** Dual-window analysis on futures
+  - Short window: 20 candles (~3.3 days) — catches regime turns early
+  - Long window: 75 candles (~12.5 days) — confirms swing holds
+  - Divergence: price-CVD disagreement (bullish = accumulation, bearish = distribution)
+  - Thresholds: slope 0.02, R² 0.3
+- **Market structure:** HH_HL (bullish) · LH_LL (bearish) · HH_LL (expanding) · LH_HL (contracting) · STRUCTURE_UNKNOWN
+- **VWAP:** Weekly & monthly anchored
+- **ATR-14:** Execution-timeframe volatility (4H)
+- **MA crosses:** Golden (50 > 200) / Death (50 < 200) / None
+
+**Events tracked:**
+
+- Golden/death crosses, 200 SMA reclaim/break, RSI extremes, structure shifts, CVD divergence
+
+**Source:** Binance spot public API (300 4H candles + 104 daily candles), Binance futures public API (300 4H candles for CVD)
 
 ---
 
-## 08 — LTF Technical Structure
+## 08 — LTF Technical Structure 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** 4H/1H chart — momentum, short-term levels, volume profile, intraday structure
 
@@ -316,7 +337,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 09 — Macro Environment
+## 09 — Macro Environment 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Fed funds rate, CPI/Core PCE inflation, nonfarm payrolls, initial jobless claims, GDP, DXY (dollar index), Treasury yields (2Y/10Y), M2 money supply
 
@@ -334,7 +357,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 10 — Geopolitics & News
+## 10 — Geopolitics & News 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Breaking news, regulatory developments, exchange incidents, protocol events, geopolitical risk events
 
@@ -351,7 +376,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 11 — Cross-Market Correlations
+## 11 — Cross-Market Correlations 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** BTC correlation with SPX, Nasdaq, gold, DXY, bonds. Relative performance of crypto vs traditional risk assets.
 
@@ -368,7 +395,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 12 — Prediction Markets
+## 12 — Prediction Markets 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Crypto-relevant prediction market odds — price targets, ETF approvals, regulatory outcomes, election impacts on crypto policy
 
@@ -385,7 +414,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 13 — Stablecoin Flows
+## 13 — Stablecoin Flows 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** USDT/USDC circulating supply, mint/burn events, market cap changes, per-chain distribution, stablecoin dominance
 
@@ -402,7 +433,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 14 — DeFi Activity
+## 14 — DeFi Activity 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Total TVL, TVL by chain, DEX vs CEX volume ratio, protocol-level TVL shifts, yield trends
 
@@ -419,7 +452,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 15 — Token Unlocks & Supply Events
+## 15 — Token Unlocks & Supply Events 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Upcoming token unlock schedules, vesting cliff events, large supply expansions, emission rate changes
 
@@ -436,7 +471,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 16 — BTC Mining Activity (BTC only)
+## 16 — BTC Mining Activity (BTC only) 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Hash rate, mining difficulty, miner revenue, miner outflows to exchanges, hash price, block production rate
 
@@ -454,7 +491,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 17 — ETH Staking & Network Activity (ETH only)
+## 17 — ETH Staking & Network Activity (ETH only) 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** Staking rate (% of supply staked), validator entry/exit queue, staking APR, net staking flows, blob fees (L2 activity), burn rate (EIP-1559), supply growth/deflation rate
 
@@ -473,7 +512,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ---
 
-## 18 — Equities Market Structure
+## 18 — Equities Market Structure 🔲
+
+> **Status: Planned — not yet implemented**
 
 **What it watches:** S&P 500 and Nasdaq structure — VIX level/term structure, put/call ratio, index vs key moving averages (20/50/200 DMA), market breadth (advance/decline, new highs/lows, % above 50/200 DMA), sector rotation and participation rate
 
@@ -511,14 +552,6 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 - SPX making new highs + % above 50 DMA < 50% → `BREADTH_DIVERGENCE` (warning: rally narrowing)
 - SPX crossing 200 DMA (either direction) + breadth confirming → `TREND_TRANSITION`
 
-**Key signals:**
-
-- Composite dropping from FAVORABLE to HOSTILE within 1 week → rapid deterioration, high alert
-- Breadth divergence persisting > 5 days → distribution underway, fragile rally
-- VIX term structure flipping to backwardation → near-term fear exceeding far-term, event-driven
-- % above 200 DMA < 40% → broad damage, not just index-level weakness
-- Composite recovering from HOSTILE while crypto hasn't bounced → potential crypto catch-up trade
-
 **Relationship to other dimensions:**
 
 - **Dimension 09 (Macro):** Macro tracks policy inputs; this tracks market outputs. Fed can be dovish while equities break down (and vice versa).
@@ -530,24 +563,34 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ## Data Source Summary
 
-| Source         | Dimensions Covered                    | Cost              | Auth              |
-| -------------- | ------------------------------------- | ----------------- | ----------------- |
-| CoinGlass      | 01, 02, 03, 04, 05, 07, 08, 15, 16   | $29/mo (Hobbyist) | API key           |
-| Glassnode      | 16, 17                                | Free (Standard)   | API key           |
-| CCXT           | 07, 08, 11                            | Free              | Per-exchange keys |
-| unbias         | 06                                    | Free (100 req/day) | API key          |
-| CryptoPanic    | 10                                    | Free tier         | API token         |
-| CryptoCompare  | 10                                    | Free tier         | API key           |
-| FRED           | 09, 11, 18                            | Free              | API key           |
-| Polymarket     | 12                                    | Free              | None              |
-| DefiLlama      | 13, 14, 17                            | Free              | None              |
-| Yahoo Finance  | 11, 18                                | Free              | None              |
-| CBOE           | 18                                    | Free              | None              |
-| Hydromancer    | 01, 05                                | Free (S3 requester-pays) | None (public S3 bucket) |
+### Currently active
 
-**Total data cost: ~$29/mo** (CoinGlass only paid source, Hydromancer S3 transfer costs and unbias free tier are negligible)
+| Source | Dimensions | Cost | Auth | Details |
+|--------|-----------|------|------|---------|
+| CoinGlass API v4 | 01, 03 | $29/mo (Hobbyist) | API key | Funding rates, OI, liquidations, Coinbase premium, ETF flows, GBTC |
+| Binance spot (public) | 07 | Free | None | 4H + daily OHLCV candles |
+| Binance futures (public) | 07 | Free | None | 4H candles for CVD analysis |
+| unbias | 06 | Free (100 req/day) | API key | Currently disabled, collecting delta data |
 
-### Hydromancer Reservoir
+**Total active data cost: ~$29/mo** (CoinGlass only paid source)
+
+### Planned (for future dimensions)
+
+| Source | Planned Dimensions | Cost | Auth |
+|--------|-------------------|------|------|
+| CoinGlass | 02, 04, 05, 08, 15, 16 | (already paying) | API key |
+| Glassnode | 16, 17 | Free (Standard) | API key |
+| CCXT | 08, 11 | Free | Per-exchange keys |
+| CryptoPanic | 10 | Free tier | API token |
+| CryptoCompare | 10 | Free tier | API key |
+| FRED | 09, 11, 18 | Free | API key |
+| Polymarket | 12 | Free | None |
+| DefiLlama | 13, 14, 17 | Free | None |
+| Yahoo Finance | 11, 18 | Free | None |
+| CBOE | 18 | Free | None |
+| Hydromancer Reservoir | 01, 05 | Free (S3 requester-pays) | None |
+
+### Hydromancer Reservoir (planned, not yet integrated)
 
 S3-based data warehouse for Hyperliquid historical data. Not a REST API — data is stored as Parquet files queryable via DuckDB.
 
@@ -556,7 +599,7 @@ S3-based data warehouse for Hyperliquid historical data. Not a REST API — data
 **Update frequency:** Daily
 **Known gap:** Late October to mid-December 2025 snapshot data missing (ABCI state capture gap)
 
-**Datasets used:**
+**Datasets available:**
 
 | Dataset | S3 Path | Schema |
 |---|---|---|
