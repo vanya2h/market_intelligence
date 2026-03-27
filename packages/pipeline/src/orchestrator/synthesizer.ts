@@ -12,6 +12,7 @@
 
 import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
+import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 const SYNTH_CACHE_TTL = 1 * 60 * 60 * 1000;
@@ -50,10 +51,8 @@ ${sections.join("\n\n---\n\n")}`;
 }
 
 async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Promise<string> {
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const systemPrompt = `You are a chief market strategist writing a crypto brief from ${outputs.length} analytical dimensions.
+  const res = await callLlm({
+    system: `You are a chief market strategist writing a crypto brief from ${outputs.length} analytical dimensions.
 The system's primary goal is detecting **swing trade reversals** (multi-day to multi-week holds).
 
 Produce a SHORT, punchy brief in this exact format:
@@ -96,17 +95,11 @@ Rules:
 - Cite specific numbers: price levels, funding rate, RSI, flow $, F&G score, reversal ratio.
 - Prioritize cross-dimension confluence over individual dimension summaries.
 - No emojis. No preamble. No "based on the data". Just state it.
-- Trade ideas are setups worth exploring, not financial advice.`;
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 512,
-    messages: [{ role: "user", content: buildPrompt(asset, outputs) }],
-    system: systemPrompt,
+- Trade ideas are setups worth exploring, not financial advice.`,
+    user: buildPrompt(asset, outputs),
+    maxTokens: 512,
   });
-
-  const block = message.content[0]!;
-  return block.type === "text" ? block.text : "[no text response]";
+  return res.text;
 }
 
 export async function synthesize(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Promise<string> {

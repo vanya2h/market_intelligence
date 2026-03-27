@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { HtfContext } from "./types.js";
 import { getCached } from "../storage/cache.js";
+import { callLlm } from "../llm.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -47,25 +48,15 @@ function contextCacheKey(ctx: HtfContext): string {
 }
 
 async function callClaude(ctx: HtfContext): Promise<string> {
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const systemPrompt = `You are a technical analyst specializing in macro crypto market structure. \
+  const res = await callLlm({
+    system: `You are a technical analyst specializing in macro crypto market structure. \
 You receive computed HTF (weekly/daily) indicator data and write a concise 2-4 sentence regime interpretation for a market brief.
 Focus on: what the current macro structure means, key levels that matter, and what to watch for next.
-Be direct and specific — cite actual values. Do not hedge or pad.`;
-
-  const userPrompt = `Analyze this ${ctx.asset} HTF technical context:\n\n${JSON.stringify(ctx, null, 2)}`;
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 256,
-    messages: [{ role: "user", content: userPrompt }],
-    system: systemPrompt,
+Be direct and specific — cite actual values. Do not hedge or pad.`,
+    user: `Analyze this ${ctx.asset} HTF technical context:\n\n${JSON.stringify(ctx, null, 2)}`,
+    maxTokens: 256,
   });
-
-  const block = message.content[0]!;
-  return block.type === "text" ? block.text : "[no text response]";
+  return res.text;
 }
 
 export async function runAgent(ctx: HtfContext): Promise<string> {

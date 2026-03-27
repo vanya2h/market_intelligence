@@ -11,6 +11,7 @@
 
 import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
+import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 const RICH_CACHE_TTL = 1 * 60 * 60 * 1000;
@@ -244,22 +245,17 @@ function buildCacheKey(asset: string, outputs: DimensionOutput[]): string {
 // ─── LLM call ────────────────────────────────────────────────────────────────
 
 async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Promise<RichBrief> {
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    messages: [{ role: "user", content: buildUserPrompt(asset, outputs) }],
+  const res = await callLlm({
     system: buildSystemPrompt(outputs.length),
+    user: buildUserPrompt(asset, outputs),
+    maxTokens: 2048,
   });
 
-  if (message.stop_reason !== "end_turn") {
-    throw new Error(`Rich brief response truncated (stop_reason: ${message.stop_reason})`);
+  if (res.stopReason !== "end_turn") {
+    throw new Error(`Rich brief response truncated (stop_reason: ${res.stopReason})`);
   }
 
-  const block = message.content[0]!;
-  const text = block.type === "text" ? block.text : "{}";
+  const text = res.text;
 
   // Parse JSON — strip any markdown fences the model might add
   const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");

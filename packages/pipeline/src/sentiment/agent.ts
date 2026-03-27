@@ -9,6 +9,7 @@
 import crypto from "node:crypto";
 import { SentimentContext } from "./types.js";
 import { getCached } from "../storage/cache.js";
+import { callLlm } from "../llm.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -40,11 +41,8 @@ function contextCacheKey(ctx: SentimentContext): string {
 }
 
 async function callClaude(ctx: SentimentContext): Promise<string> {
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   // Expert consensus excluded while collecting more data — re-enable later
-  // const systemPrompt = `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, ETF flows, and accuracy-weighted expert consensus). Write a concise 2-4 sentence interpretation for a market brief.
+  // const system = `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, ETF flows, and accuracy-weighted expert consensus). Write a concise 2-4 sentence interpretation for a market brief.
   //
   // Focus on:
   // - The composite F&G score and what the component breakdown reveals
@@ -54,7 +52,8 @@ async function callClaude(ctx: SentimentContext): Promise<string> {
   //
   // Be direct and specific — cite the composite score, component scores, and z-score. Do not hedge or pad.`;
 
-  const systemPrompt = `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, momentum divergence, volatility compression, and ETF flows). Write a concise 2-4 sentence interpretation for a market brief.
+  const res = await callLlm({
+    system: `You are a market sentiment analyst specializing in crypto markets. You receive structured sentiment data including a composite Fear & Greed index (0–100, computed from derivatives positioning, HTF trend, momentum divergence, volatility compression, and ETF flows). Write a concise 2-4 sentence interpretation for a market brief.
 
 Focus on:
 - The composite F&G score and what the component breakdown reveals
@@ -62,19 +61,11 @@ Focus on:
 - Whether any component is diverging sharply from the others (internal divergence)
 - Contrarian implications at extremes
 
-Be direct and specific — cite the composite score and component scores. Do not hedge or pad.`;
-
-  const userPrompt = `Analyze this ${ctx.asset} sentiment context:\n\n${JSON.stringify(ctx, null, 2)}`;
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 256,
-    messages: [{ role: "user", content: userPrompt }],
-    system: systemPrompt,
+Be direct and specific — cite the composite score and component scores. Do not hedge or pad.`,
+    user: `Analyze this ${ctx.asset} sentiment context:\n\n${JSON.stringify(ctx, null, 2)}`,
+    maxTokens: 256,
   });
-
-  const block = message.content[0]!;
-  return block.type === "text" ? block.text : "[no text response]";
+  return res.text;
 }
 
 export async function runAgent(ctx: SentimentContext): Promise<string> {

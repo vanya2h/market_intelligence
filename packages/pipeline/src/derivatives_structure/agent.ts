@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { DerivativesContext } from "../types.js";
 import { getCached } from "../storage/cache.js";
+import { callLlm } from "../llm.js";
 
 // 24h — content-hash invalidates before this if market state changes
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -38,26 +39,16 @@ function contextCacheKey(ctx: DerivativesContext): string {
 }
 
 async function callClaude(ctx: DerivativesContext): Promise<string> {
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const systemPrompt = `You are a crypto derivatives analyst who works with BTC and ETH. You receive structured market data
+  const res = await callLlm({
+    system: `You are a crypto derivatives analyst who works with BTC and ETH. You receive structured market data
 and write a concise 2-4 sentence regime interpretation for a market brief.
 The data has two independent dimensions: positioning (structural crowding) and stress (event-driven pressure).
 Focus on: what the current positioning/stress combination means, what risks it implies, and what to watch next.
-Be direct and specific — cite the actual numbers. Do not hedge or pad.`;
-
-  const userPrompt = `Analyze this ${ctx.asset} derivatives context:\n\n${JSON.stringify(ctx, null, 2)}`;
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 256,
-    messages: [{ role: "user", content: userPrompt }],
-    system: systemPrompt,
+Be direct and specific — cite the actual numbers. Do not hedge or pad.`,
+    user: `Analyze this ${ctx.asset} derivatives context:\n\n${JSON.stringify(ctx, null, 2)}`,
+    maxTokens: 256,
   });
-
-  const block = message.content[0]!;
-  return block.type === "text" ? block.text : "[no text response]";
+  return res.text;
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@
 import crypto from "node:crypto";
 import { EtfContext } from "./types.js";
 import { getCached } from "../storage/cache.js";
+import { callLlm } from "../llm.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -35,26 +36,16 @@ function contextCacheKey(ctx: EtfContext): string {
 }
 
 async function callClaude(ctx: EtfContext): Promise<string> {
-  const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const systemPrompt = `You are an institutional market analyst. You receive structured ETF flow data \
+  const res = await callLlm({
+    system: `You are an institutional market analyst. You receive structured ETF flow data \
 for crypto spot ETFs and write a concise 2-4 sentence interpretation for a market brief.
 Focus on: what the flow regime means for institutional demand, what the trend implies going forward, \
 and any notable signals (σ events, Grayscale premium/discount).
-Be direct and specific — cite actual numbers. Do not hedge or pad.`;
-
-  const userPrompt = `Analyze this ${ctx.asset} ETF flows context:\n\n${JSON.stringify(ctx, null, 2)}`;
-
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 256,
-    messages: [{ role: "user", content: userPrompt }],
-    system: systemPrompt,
+Be direct and specific — cite actual numbers. Do not hedge or pad.`,
+    user: `Analyze this ${ctx.asset} ETF flows context:\n\n${JSON.stringify(ctx, null, 2)}`,
+    maxTokens: 256,
   });
-
-  const block = message.content[0]!;
-  return block.type === "text" ? block.text : "[no text response]";
+  return res.text;
 }
 
 export async function runAgent(ctx: EtfContext): Promise<string> {
