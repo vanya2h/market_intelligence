@@ -3,7 +3,7 @@ import { SentimentGauge } from "./SentimentGauge";
 import { SectionBlock } from "./SectionBlock";
 import { DIMENSION_TABS, TAB_LABELS } from "./BriefSidebar";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";
-import { formatDistanceToNowStrict } from "date-fns";
+import { RelativeTime } from "./RelativeTime";
 
 export function MobileBriefSummary({ brief }: { brief: Brief }) {
   return (
@@ -25,7 +25,6 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
               if (!bd) return null;
               const { color, arrow } = regimeColor(bd.regime);
               const sinceDate = bd.since ? new Date(bd.since) : null;
-              const sinceLabel = sinceDate ? formatDistanceToNowStrict(sinceDate, { addSuffix: true }) : null;
               return (
                 <div
                   key={dim}
@@ -40,10 +39,12 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
                       {regimeLabel(bd.regime)} {arrow}
                     </span>
                   </div>
-                  {sinceLabel && (
-                    <span className="font-mono-jb text-[9px] tabular-nums" style={{ color: "var(--text-muted)" }}>
-                      {sinceLabel}
-                    </span>
+                  {sinceDate && (
+                    <RelativeTime
+                      date={sinceDate}
+                      className="font-mono-jb text-[9px] tabular-nums"
+                      style={{ color: "var(--text-muted)" }}
+                    />
                   )}
                 </div>
               );

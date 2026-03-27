@@ -4,12 +4,15 @@ import { BriefHistoryDialog } from "./BriefHistoryDialog";
 import { TabBar } from "./TabBar";
 
 function LiveClock() {
-  const [now, setNow] = useState(new Date());
+  const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  if (!now) return <span className="font-mono-jb text-[11px] tabular-nums">&nbsp;</span>;
 
   return (
     <span className="font-mono-jb text-[11px] tabular-nums">

@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { formatDistanceToNowStrict } from "date-fns";
+import { RelativeTime } from "./RelativeTime";
 import { UsdValue } from "./UsdValue";
 import { getAssetPrice } from "../lib/asset";
 import { AssetType } from "@market-intel/api";
@@ -70,9 +70,10 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
           Brief price
         </span>
         <UsdValue value={snapshotPrice} style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }} />
-        <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
-          {formatDistanceToNowStrict(new Date(timestamp), { addSuffix: true })}
-        </span>
+        <RelativeTime
+          date={new Date(timestamp)}
+          style={{ fontSize: "10px", color: "var(--text-muted)" }}
+        />
       </div>
     );
   }
@@ -174,7 +175,7 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
           color: "var(--text-muted)",
         }}
       >
-        brief {formatDistanceToNowStrict(new Date(timestamp), { addSuffix: true })}
+        brief <RelativeTime date={new Date(timestamp)} />
       </span>
     </div>
   );

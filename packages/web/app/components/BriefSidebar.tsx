@@ -4,7 +4,7 @@ import { SectionBlock } from "./SectionBlock";
 import { Tooltip } from "./Tooltip";
 import { InfoCircledIcon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";
-import { formatDistanceToNowStrict } from "date-fns";
+import { RelativeTime } from "./RelativeTime";
 import type { Brief } from "@market-intel/api";
 
 export const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "SENTIMENT", "HTF"] as const;
@@ -146,7 +146,6 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
 
             const { color, arrow } = regimeColor(bd.regime);
             const sinceDate = bd.since ? new Date(bd.since) : null;
-            const sinceLabel = sinceDate ? formatDistanceToNowStrict(sinceDate, { addSuffix: true }) : null;
             return (
               <div
                 key={dim}
@@ -175,9 +174,9 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
                   ) : (
                     <span />
                   )}
-                  {sinceLabel && (
+                  {sinceDate && (
                     <span className="font-mono-jb text-[10px] tabular-nums" style={{ color: "var(--text-muted)" }}>
-                      changed {sinceLabel}
+                      changed <RelativeTime date={sinceDate} />
                     </span>
                   )}
                 </div>

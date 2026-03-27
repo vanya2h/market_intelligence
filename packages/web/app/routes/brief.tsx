@@ -1,16 +1,19 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
-import { formatDistanceToNowStrict, format } from "date-fns";
+import { format } from "date-fns";
+import { RelativeTime } from "../components/RelativeTime";
 import { BriefSection } from "../components/BriefSection";
 import { AppHeader } from "../components/AppHeader";
 import { BriefSidebar } from "../components/BriefSidebar";
 import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { DimensionTabs } from "../components/DimensionTabs";
+import { TradeIdeaSection } from "../components/TradeIdeaSection";
 import { StickyFooter } from "../components/StickyFooter";
 import { UsdValue } from "../components/UsdValue";
 import { Tooltip } from "../components/Tooltip";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { getBriefById } from "../lib/brief";
+import { getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -19,15 +22,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
     throw new Response("Missing brief ID", { status: 400 });
   }
 
-  return {
-    brief: await getBriefById(id)(api),
-  };
+  const [brief, tradeIdea] = await Promise.all([
+    getBriefById(id)(api),
+    getTradeIdeaByBriefId(id)(api).catch(() => null),
+  ]);
+
+  return { brief, tradeIdea };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function BriefPage() {
-  const { brief } = useLoaderData<LoaderData>();
+  const { brief, tradeIdea } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -43,9 +49,11 @@ export default function BriefPage() {
                 <InfoCircledIcon style={{ color: "var(--text-muted)", width: 13, height: 13 }} />
               </span>
             </Tooltip>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {formatDistanceToNowStrict(brief.timestamp, { addSuffix: true })}
-            </span>
+            <RelativeTime
+              date={brief.timestamp}
+              className="text-xs"
+              style={{ color: "var(--text-muted)" }}
+            />
           </div>
           <div className="grow" />
           {brief.snapshotPrice != null && (
@@ -73,6 +81,13 @@ export default function BriefPage() {
           <div className="p-4 md:p-6">
             <BriefSection brief={brief} />
           </div>
+
+          {/* Trade idea section */}
+          {tradeIdea && (
+            <div className="px-4 pb-4 md:px-6 md:pb-6">
+              <TradeIdeaSection tradeIdea={tradeIdea} />
+            </div>
+          )}
 
           {/* Dimension tabs + content */}
           <DimensionTabs dimensions={brief.dimensions} />
