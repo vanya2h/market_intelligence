@@ -92,6 +92,41 @@ enum SentimentRegime {
     SENTIMENT_DIVERGENCE
 }
 
+// ─── Notify Run (resumable pipeline tracking) ───────────────────────────────
+
+enum NotifyStage {
+    DIMENSIONS
+    TRADE_IDEA
+    SYNTHESIS
+    PERSIST
+    TELEGRAM
+    TWITTER
+}
+
+enum RunStatus {
+    RUNNING
+    COMPLETED
+    FAILED
+}
+
+model NotifyRun {
+    id            String       @id @default(cuid())
+    asset         Asset
+    status        RunStatus    @default(RUNNING)
+    lastCompleted NotifyStage?
+    failedStage   NotifyStage?
+    error         String?
+    artifacts     Json?
+    briefId       String?
+    brief         Brief?       @relation(fields: [briefId], references: [id], onDelete: SetNull)
+    createdAt     DateTime     @default(now())
+    updatedAt     DateTime     @updatedAt
+
+    @@index([asset, createdAt])
+    @@index([status])
+    @@map("notify_runs")
+}
+
 // ─── Dimension Regime State (mutable singleton per asset+dimension) ──────────
 
 model DimensionState {
@@ -145,6 +180,7 @@ model Brief {
     sentiment      SentimentDimension?
     exchangeFlows  ExchangeFlowsDimension?
     tradeIdea      TradeIdea?
+    notifyRuns     NotifyRun[]
 
     @@index([asset, timestamp])
     @@map("briefs")
