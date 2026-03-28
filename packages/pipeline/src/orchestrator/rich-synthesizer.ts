@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
+import { $Enums } from "../generated/prisma/client.js";
 
 const RICH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
@@ -184,7 +185,7 @@ OUTPUT: Return ONLY minified JSON: {"blocks":[...]}
 No markdown, no explanation.`;
 }
 
-function buildUserPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[]): string {
+function buildUserPrompt(asset: $Enums.Asset, outputs: DimensionOutput[]): string {
   const sections = outputs.map((o) => {
     return `### ${DIMENSION_LABELS[o.dimension]}
 **Regime:** ${o.regime}
@@ -220,7 +221,7 @@ function buildCacheKey(asset: string, outputs: DimensionOutput[]): string {
 
 // ─── LLM call ────────────────────────────────────────────────────────────────
 
-async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Promise<RichBrief> {
+async function callClaude(asset: $Enums.Asset, outputs: DimensionOutput[]): Promise<RichBrief> {
   const res = await callLlm({
     system: buildSystemPrompt(outputs.length),
     user: buildUserPrompt(asset, outputs),
@@ -259,16 +260,11 @@ async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[]): Pro
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export async function synthesizeRich(
-  asset: "BTC" | "ETH",
-  outputs: DimensionOutput[]
-): Promise<RichBrief | null> {
+export async function synthesizeRich(asset: $Enums.Asset, outputs: DimensionOutput[]): Promise<RichBrief | null> {
   if (outputs.length === 0) return null;
 
   try {
-    return await getCached(buildCacheKey(asset, outputs), RICH_CACHE_TTL, () =>
-      callClaude(asset, outputs)
-    );
+    return await getCached(buildCacheKey(asset, outputs), RICH_CACHE_TTL, () => callClaude(asset, outputs));
   } catch (err) {
     // Rich brief is a nice-to-have — don't break the pipeline if it fails
     console.error("Rich brief generation failed (falling back to text-only):", err);

@@ -17,6 +17,7 @@ import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 import type { TradeDecision } from "./trade-idea/index.js";
 import { CONVICTION_THRESHOLD } from "./trade-idea/confluence.js";
 import type { RichBrief } from "./rich-synthesizer.js";
+import { $Enums } from "../generated/prisma/client.js";
 
 const SYNTH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
@@ -46,7 +47,7 @@ No HTF data available — trade idea could not be computed.`;
 The system identified ${decision.direction} as the best directional candidate but conviction is insufficient. Explain WHY each dimension scored the way it did and what would need to change for this to become a high-conviction trade.`;
   }
   const targetDist = Math.abs(decision.compositeTarget - decision.entryPrice);
-  const targetDistPct = ((decision.compositeTarget - decision.entryPrice) / decision.entryPrice * 100).toFixed(2);
+  const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
   return `### Trade Decision: ${decision.direction} (conviction ${decision.confluence.total}/${CONVICTION_THRESHOLD})
 **Direction:** ${decision.direction}
 **Conviction:** ${decision.confluence.total} (PASSES threshold of ${CONVICTION_THRESHOLD})
@@ -75,52 +76,45 @@ ${outputs.map((o) => `**${DIMENSION_LABELS[o.dimension]}** (${o.regime}): ${o.in
   return `Write a Telegram-friendly market brief for ${asset}.
 Current time: ${new Date().toUTCString()}
 
-${richSection}${decision && !decision.skipped ? `
+${richSection}${
+    decision && !decision.skipped
+      ? `
 
 ---
 
-${buildTradeSection(decision)}` : ""}`;
+${buildTradeSection(decision)}`
+      : ""
+  }`;
 }
 
 export function buildSystemPrompt(decision: TradeDecision | null): string {
-  const tradeFormat = decision && !decision.skipped
-    ? `**TRADE IDEA: ${decision.direction}** (conviction ${decision.confluence.total}/${CONVICTION_THRESHOLD})
-- [One sentence: the primary driver — which dimensions are strongest and why]
-- [One sentence: the key risk or invalidation condition]`
-    : ``;
+  const tradeSection =
+    decision && !decision.skipped
+      ? `\n4. End with the trade idea: what direction, why it makes sense given the above, and what price would prove it wrong.`
+      : ``;
 
-  return `You are a chief market strategist writing a short Telegram brief.
-Your input is a rich infographic brief (JSON blocks) that already contains the full analysis. Your job is to condense it into a punchy text summary.
-The trade decision was made mechanically. DESCRIBE it — do NOT override or suggest a different direction.
+  return `You write a short Telegram market update. Your audience is crypto traders who want a quick, clear read on what's happening and what to watch.
 
-Produce a brief in this exact format:
+Your input is a rich infographic brief (JSON blocks) with the full analysis. Your job is to distill it into something a human actually wants to read.
 
-**OVERVIEW:** [2-3 sentences — the macro picture. What regime are we in? What's the dominant theme?]
+Structure:
+1. Open with what the asset is doing right now and the key price level (e.g. "BTC sitting at $87k after getting rejected — sellers still in control here")
+2. Explain WHY in plain English — what's driving the move? Connect the dots between signals. Use cause-and-effect, not lists of metrics.
+3. Close with what comes next — what level or event decides the next move? Give 2-3 key prices with a short "why it matters" for each.${tradeSection}
 
-**KEY TENSION:** [one line — the single most important cross-dimension conflict or signal]
-
-**HIGHLIGHTS**
-- [3-4 short bullets. Cite numbers. Cover what's unusual or at extremes.]
-- [Include key price levels the trader should watch: support, resistance, invalidation zones]
-- [Flag any signals that are fresh vs fading]
-
-${tradeFormat}
-
-**LEVELS TO WATCH**
-- [2-3 specific price levels with context: e.g. "$66,500 — SMA50 resistance, needs reclaim for bullish flip"]
-
-Rules:
-- Maximum 250 words. Every word must earn its place.
-- One sentence per bullet. No multi-sentence bullets.
-- Cite specific numbers from the rich brief data: prices, percentiles, scores, flows.
-- Price levels are critical — the trader needs to know where the action zones are.
-- The trade decision is FINAL — describe it, don't debate it.
-- No emojis. No preamble. No "based on the data". Just state it.
-- Trade ideas are setups, not financial advice.`;
+Clarity rules:
+- Tone: clear and direct, like a senior analyst briefing a peer. Not casual ("here's the story"), not robotic. State what's happening and why — no filler transitions.
+- BAD: "OI delta at 85th percentile with negative funding divergence" — what does this mean?
+- GOOD: "traders are piling into new positions but paying to be short — that mismatch often triggers a squeeze"
+- Use exact prices for levels. For everything else, describe what it means rather than citing the number.
+- No jargon without context. If you mention funding rate, say what it implies. If you mention flows, say what the positioning tells us.
+- Maximum 100 words. Short paragraphs. No headers, no bold formatting. The only exception: key levels at the end should be a bullet list (e.g. "• $65,500 — first support, losing it opens $63k").
+- You can use emojis if it makes your message more readable.
+- The trade decision (if present) was made mechanically — describe it, don't override it. Trade ideas are setups, not financial advice.`;
 }
 
 async function callClaude(
-  asset: "BTC" | "ETH",
+  asset: $Enums.Asset,
   richBrief: RichBrief | null,
   outputs: DimensionOutput[],
   decision: TradeDecision | null,
@@ -128,7 +122,7 @@ async function callClaude(
   const res = await callLlm({
     system: buildSystemPrompt(decision),
     user: buildPrompt(asset, richBrief, outputs, decision),
-    maxTokens: 512,
+    maxTokens: 350,
   });
   return res.text;
 }
@@ -143,6 +137,6 @@ export async function synthesize(
     return "No dimension data available — all pipelines failed.";
   }
   return getCached(buildCacheKey(asset, richBrief, decision), SYNTH_CACHE_TTL, () =>
-    callClaude(asset, richBrief, outputs, decision)
+    callClaude(asset, richBrief, outputs, decision),
   );
 }
