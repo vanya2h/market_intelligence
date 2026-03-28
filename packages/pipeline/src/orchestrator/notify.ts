@@ -132,10 +132,14 @@ export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
 
     if (twitterEnabled && asset === "BTC") {
       step(6, totalSteps, `Synthesizing Twitter/X post (${asset})...`);
-      const tweet = await synthesizeTweet(asset, outputs, briefUrl);
-      note(`tweet: ${tweet.length} chars`);
-      const tweetId = await postTweet(tweet);
-      console.log(`      ${chalk.green.bold("✓")} posted to Twitter/X (${tweetId})`);
+      try {
+        const tweet = await synthesizeTweet(asset, outputs, briefUrl);
+        note(`tweet: ${tweet.length} chars`);
+        const tweetId = await postTweet(tweet);
+        console.log(`      ${chalk.green.bold("✓")} posted to Twitter/X (${tweetId})`);
+      } catch (err) {
+        console.error(`      ${chalk.red.bold("✗")} Twitter/X failed:`, err instanceof Error ? err.message : err);
+      }
     }
 
     console.log(`\n      ${chalk.green.bold("✓")} ${asset} brief sent`);
