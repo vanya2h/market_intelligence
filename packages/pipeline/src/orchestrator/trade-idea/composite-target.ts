@@ -21,7 +21,7 @@ export type LevelType = "INVALIDATION" | "TARGET";
 
 export interface LevelResult {
   type: LevelType;
-  label: string;  // "1:2", "1:3", ... or "T1", "T2", "T3"
+  label: string; // "1:2", "1:3", ... or "T1", "T2", "T3"
   price: number;
 }
 
@@ -39,10 +39,11 @@ interface WeightedSample {
 // ─── Weights for structure levels ────────────────────────────────────────────
 
 const LEVEL_WEIGHTS = {
-  sma50: 0.3,
-  sma200: 0.25,
-  vwapWeekly: 0.25,
+  sma50: 0.2,
+  sma200: 0.2,
+  vwapWeekly: 0.2,
   vwapMonthly: 0.15,
+  poc: 0.25,
 } as const;
 
 // RSI confidence: when RSI is at 50 → floor only; at extremes → full weight
@@ -91,8 +92,7 @@ function weightedMedian(samples: WeightedSample[]): number {
       // Interpolate if we're between two samples
       if (i > 0 && cumulative - sample.weight < halfWeight) {
         const prev = sorted[i - 1]!;
-        const fraction =
-          (halfWeight - (cumulative - sample.weight)) / sample.weight;
+        const fraction = (halfWeight - (cumulative - sample.weight)) / sample.weight;
         return prev.value + fraction * (sample.value - prev.value);
       }
       return sample.value;
@@ -127,11 +127,8 @@ function rsiConfidence(rsiH4: number): number {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export function computeCompositeTarget(
-  htfContext: HtfContext,
-  direction: Direction,
-): CompositeTargetResult {
-  const { price, ma, vwap, rsi, atr } = htfContext;
+export function computeCompositeTarget(htfContext: HtfContext, direction: Direction): CompositeTargetResult {
+  const { price, ma, vwap, rsi, atr, volumeProfile } = htfContext;
   const entryPrice = price;
 
   // FLAT: target is current price, levels are breakout thresholds based on ATR.
@@ -156,12 +153,17 @@ export function computeCompositeTarget(
     { value: vwap.monthly, weight: LEVEL_WEIGHTS.vwapMonthly },
   ];
 
+  // POC — strongest single price magnet (displacement-anchored volume profile)
+  samples.push({
+    value: volumeProfile.profile.poc,
+    weight: LEVEL_WEIGHTS.poc,
+  });
+
   const rawTarget = weightedMedian(samples);
 
   // Check if target is on the correct side
   const targetOnCorrectSide =
-    (direction === "LONG" && rawTarget > entryPrice) ||
-    (direction === "SHORT" && rawTarget < entryPrice);
+    (direction === "LONG" && rawTarget > entryPrice) || (direction === "SHORT" && rawTarget < entryPrice);
 
   // If all structure levels are on the wrong side, use ATR fallback
   let baseTarget: number;
@@ -169,15 +171,12 @@ export function computeCompositeTarget(
     baseTarget = rawTarget;
   } else {
     baseTarget =
-      direction === "LONG"
-        ? entryPrice + ATR_FALLBACK_MULTIPLIER * atr
-        : entryPrice - ATR_FALLBACK_MULTIPLIER * atr;
+      direction === "LONG" ? entryPrice + ATR_FALLBACK_MULTIPLIER * atr : entryPrice - ATR_FALLBACK_MULTIPLIER * atr;
   }
 
   // Apply RSI confidence scaling
   const confidence = rsiConfidence(rsi.h4);
-  const adjustedTarget =
-    entryPrice + (baseTarget - entryPrice) * confidence;
+  const adjustedTarget = entryPrice + (baseTarget - entryPrice) * confidence;
 
   const targetDistance = Math.abs(adjustedTarget - entryPrice);
   const sign = direction === "LONG" ? 1 : -1;

@@ -34,6 +34,9 @@ import {
   RsiContext,
   SignalStaleness,
   VolatilityContext,
+  VolumeProfileContext,
+  VolumeProfilePosition,
+  VolumeProfileResult,
   VwapContext,
 } from "./types.js";
 
@@ -488,6 +491,205 @@ function cvdDivergencePeakStaleness(candles: Candle[]): number | null {
   return longSlice.length - bestEndIdx;
 }
 
+// ─── Volume Profile ─────────────────────────────────────────────────────────
+
+const VP_BIN_PCT = 0.001;          // 0.1% of price per bin
+const VP_MIN_RANGE_CANDLES = 20;   // minimum candles for meaningful profile
+const VP_DISPLACEMENT_SINGLE = 5;  // single-candle displacement threshold (×ATR)
+const VP_DISPLACEMENT_WINDOW = 5;  // 3-candle window displacement threshold (×ATR)
+const VA_COVERAGE = 0.70;          // Value Area = 70% of total volume
+
+/**
+ * Find where the current range started by detecting the most recent displacement.
+ *
+ * Walks backward through candles looking for:
+ *   - Single-candle move: |close - open| > 2×ATR
+ *   - 3-candle window move: |close[i] - close[i-2]| > 3×ATR
+ *
+ * Returns the index of the first candle AFTER the displacement (range start).
+ * Guarantees at least VP_MIN_RANGE_CANDLES. Falls back to 0 if no displacement found.
+ */
+function findRangeStart(candles: Candle[], atr: number): number {
+  if (atr <= 0 || candles.length <= VP_MIN_RANGE_CANDLES) return 0;
+
+  for (let i = candles.length - VP_MIN_RANGE_CANDLES; i >= 0; i--) {
+    const c = candles[i]!;
+    // Single-candle displacement
+    if (Math.abs(c.close - c.open) > VP_DISPLACEMENT_SINGLE * atr) {
+      return i + 1;
+    }
+    // 3-candle window displacement
+    if (i >= 2) {
+      const move = Math.abs(c.close - candles[i - 2]!.close);
+      if (move > VP_DISPLACEMENT_WINDOW * atr) {
+        return i + 1;
+      }
+    }
+  }
+
+  return 0; // no displacement found — use all candles
+}
+
+/**
+ * Build a volume profile by distributing each candle's volume uniformly
+ * across the price bins it spans (high-low range).
+ *
+ * Returns Map<binIndex, accumulatedVolume>.
+ */
+function buildVolumeProfile(candles: Candle[], binSize: number): Map<number, number> {
+  const profile = new Map<number, number>();
+
+  for (const c of candles) {
+    const lowBin = Math.floor(c.low / binSize);
+    const highBin = Math.floor(c.high / binSize);
+    const binCount = highBin - lowBin + 1;
+    const volumePerBin = c.volume / binCount;
+
+    for (let bin = lowBin; bin <= highBin; bin++) {
+      profile.set(bin, (profile.get(bin) ?? 0) + volumePerBin);
+    }
+  }
+
+  return profile;
+}
+
+/**
+ * Analyze a volume profile to extract POC, Value Area, HVNs, and LVNs.
+ *
+ * Value Area (70% rule): expand outward from the POC bin, always adding
+ * the side with more volume, until 70% of total volume is captured.
+ *
+ * HVNs: top 3 bins by volume excluding POC (secondary price magnets).
+ * LVNs: bins below 20th percentile volume flanked by higher-volume bins
+ * on both sides — valleys in the distribution (acceleration zones).
+ */
+function analyzeVolumeProfile(
+  profile: Map<number, number>,
+  binSize: number,
+  currentPrice: number,
+): VolumeProfileResult {
+  if (profile.size === 0) {
+    return {
+      poc: currentPrice, pocVolumePct: 0,
+      vaHigh: currentPrice, vaLow: currentPrice,
+      pricePosition: "INSIDE_VA", priceVsPocPct: 0,
+      hvns: [], lvns: [],
+    };
+  }
+
+  const entries = [...profile.entries()].sort((a, b) => a[0] - b[0]);
+  const totalVolume = entries.reduce((s, [, v]) => s + v, 0);
+
+  // POC: bin with maximum volume
+  let pocBin = entries[0]![0];
+  let pocVolume = 0;
+  for (const [bin, vol] of entries) {
+    if (vol > pocVolume) {
+      pocBin = bin;
+      pocVolume = vol;
+    }
+  }
+  const poc = parseFloat(((pocBin + 0.5) * binSize).toFixed(2));
+  const pocVolumePct = parseFloat(((pocVolume / totalVolume) * 100).toFixed(2));
+
+  // Value Area: expand outward from POC until 70% of volume captured
+  const binToVolume = new Map(entries);
+  const allBins = entries.map(([b]) => b);
+  const pocIdx = allBins.indexOf(pocBin);
+
+  let vaLowIdx = pocIdx;
+  let vaHighIdx = pocIdx;
+  let vaVolume = pocVolume;
+
+  while (vaVolume / totalVolume < VA_COVERAGE) {
+    const canGoLow = vaLowIdx > 0;
+    const canGoHigh = vaHighIdx < allBins.length - 1;
+    if (!canGoLow && !canGoHigh) break;
+
+    const lowVol = canGoLow ? (binToVolume.get(allBins[vaLowIdx - 1]!) ?? 0) : -1;
+    const highVol = canGoHigh ? (binToVolume.get(allBins[vaHighIdx + 1]!) ?? 0) : -1;
+
+    if (lowVol >= highVol) {
+      vaLowIdx--;
+      vaVolume += lowVol;
+    } else {
+      vaHighIdx++;
+      vaVolume += highVol;
+    }
+  }
+
+  const vaLow = parseFloat((allBins[vaLowIdx]! * binSize).toFixed(2));
+  const vaHigh = parseFloat(((allBins[vaHighIdx]! + 1) * binSize).toFixed(2));
+
+  // Price position
+  let pricePosition: VolumeProfilePosition;
+  if (currentPrice > vaHigh) pricePosition = "ABOVE_VA";
+  else if (currentPrice < vaLow) pricePosition = "BELOW_VA";
+  else pricePosition = "INSIDE_VA";
+
+  const priceVsPocPct = parseFloat(((currentPrice / poc - 1) * 100).toFixed(2));
+
+  // HVNs: top 3 by volume, excluding POC
+  const hvns = entries
+    .filter(([bin]) => bin !== pocBin)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([bin]) => parseFloat(((bin + 0.5) * binSize).toFixed(2)));
+
+  // LVNs: bins below 20th percentile volume flanked by higher-volume bins
+  const volumes = entries.map(([, v]) => v);
+  const sortedVols = [...volumes].sort((a, b) => a - b);
+  const p20 = sortedVols[Math.floor(sortedVols.length * 0.2)] ?? 0;
+
+  const lvns: number[] = [];
+  for (let i = 1; i < entries.length - 1; i++) {
+    const [bin, vol] = entries[i]!;
+    if (vol > p20) continue;
+    const leftVol = entries[i - 1]![1];
+    const rightVol = entries[i + 1]![1];
+    if (leftVol > vol && rightVol > vol) {
+      const significance = Math.min(leftVol, rightVol) / Math.max(vol, 0.001);
+      lvns.push(significance); // temporarily store significance at this index
+      lvns.push(bin);
+    }
+  }
+  // Extract top 3 LVNs by significance
+  const lvnPairs: { bin: number; sig: number }[] = [];
+  for (let i = 0; i < lvns.length; i += 2) {
+    lvnPairs.push({ sig: lvns[i]!, bin: lvns[i + 1]! });
+  }
+  const topLvns = lvnPairs
+    .sort((a, b) => b.sig - a.sig)
+    .slice(0, 3)
+    .map((p) => parseFloat(((p.bin + 0.5) * binSize).toFixed(2)));
+
+  return { poc, pocVolumePct, vaHigh, vaLow, pricePosition, priceVsPocPct, hvns, lvns: topLvns };
+}
+
+/**
+ * Compute the displacement-anchored volume profile context.
+ *
+ * 1. Detect where the current range started (last displacement)
+ * 2. Build + analyze the volume profile from range start to now
+ */
+function computeVolumeProfileContext(
+  futuresCandles: Candle[],
+  atr: number,
+  currentPrice: number,
+): VolumeProfileContext {
+  const binSize = currentPrice * VP_BIN_PCT;
+  const rangeStartIdx = findRangeStart(futuresCandles, atr);
+  const rangeCandles = futuresCandles.slice(rangeStartIdx);
+
+  const profileMap = buildVolumeProfile(rangeCandles, binSize);
+  const profile = analyzeVolumeProfile(profileMap, binSize, currentPrice);
+
+  return {
+    profile,
+    rangeStartCandles: futuresCandles.length - rangeStartIdx,
+  };
+}
+
 // ─── Event detection ─────────────────────────────────────────────────────────
 
 function detectEvents(
@@ -695,6 +897,7 @@ export function analyze(
     events,
     atr: h4Atr,
     volatility: analyzeVolatility(h4, h4Atr),
+    volumeProfile: computeVolumeProfileContext(snapshot.futuresH4Candles, h4Atr, price),
     staleness,
   };
 

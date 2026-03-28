@@ -585,6 +585,60 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           group: "Volatility",
           value: safe(() => formatUsd(get(ctx, "atr") as number)),
         },
+        ...(get(ctx, "volumeProfile.profile.poc") != null
+          ? [
+              {
+                label: "POC",
+                group: "Volume Profile",
+                value: safe(() => formatUsd(get(ctx, "volumeProfile.profile.poc") as number)),
+              },
+              {
+                label: "VA High",
+                group: "Volume Profile",
+                value: safe(() => formatUsd(get(ctx, "volumeProfile.profile.vaHigh") as number)),
+              },
+              {
+                label: "VA Low",
+                group: "Volume Profile",
+                value: safe(() => formatUsd(get(ctx, "volumeProfile.profile.vaLow") as number)),
+              },
+              {
+                label: "Price Position",
+                group: "Volume Profile",
+                value: safe(() => (get(ctx, "volumeProfile.profile.pricePosition") as string).replace(/_/g, " ")),
+                signal: (() => {
+                  const pos = get(ctx, "volumeProfile.profile.pricePosition") as string;
+                  if (pos === "BELOW_VA") return "bullish" as MetricSignal;
+                  if (pos === "ABOVE_VA") return "bearish" as MetricSignal;
+                  return "neutral" as MetricSignal;
+                })(),
+              },
+              {
+                label: "Price vs POC",
+                group: "Volume Profile",
+                value: safe(() => formatPercent(get(ctx, "volumeProfile.profile.priceVsPocPct") as number)),
+                signal: (() => {
+                  const pct = get(ctx, "volumeProfile.profile.priceVsPocPct") as number;
+                  if (pct < -3) return "bullish" as MetricSignal;
+                  if (pct > 3) return "bearish" as MetricSignal;
+                  return "neutral" as MetricSignal;
+                })(),
+              },
+              {
+                label: "POC Volume",
+                group: "Volume Profile",
+                value: safe(() => `${formatNumber(get(ctx, "volumeProfile.profile.pocVolumePct") as number, 1)}%`),
+              },
+              {
+                label: "Range",
+                group: "Volume Profile",
+                value: safe(() => {
+                  const candles = get(ctx, "volumeProfile.rangeStartCandles") as number;
+                  return `${candles} candles (~${formatNumber(candles * 4 / 24, 0)}d)`;
+                }),
+              },
+            ]
+          : []),
         ...(get(ctx, "ma.recentCross") !== "NONE" && get(ctx, "ma.recentCross") != null
           ? [
               {

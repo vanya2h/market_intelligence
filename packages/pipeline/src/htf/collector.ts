@@ -75,7 +75,7 @@ export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<HtfSnapshot
   const [h4Candles, dailyCandles, futuresH4Candles] = await Promise.all([
     fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "4h",  300, `htf-4h-${asset.toLowerCase()}`,          TTL.H4),
     fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "1d",  104, `htf-daily-${asset.toLowerCase()}`,       TTL.DAILY),
-    fetchKlines(BINANCE_FUTURES, "/fapi/v1/klines", symbol, "4h",  300, `htf-futures-4h-${asset.toLowerCase()}`,  TTL.H4),
+    fetchKlines(BINANCE_FUTURES, "/fapi/v1/klines", symbol, "4h",  750, `htf-futures-4h-750-${asset.toLowerCase()}`,  TTL.H4),
   ]);
 
   console.log(`      ${h4Candles.length} × 4h spot · ${futuresH4Candles.length} × 4h futures · ${dailyCandles.length} × 1d candles`);

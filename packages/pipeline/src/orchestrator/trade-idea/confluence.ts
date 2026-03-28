@@ -50,9 +50,9 @@ function directional(score: number, direction: Direction): number {
 //   - OI context amplifies or dampens conviction
 
 // Component weights
-const DERIV_W_POSITIONING = 0.40;
+const DERIV_W_POSITIONING = 0.4;
 const DERIV_W_STRESS = 0.25;
-const DERIV_W_FUNDING = 0.20;
+const DERIV_W_FUNDING = 0.2;
 const DERIV_W_OI = 0.15;
 
 function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number {
@@ -63,19 +63,33 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
   // 1. Positioning regime → raw LONG bias score
   let posScore = 0;
   switch (positioning.state) {
-    case "CROWDED_SHORT": posScore = 100; break;  // short squeeze → LONG
-    case "CROWDED_LONG":  posScore = -100; break; // long squeeze → SHORT
-    case "HEATING_UP":    posScore = -50; break;   // leverage building → caution for LONG
-    default:              posScore = 0;
+    case "CROWDED_SHORT":
+      posScore = 100;
+      break; // short squeeze → LONG
+    case "CROWDED_LONG":
+      posScore = -100;
+      break; // long squeeze → SHORT
+    case "HEATING_UP":
+      posScore = -50;
+      break; // leverage building → caution for LONG
+    default:
+      posScore = 0;
   }
 
   // 2. Stress → raw LONG bias score (capitulation = forced selling = buy opportunity)
   let stressScore = 0;
   switch (stress.state) {
-    case "CAPITULATION": stressScore = 100; break;
-    case "UNWINDING":    stressScore = 70; break;
-    case "DELEVERAGING": stressScore = 20; break;
-    default:             stressScore = 0;
+    case "CAPITULATION":
+      stressScore = 100;
+      break;
+    case "UNWINDING":
+      stressScore = 70;
+      break;
+    case "DELEVERAGING":
+      stressScore = 20;
+      break;
+    default:
+      stressScore = 0;
   }
 
   // 3. Funding pressure — extreme funding percentile means one side is paying heavily
@@ -97,10 +111,17 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
   // 4. OI context — high OI = more fuel for squeeze, depressed = less conviction
   let oiMult = 1.0;
   switch (oiSignal) {
-    case "EXTREME":  oiMult = 1.2; break;
-    case "ELEVATED":  oiMult = 1.1; break;
-    case "DEPRESSED": oiMult = 0.7; break;
-    default:          oiMult = 1.0;
+    case "EXTREME":
+      oiMult = 1.2;
+      break;
+    case "ELEVATED":
+      oiMult = 1.1;
+      break;
+    case "DEPRESSED":
+      oiMult = 0.7;
+      break;
+    default:
+      oiMult = 1.0;
   }
 
   const rawScore =
@@ -115,10 +136,7 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
   // OI component adds a small direct contribution
   const oiDirect = (oiMult - 1.0) * 50; // EXTREME: +10, ELEVATED: +5, DEPRESSED: -15
 
-  return clamp(
-    directional(scaled + oiDirect * DERIV_W_OI, direction),
-    -100, 100,
-  );
+  return clamp(directional(scaled + oiDirect * DERIV_W_OI, direction), -100, 100);
 }
 
 // ─── ETFs (-100 to +100) ────────────────────────────────────────────────────
@@ -129,9 +147,9 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
 //   - Regime gives base direction
 //   - Reversal ratio measures conviction of the reversal
 
-const ETF_W_SIGMA = 0.40;
+const ETF_W_SIGMA = 0.4;
 const ETF_W_STREAK = 0.25;
-const ETF_W_REGIME = 0.20;
+const ETF_W_REGIME = 0.2;
 const ETF_W_REVERSAL = 0.15;
 
 function scoreEtfs(ctx: EtfContext, direction: Direction): number {
@@ -167,11 +185,20 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   // 3. Regime base score
   let regimeScore = 0;
   switch (regime) {
-    case "STRONG_INFLOW":       regimeScore = 80; break;
-    case "REVERSAL_TO_INFLOW":  regimeScore = 60; break;
-    case "REVERSAL_TO_OUTFLOW": regimeScore = -60; break;
-    case "STRONG_OUTFLOW":      regimeScore = -80; break;
-    default:                    regimeScore = 0; // NEUTRAL, MIXED
+    case "STRONG_INFLOW":
+      regimeScore = 80;
+      break;
+    case "REVERSAL_TO_INFLOW":
+      regimeScore = 60;
+      break;
+    case "REVERSAL_TO_OUTFLOW":
+      regimeScore = -60;
+      break;
+    case "STRONG_OUTFLOW":
+      regimeScore = -80;
+      break;
+    default:
+      regimeScore = 0; // NEUTRAL, MIXED
   }
 
   // 4. Reversal ratio — how much of the prior streak has been reversed.
@@ -184,10 +211,7 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   }
 
   const rawScore =
-    sigmaScore * ETF_W_SIGMA +
-    streakScore * ETF_W_STREAK +
-    regimeScore * ETF_W_REGIME +
-    reversalScore * ETF_W_REVERSAL;
+    sigmaScore * ETF_W_SIGMA + streakScore * ETF_W_STREAK + regimeScore * ETF_W_REGIME + reversalScore * ETF_W_REVERSAL;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }
@@ -200,11 +224,12 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
 //     after a big move, ATR decays, then the next big move fires
 //   - Regime and market structure are complementary, not primary
 
-const HTF_W_RSI = 0.30;
-const HTF_W_CVD = 0.30;
-const HTF_W_VOLATILITY = 0.20;
-const HTF_W_REGIME = 0.10;
-const HTF_W_STRUCTURE = 0.10;
+const HTF_W_RSI = 0.25;
+const HTF_W_CVD = 0.25;
+const HTF_W_VOLATILITY = 0.15;
+const HTF_W_VP = 0.2;
+const HTF_W_REGIME = 0.1;
+const HTF_W_STRUCTURE = 0.05;
 
 function scoreHtf(ctx: HtfContext, direction: Direction): number {
   if (direction === "FLAT") {
@@ -219,6 +244,10 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
     // High ATR = not flat, penalize. Low ATR without displacement = genuinely quiet.
     if (ctx.volatility.atrPercentile > 70) flatScore -= 20;
     else if (ctx.volatility.atrPercentile < 30 && !ctx.volatility.compressionAfterMove) flatScore += 20;
+    // Price inside Value Area + thick POC = range-bound thesis
+    if (ctx.volumeProfile.profile.pricePosition === "INSIDE_VA" && ctx.volumeProfile.profile.pocVolumePct > 3) {
+      flatScore += 25;
+    }
     return clamp(flatScore, -100, 100);
   }
 
@@ -241,7 +270,7 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
 
   // R² quality: high R² = more reliable divergence signal
   const r2Avg = (ctx.cvd.futures.short.r2 + ctx.cvd.futures.long.r2) / 2;
-  cvdScore *= (0.5 + r2Avg * 0.5); // scale 50%-100% based on fit quality
+  cvdScore *= 0.5 + r2Avg * 0.5; // scale 50%-100% based on fit quality
 
   // 3. Volatility compression — "coiled spring" after big move.
   //    Doesn't pick direction, but amplifies directional conviction.
@@ -270,31 +299,72 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
   // 4. Regime — complementary
   let regimeScore = 0;
   switch (ctx.regime) {
-    case "MACRO_BULLISH": regimeScore = 40; break;
-    case "RECLAIMING":    regimeScore = 50; break;
-    case "ACCUMULATION":  regimeScore = 60; break;
-    case "MACRO_BEARISH": regimeScore = -40; break;
-    case "DISTRIBUTION":  regimeScore = -60; break;
+    case "MACRO_BULLISH":
+      regimeScore = 40;
+      break;
+    case "RECLAIMING":
+      regimeScore = 50;
+      break;
+    case "ACCUMULATION":
+      regimeScore = 60;
+      break;
+    case "MACRO_BEARISH":
+      regimeScore = -40;
+      break;
+    case "DISTRIBUTION":
+      regimeScore = -60;
+      break;
     // Extended = contrarian (mean-reversion in opposite direction)
-    case "BEAR_EXTENDED": regimeScore = 70; break;
-    case "BULL_EXTENDED": regimeScore = -70; break;
-    case "RANGING":       regimeScore = 0; break;
+    case "BEAR_EXTENDED":
+      regimeScore = 70;
+      break;
+    case "BULL_EXTENDED":
+      regimeScore = -70;
+      break;
+    case "RANGING":
+      regimeScore = 0;
+      break;
   }
 
   // 5. Market structure — complementary
   let structureScore = 0;
   switch (ctx.structure) {
-    case "HH_HL": structureScore = 50; break;   // higher highs/lows → LONG
-    case "LH_LL": structureScore = -50; break;  // lower highs/lows → SHORT
-    case "HH_LL": structureScore = 10; break;   // mixed, slight LONG bias
-    case "LH_HL": structureScore = -10; break;  // mixed, slight SHORT bias
-    default:      structureScore = 0;
+    case "HH_HL":
+      structureScore = 50;
+      break; // higher highs/lows → LONG
+    case "LH_LL":
+      structureScore = -50;
+      break; // lower highs/lows → SHORT
+    case "HH_LL":
+      structureScore = 10;
+      break; // mixed, slight LONG bias
+    case "LH_HL":
+      structureScore = -10;
+      break; // mixed, slight SHORT bias
+    default:
+      structureScore = 0;
+  }
+
+  // 6. Volume Profile — price position relative to Value Area (LONG-biased)
+  //    Below VA = magnet pulling price up (bullish mean-reversion)
+  //    Above VA = extended beyond fair value (bearish mean-reversion)
+  //    Confidence scaled by POC thickness (pocVolumePct / 5, clamped 0.5–1.5)
+  let vpScore = 0;
+  if (ctx.volumeProfile) {
+    const vp = ctx.volumeProfile.profile;
+    if (vp.pricePosition === "BELOW_VA") vpScore = 70;
+    else if (vp.pricePosition === "INSIDE_VA" && vp.priceVsPocPct < 0) vpScore = 40;
+    else if (vp.pricePosition === "INSIDE_VA" && vp.priceVsPocPct > 0) vpScore = -40;
+    else if (vp.pricePosition === "ABOVE_VA") vpScore = -70;
+    // Thick POC = stronger magnet, thin POC = weaker signal
+    vpScore *= clamp(vp.pocVolumePct / 5, 0.5, 1.5);
   }
 
   const rawScore =
     rsiRaw * HTF_W_RSI +
     clamp(cvdScore, -100, 100) * HTF_W_CVD +
     clamp(volScore, -100, 100) * HTF_W_VOLATILITY +
+    clamp(vpScore, -100, 100) * HTF_W_VP +
     regimeScore * HTF_W_REGIME +
     structureScore * HTF_W_STRUCTURE;
 
@@ -308,7 +378,7 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
 // Expert consensus excluded (disabled for now)
 
 const SENT_W_COMPOSITE = 0.55;
-const SENT_W_REGIME = 0.20;
+const SENT_W_REGIME = 0.2;
 const SENT_W_CONVERGENCE = 0.25;
 
 function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
@@ -332,14 +402,29 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
   // 2. Regime base — gives discrete signal
   let regimeScore = 0;
   switch (ctx.regime) {
-    case "EXTREME_FEAR":          regimeScore = 100; break;  // strong contrarian LONG
-    case "FEAR":                  regimeScore = 50; break;
-    case "EXTREME_GREED":         regimeScore = -100; break; // strong contrarian SHORT
-    case "GREED":                 regimeScore = -50; break;
-    case "CONSENSUS_BULLISH":     regimeScore = 30; break;   // experts agree bullish
-    case "CONSENSUS_BEARISH":     regimeScore = -30; break;
-    case "SENTIMENT_DIVERGENCE":  regimeScore = 0; break;    // mixed signals
-    default:                      regimeScore = 0;
+    case "EXTREME_FEAR":
+      regimeScore = 100;
+      break; // strong contrarian LONG
+    case "FEAR":
+      regimeScore = 50;
+      break;
+    case "EXTREME_GREED":
+      regimeScore = -100;
+      break; // strong contrarian SHORT
+    case "GREED":
+      regimeScore = -50;
+      break;
+    case "CONSENSUS_BULLISH":
+      regimeScore = 30;
+      break; // experts agree bullish
+    case "CONSENSUS_BEARISH":
+      regimeScore = -30;
+      break;
+    case "SENTIMENT_DIVERGENCE":
+      regimeScore = 0;
+      break; // mixed signals
+    default:
+      regimeScore = 0;
   }
 
   // 3. Component convergence — how many F&G components agree on direction.
@@ -377,10 +462,10 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
 //   - Flow sigma and reserve trend drive the score
 //   - 30d extremes (low/high) amplify the signal
 
-const EF_W_REGIME = 0.30;
+const EF_W_REGIME = 0.3;
 const EF_W_TREND = 0.25;
 const EF_W_SIGMA = 0.25;
-const EF_W_EXTREME = 0.20;
+const EF_W_EXTREME = 0.2;
 
 function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): number {
   if (direction === "FLAT") {
@@ -393,17 +478,27 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
   // 1. Regime — direct signal. Outflows = accumulation = LONG-biased.
   let regimeScore = 0;
   switch (ctx.regime) {
-    case "ACCUMULATION":   regimeScore = 70; break;   // coins leaving → bullish
-    case "HEAVY_OUTFLOW":  regimeScore = 90; break;   // aggressive accumulation
-    case "DISTRIBUTION":   regimeScore = -70; break;  // coins entering → bearish
-    case "HEAVY_INFLOW":   regimeScore = -90; break;  // aggressive distribution
-    default:               regimeScore = 0;
+    case "ACCUMULATION":
+      regimeScore = 70;
+      break; // coins leaving → bullish
+    case "HEAVY_OUTFLOW":
+      regimeScore = 90;
+      break; // aggressive accumulation
+    case "DISTRIBUTION":
+      regimeScore = -70;
+      break; // coins entering → bearish
+    case "HEAVY_INFLOW":
+      regimeScore = -90;
+      break; // aggressive distribution
+    default:
+      regimeScore = 0;
   }
 
   // 2. Balance trend — sustained direction
   let trendScore = 0;
-  if (m.balanceTrend === "FALLING") trendScore = 60;       // reserves shrinking → bullish
-  else if (m.balanceTrend === "RISING") trendScore = -60;   // reserves growing → bearish
+  if (m.balanceTrend === "FALLING")
+    trendScore = 60; // reserves shrinking → bullish
+  else if (m.balanceTrend === "RISING") trendScore = -60; // reserves growing → bearish
 
   // 3. Flow sigma — today's flow intensity relative to 30d distribution
   //    Negative sigma = outflow day (bullish), positive = inflow day (bearish)
@@ -411,24 +506,19 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
 
   // 4. 30d extremes — reserves at monthly low/high = strong signal
   let extremeScore = 0;
-  if (m.isAt30dLow) extremeScore = 80;         // reserves at lowest in 30d → strong accumulation
-  else if (m.isAt30dHigh) extremeScore = -80;   // reserves at highest → strong distribution
+  if (m.isAt30dLow)
+    extremeScore = 80; // reserves at lowest in 30d → strong accumulation
+  else if (m.isAt30dHigh) extremeScore = -80; // reserves at highest → strong distribution
 
   const rawScore =
-    regimeScore * EF_W_REGIME +
-    trendScore * EF_W_TREND +
-    sigmaScore * EF_W_SIGMA +
-    extremeScore * EF_W_EXTREME;
+    regimeScore * EF_W_REGIME + trendScore * EF_W_TREND + sigmaScore * EF_W_SIGMA + extremeScore * EF_W_EXTREME;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export function computeConfluence(
-  outputs: DimensionOutput[],
-  direction: Direction,
-): Confluence {
+export function computeConfluence(outputs: DimensionOutput[], direction: Direction): Confluence {
   const deriv = outputs.find((o) => o.dimension === "DERIVATIVES");
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");

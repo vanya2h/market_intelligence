@@ -26,7 +26,7 @@ export interface HtfSnapshot {
   asset: "BTC" | "ETH";
   h4Candles: Candle[]; // last ~300 4h candles → SMA 50/200 on 4h, 4h RSI
   dailyCandles: Candle[]; // last ~104 daily candles → daily RSI, market structure
-  futuresH4Candles: Candle[]; // last ~300 4h candles from futures → futures CVD
+  futuresH4Candles: Candle[]; // last ~750 4h candles from futures → CVD + volume profile
 }
 
 export interface MaContext {
@@ -119,6 +119,34 @@ export interface VolatilityContext {
   compressionAfterMove: boolean;
 }
 
+export type VolumeProfilePosition = "ABOVE_VA" | "INSIDE_VA" | "BELOW_VA";
+
+export interface VolumeProfileResult {
+  /** Point of Control — price level with highest volume */
+  poc: number;
+  /** % of total volume concentrated at POC bin (thickness = confidence) */
+  pocVolumePct: number;
+  /** Value Area high boundary (70% of volume rule) */
+  vaHigh: number;
+  /** Value Area low boundary */
+  vaLow: number;
+  /** Current price position relative to Value Area */
+  pricePosition: VolumeProfilePosition;
+  /** % distance from POC (negative = below) */
+  priceVsPocPct: number;
+  /** Up to 3 High Volume Nodes excluding POC (secondary magnets) */
+  hvns: number[];
+  /** Up to 3 Low Volume Nodes — acceleration zones between HVNs */
+  lvns: number[];
+}
+
+export interface VolumeProfileContext {
+  /** Displacement-anchored profile — covers the current range */
+  profile: VolumeProfileResult;
+  /** How many candles back the detected range started (transparency for LLM) */
+  rangeStartCandles: number;
+}
+
 // Structured context passed to the LLM agent
 export interface HtfContext {
   asset: "BTC" | "ETH";
@@ -137,6 +165,8 @@ export interface HtfContext {
   atr: number;
   /** Volatility compression / coiled spring detection */
   volatility: VolatilityContext;
+  /** Volume profile with displacement-anchored range detection */
+  volumeProfile: VolumeProfileContext;
   /** How fresh each key signal is (candles since peak) — null if not present */
   staleness: SignalStaleness;
 }

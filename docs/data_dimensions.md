@@ -289,7 +289,7 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 ## 07 — HTF Technical Structure ✅
 
-**What it watches:** 4H and daily chart structure — moving averages (50/200 SMA on 4H), RSI (14-period on daily + 4H), market structure (HH/HL/LH/LL), CVD (cumulative volume delta) with dual-window analysis, VWAP (weekly + monthly anchored), ATR (14-period on 4H)
+**What it watches:** 4H and daily chart structure — moving averages (50/200 SMA on 4H), RSI (14-period on daily + 4H), market structure (HH/HL/LH/LL), CVD (cumulative volume delta) with dual-window analysis, VWAP (weekly + monthly anchored), ATR (14-period on 4H), Volume Profile (POC, Value Area, HVN/LVN) with displacement-based range detection
 
 **Why it matters:** Defines the macro regime. Are we in a trend or range? Where are the structural levels that matter? HTF structure overrides LTF noise. CVD adds volume-conviction context that pure price structure misses.
 
@@ -322,12 +322,23 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 - **VWAP:** Weekly & monthly anchored
 - **ATR-14:** Execution-timeframe volatility (4H)
 - **MA crosses:** Golden (50 > 200) / Death (50 < 200) / None
+- **Volume Profile:** Displacement-anchored profile from futures 4H candles (750 candle history, ~4 months)
+  - Bin size: 0.1% of current price (adaptive — BTC@$85k → $85 bins, ETH@$2k → $2 bins)
+  - Volume distribution: uniform across each candle's high-low range
+  - Range detection: walks backward from current candle, finds last displacement (single candle >5×ATR or 3-candle window >5×ATR). Profile anchored to first candle after displacement. Minimum 20 candles, fallback to all 750 if no displacement found.
+  - POC (Point of Control): price level with highest volume — strongest price magnet
+  - Value Area: 70% of total volume, expanding outward from POC (VA High / VA Low)
+  - HVNs: up to 3 High Volume Nodes (secondary magnets, excluding POC)
+  - LVNs: up to 3 Low Volume Nodes (acceleration zones — thin areas where price moves fast)
+  - Price position: ABOVE_VA / INSIDE_VA / BELOW_VA
+  - POC feeds into composite target at 25% weight (highest of all levels)
+  - VP position contributes 20% of HTF confluence score
 
 **Events tracked:**
 
 - Golden/death crosses, 200 SMA reclaim/break, RSI extremes, structure shifts, CVD divergence
 
-**Source:** Binance spot public API (300 4H candles + 104 daily candles), Binance futures public API (300 4H candles for CVD)
+**Source:** Binance spot public API (300 4H candles + 104 daily candles), Binance futures public API (750 4H candles for CVD + volume profile)
 
 ---
 

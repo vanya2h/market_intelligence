@@ -119,7 +119,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How are the technical indicators computed?",
-        a: "SMA-50 and SMA-200 on 4H candles (300 candle history). RSI-14 on daily candles (104 candle history) plus 4H for momentum. CVD uses dual-window analysis (20-candle short, 75-candle long) with slope and R² thresholds. Market structure is detected via pivot analysis (higher-highs/higher-lows vs lower-highs/lower-lows). VWAP is anchored weekly and monthly. ATR-14 on 4H candles measures volatility.",
+        a: "SMA-50 and SMA-200 on 4H candles (300 candle history). RSI-14 on daily candles (104 candle history) plus 4H for momentum. CVD uses dual-window analysis (20-candle short, 75-candle long) with slope and R² thresholds. Market structure is detected via pivot analysis (higher-highs/higher-lows vs lower-highs/lower-lows). VWAP is anchored weekly and monthly. ATR-14 on 4H candles measures volatility. Volume Profile is computed from futures 4H candles (750 candle history, ~4 months) with displacement-based range detection — see the Volume Profile section below.",
       },
       {
         q: "How does the Momentum Divergence detection work?",
@@ -128,6 +128,35 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       {
         q: "What does 'code computes, LLMs reason' mean?",
         a: "All metrics are computed deterministically by code: percentiles, state machines, technical indicators. No LLM is involved in scoring. LLM agents (Claude Sonnet) then interpret the computed metrics — they receive the regime states and context, and produce the written brief explaining what it means. The separation ensures scores are reproducible and auditable, while interpretation benefits from language model reasoning.",
+      },
+    ],
+  },
+  {
+    title: "Volume Profile",
+    items: [
+      {
+        q: "What is Volume Profile?",
+        a: "Volume Profile shows how much trading volume occurred at each price level over a period. Unlike time-based volume bars, it reveals where the market spent the most time transacting — these high-volume levels act as price magnets. The system computes it from Binance futures 4H candles (~4 months of history) by distributing each candle's volume uniformly across the price bins it spans.",
+      },
+      {
+        q: "What is the POC (Point of Control)?",
+        a: "The price level with the highest traded volume — the strongest single price magnet. Price tends to gravitate toward the POC during range-bound conditions. In the composite target calculation, the POC carries the highest weight (25%) because it represents empirical consensus on fair value.",
+      },
+      {
+        q: "What is the Value Area (VA)?",
+        a: "The price range containing 70% of all traded volume, built by expanding outward from the POC. VA High and VA Low define the boundaries. When price is inside the VA, it's trading within fair value. When outside, it's extended and more likely to mean-revert. The system reports your position as ABOVE VA, INSIDE VA, or BELOW VA.",
+      },
+      {
+        q: "How does displacement-based range detection work?",
+        a: "Volume Profile is most meaningful during ranges — not trends. The system automatically detects where the current range started by walking backward through candles looking for a displacement: a single candle moving more than 5×ATR, or a 3-candle window moving more than 5×ATR. The profile is anchored to the first candle after that displacement. This ensures the profile only includes volume from the current trading range, not from a prior trend phase. Minimum range: 20 candles (~3.3 days). If no displacement is found in the full 750-candle window, all candles are used.",
+      },
+      {
+        q: "What are HVNs and LVNs?",
+        a: "High Volume Nodes (HVNs) are secondary price magnets — bins with significant volume concentration, excluding the POC. Price tends to consolidate around HVNs. Low Volume Nodes (LVNs) are acceleration zones — thin areas between HVNs where price moves quickly because there's little historical agreement. LVNs often act as support/resistance gaps: price either bounces off them or rips through.",
+      },
+      {
+        q: "How does Volume Profile affect trade ideas?",
+        a: "Two ways. First, the POC is the highest-weighted level (25%) in the composite target calculation — it pulls the target toward the strongest volume magnet. Second, price position relative to the Value Area contributes 20% of the HTF confluence score: price below the VA is a bullish signal (POC magnet pulls up), price above is bearish. The signal strength scales with POC thickness — a concentrated POC with 5%+ of total volume gets full weight.",
       },
     ],
   },
@@ -156,7 +185,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How are price targets computed?",
-        a: "A weighted median of four mean-reversion structure levels: SMA-50 (30%), SMA-200 (25%), weekly VWAP (25%), monthly VWAP (15%). RSI confidence scales the target distance — when RSI is extreme (near 0 or 100), the target stands at full distance; when RSI is near 50, it compresses toward entry (0.3x floor). Each idea produces seven tracked levels: four invalidation stops at R:R 1:2 through 1:5, and three targets at 50%, 100%, and 150% of target distance.",
+        a: "A weighted median of five mean-reversion structure levels: POC (25%), SMA-50 (20%), SMA-200 (20%), weekly VWAP (20%), monthly VWAP (15%). The POC (Point of Control) from the volume profile is the highest-weighted level because it represents the strongest empirical price magnet — where the most volume traded. RSI confidence scales the target distance — when RSI is extreme (near 0 or 100), the target stands at full distance; when RSI is near 50, it compresses toward entry (0.3x floor). Each idea produces seven tracked levels: four invalidation stops at R:R 1:2 through 1:5, and three targets at 50%, 100%, and 150% of target distance.",
       },
       {
         q: "What role does the LLM play in trade ideas?",
@@ -198,7 +227,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "How are trade ideas tracked?",
-        a: "Each idea generates seven independently-tracked price levels: four invalidation stops (at 1:2, 1:3, 1:4, and 1:5 risk-reward ratios) and three targets (T1 at 50% of target distance, T2 at 100%, T3 at 150% extension). The composite target is a weighted median of mean-reversion levels: SMA-50 (30%), SMA-200 (25%), weekly VWAP (25%), and monthly VWAP (15%), compressed by an RSI confidence multiplier. Each level resolves independently when price touches it.",
+        a: "Each idea generates seven independently-tracked price levels: four invalidation stops (at 1:2, 1:3, 1:4, and 1:5 risk-reward ratios) and three targets (T1 at 50% of target distance, T2 at 100%, T3 at 150% extension). The composite target is a weighted median of five mean-reversion levels: POC (25%), SMA-50 (20%), SMA-200 (20%), weekly VWAP (20%), and monthly VWAP (15%), compressed by an RSI confidence multiplier. Each level resolves independently when price touches it.",
       },
       {
         q: "How does automated outcome checking work?",
