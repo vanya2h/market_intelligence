@@ -249,7 +249,7 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
       const score = conf[dim] ?? 0;
       const dimBuckets = buckets.get(dim)!;
 
-      const bucket = score === 1 ? dimBuckets.agreed : score === -1 ? dimBuckets.disagreed : dimBuckets.neutral;
+      const bucket = score > 0 ? dimBuckets.agreed : score < 0 ? dimBuckets.disagreed : dimBuckets.neutral;
 
       bucket.count++;
       if (isWin) bucket.wins++;

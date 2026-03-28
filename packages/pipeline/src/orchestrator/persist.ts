@@ -98,3 +98,18 @@ export async function saveBrief(
   });
   return record.id;
 }
+
+/** Update an existing brief with synthesized text (called after trade idea is computed). */
+export async function updateBrief(
+  briefId: string,
+  brief: string,
+  richBrief?: RichBrief | null,
+): Promise<void> {
+  await prisma.brief.update({
+    where: { id: briefId },
+    data: {
+      brief,
+      ...(richBrief ? { richBrief: JSON.parse(JSON.stringify(richBrief)) } : {}),
+    },
+  });
+}

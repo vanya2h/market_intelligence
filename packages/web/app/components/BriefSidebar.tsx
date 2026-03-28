@@ -180,17 +180,17 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
                   </Tooltip>
                 </div>
                 <div className="flex items-center justify-between">
-                  {bd.previousRegime && bd.previousRegime !== bd.regime ? (
-                    <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
-                      was {regimeLabel(bd.previousRegime!)}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
                   {sinceDate && (
                     <span className="font-mono-jb text-[0.625rem] tabular-nums" style={{ color: "var(--text-muted)" }}>
                       changed <RelativeTime date={sinceDate} />
                     </span>
+                  )}
+                  {bd.previousRegime && bd.previousRegime !== bd.regime ? (
+                    <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
+                      previous: {regimeLabel(bd.previousRegime!)}
+                    </span>
+                  ) : (
+                    <span />
                   )}
                 </div>
                 {dim === "DERIVATIVES" && bd.stress && bd.stress !== "STRESS_NONE" && (

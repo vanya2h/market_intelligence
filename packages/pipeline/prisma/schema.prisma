@@ -258,7 +258,8 @@ model TradeIdea {
     direction       TradeDirection
     entryPrice      Float
     compositeTarget Float
-    confluence      Json?          // { derivatives: 1|-1|0, etfs: ..., htf: ..., sentiment: ... }
+    confluence      Json?          // { derivatives, etfs, htf, sentiment, total } each -100..+100
+    skipped         Boolean        @default(false) // true when conviction < threshold
     createdAt       DateTime       @default(now())
 
     levels          TradeIdeaLevel[]

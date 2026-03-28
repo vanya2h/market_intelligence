@@ -14,8 +14,8 @@ import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
 import { synthesizeRich } from "./rich-synthesizer.js";
-import { saveBrief } from "./persist.js";
-import { processTradeIdea } from "./trade-idea/index.js";
+import { saveBrief, updateBrief } from "./persist.js";
+import { processTradeIdea, type TradeDecision } from "./trade-idea/index.js";
 import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -125,22 +125,33 @@ export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
     console.log("");
     printDimensionSummary(outputs);
 
-    step(2, totalSteps, "Synthesizing market brief...");
-    const [brief, richBrief] = await Promise.all([
-      synthesize(asset, outputs),
-      synthesizeRich(asset, outputs),
-    ]);
-    if (richBrief) note("rich brief generated");
-
-    step(3, totalSteps, "Saving to database...");
-    const briefId = await saveBrief(asset, brief, outputs, richBrief);
-
-    step(4, totalSteps, "Extracting trade idea...");
+    // Trade idea is computed BEFORE synthesis — mechanical decision drives the brief
+    step(2, totalSteps, "Computing trade idea (mechanical)...");
     const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
+    let decision: TradeDecision | null = null;
+    let briefId: string | undefined;
+
     if (htfOut) {
-      await processTradeIdea(briefId, asset, brief, htfOut.context, outputs);
+      // Save a placeholder brief first (we need briefId for the trade idea)
+      briefId = await saveBrief(asset, "", outputs, null);
+      const result = await processTradeIdea(briefId, asset, htfOut.context, outputs);
+      decision = result.decision;
     } else {
-      note("skipped — no HTF output available");
+      note("no HTF output — trade idea skipped");
+    }
+
+    step(3, totalSteps, "Synthesizing market brief...");
+    const richBrief = await synthesizeRich(asset, outputs);
+    if (richBrief) note("rich brief generated");
+    const brief = await synthesize(asset, outputs, decision, richBrief);
+    note("text brief generated");
+
+    step(4, totalSteps, "Saving to database...");
+    if (briefId) {
+      // Update the placeholder brief with the synthesized text
+      await updateBrief(briefId, brief, richBrief);
+    } else {
+      await saveBrief(asset, brief, outputs, richBrief);
     }
 
     printBrief(asset, outputs, brief);

@@ -17,8 +17,8 @@ import chalk from "chalk";
 import { runAllDimensions } from "./pipeline.js";
 import { synthesize } from "./synthesizer.js";
 import { synthesizeRich } from "./rich-synthesizer.js";
-import { saveBrief } from "./persist.js";
-import { processTradeIdea } from "./trade-idea/index.js";
+import { saveBrief, updateBrief } from "./persist.js";
+import { processTradeIdea, type TradeDecision } from "./trade-idea/index.js";
 import type { HtfOutput } from "./types.js";
 import { postTweet } from "./twitter.js";
 import { synthesizeTweet } from "./twitter-synthesizer.js";
@@ -104,25 +104,33 @@ export async function runNotify(assets: ("BTC" | "ETH")[]): Promise<void> {
     const outputs = await runAllDimensions(asset);
     note(`${outputs.length} dimensions completed`);
 
-    step(2, totalSteps, "Synthesizing market brief...");
-    const [brief, richBrief] = await Promise.all([
-      synthesize(asset, outputs),
-      synthesizeRich(asset, outputs),
-    ]);
-    if (richBrief) note("rich brief generated");
+    step(2, totalSteps, "Computing trade idea (mechanical)...");
+    const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
+    let decision: TradeDecision | null = null;
+    let briefId: string | undefined;
 
-    step(3, totalSteps, "Saving to database...");
-    const briefId = await saveBrief(asset, brief, outputs, richBrief);
+    if (htfOut) {
+      briefId = await saveBrief(asset, "", outputs, null);
+      const result = await processTradeIdea(briefId, asset, htfOut.context, outputs);
+      decision = result.decision;
+    } else {
+      note("no HTF output — trade idea skipped");
+    }
+
+    step(3, totalSteps, "Synthesizing market brief...");
+    const richBrief = await synthesizeRich(asset, outputs);
+    if (richBrief) note("rich brief generated");
+    const brief = await synthesize(asset, outputs, decision, richBrief);
+    note("text brief generated");
+
+    step(4, totalSteps, "Saving to database...");
+    if (briefId) {
+      await updateBrief(briefId, brief, richBrief);
+    } else {
+      briefId = await saveBrief(asset, brief, outputs, richBrief);
+    }
     const briefUrl = webAppUrl ? `${webAppUrl}/brief/${briefId}` : undefined;
     if (briefUrl) note(`brief URL: ${briefUrl}`);
-
-    step(4, totalSteps, "Extracting trade idea...");
-    const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
-    if (htfOut) {
-      await processTradeIdea(briefId, asset, brief, htfOut.context, outputs);
-    } else {
-      note("skipped — no HTF output available");
-    }
 
     step(5, totalSteps, `Sending ${asset} to Telegram...`);
     const textMsg = buildTextMessage(asset, brief, briefUrl);

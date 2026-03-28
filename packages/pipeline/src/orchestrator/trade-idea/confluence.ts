@@ -1,130 +1,371 @@
 /**
- * Confluence Mapper
+ * Confluence Scoring
  *
- * Maps each dimension's regime state to an agreement score relative
- * to the trade idea direction:
- *   +1 = agrees (regime supports the direction)
- *   -1 = disagrees (regime opposes the direction)
- *    0 = neutral (regime is ambiguous or not applicable)
+ * Each dimension produces a conviction score from -100 to +100
+ * relative to the trade idea direction:
+ *   +100 = maximum agreement (dimension strongly supports direction)
+ *   -100 = maximum disagreement (dimension strongly opposes direction)
+ *      0 = neutral / no signal
  *
- * For derivatives, both positioning and stress are considered.
- * The final score is clamped to [-1, 0, +1].
+ * Total conviction = sum of all dimensions (-400 to +400).
+ * A trade is only taken when total >= CONVICTION_THRESHOLD.
+ *
+ * For FLAT ideas: scores reflect how strongly the market favors staying
+ * rangebound. Positive = supports flat, negative = breakout likely.
  */
 
-import type {
-  PositioningRegime,
-  StressLevel,
-  EtfRegime,
-  HtfRegime,
-  SentimentRegime,
-} from "../../generated/prisma/client.js";
+import type { DerivativesContext } from "../../types.js";
+import type { EtfContext } from "../../etfs/types.js";
+import type { HtfContext } from "../../htf/types.js";
+import type { SentimentContext } from "../../sentiment/types.js";
 import type { DimensionOutput } from "../types.js";
 import type { Direction } from "./composite-target.js";
 
-export type AgreementScore = -1 | 0 | 1;
+export const CONVICTION_THRESHOLD = 200;
 
 export interface Confluence {
-  derivatives: AgreementScore;
-  etfs: AgreementScore;
-  htf: AgreementScore;
-  sentiment: AgreementScore;
+  derivatives: number;
+  etfs: number;
+  htf: number;
+  sentiment: number;
+  total: number;
 }
 
-// ─── Derivatives ─────────────────────────────────────────────────────────────
-// Swing reversal logic: crowded positioning in opposite direction = agrees
-// Stress (capitulation/unwinding) = mean-reversion opportunity = agrees with LONG
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
 
-const POSITIONING_LONG: PositioningRegime[] = ["CROWDED_SHORT"];
-const POSITIONING_SHORT: PositioningRegime[] = ["CROWDED_LONG", "HEATING_UP"];
+/** Flip score for SHORT direction (signals that agree with LONG disagree with SHORT) */
+function directional(score: number, direction: Direction): number {
+  return direction === "SHORT" ? -score : score;
+}
 
-const STRESS_LONG: StressLevel[] = ["CAPITULATION", "UNWINDING"];
-const STRESS_SHORT: StressLevel[] = [];
-// Deleveraging is ambiguous — could precede moves in either direction
+// ─── Derivatives (-100 to +100) ─────────────────────────────────────────────
+// Swing reversal logic:
+//   - Crowded positioning in opposite direction = strong agreement
+//   - Stress events (capitulation/unwinding) = mean-reversion (favors LONG)
+//   - Funding pressure extremes = crowded side paying premium
+//   - OI context amplifies or dampens conviction
 
-function scoreDerivatives(
-  regime: PositioningRegime,
-  stress: StressLevel | null,
-  direction: Direction,
-): AgreementScore {
+// Component weights
+const DERIV_W_POSITIONING = 0.40;
+const DERIV_W_STRESS = 0.25;
+const DERIV_W_FUNDING = 0.20;
+const DERIV_W_OI = 0.15;
+
+function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number {
   if (direction === "FLAT") return 0;
 
-  const longSet = direction === "LONG" ? POSITIONING_LONG : POSITIONING_SHORT;
-  const shortSet = direction === "LONG" ? POSITIONING_SHORT : POSITIONING_LONG;
-  const stressAgrees = direction === "LONG" ? STRESS_LONG : STRESS_SHORT;
+  const { positioning, stress, signals, oiSignal } = ctx;
 
-  let score = 0;
+  // 1. Positioning regime → raw LONG bias score
+  let posScore = 0;
+  switch (positioning.state) {
+    case "CROWDED_SHORT": posScore = 100; break;  // short squeeze → LONG
+    case "CROWDED_LONG":  posScore = -100; break; // long squeeze → SHORT
+    case "HEATING_UP":    posScore = -50; break;   // leverage building → caution for LONG
+    default:              posScore = 0;
+  }
 
-  if (longSet.includes(regime)) score += 1;
-  else if (shortSet.includes(regime)) score -= 1;
+  // 2. Stress → raw LONG bias score (capitulation = forced selling = buy opportunity)
+  let stressScore = 0;
+  switch (stress.state) {
+    case "CAPITULATION": stressScore = 100; break;
+    case "UNWINDING":    stressScore = 70; break;
+    case "DELEVERAGING": stressScore = 20; break;
+    default:             stressScore = 0;
+  }
 
-  if (stress && stressAgrees.includes(stress)) score += 1;
+  // 3. Funding pressure — extreme funding percentile means one side is paying heavily
+  //    fundingPct1m: 0-100 percentile. >80 = longs paying (crowded long), <20 = shorts paying
+  let fundingScore = 0;
+  const fp = signals.fundingPct1m;
+  if (fp > 80) {
+    // Longs paying heavy premium → disagrees with LONG
+    fundingScore = -((fp - 80) / 20) * 100;
+  } else if (fp < 20) {
+    // Shorts paying → agrees with LONG
+    fundingScore = ((20 - fp) / 20) * 100;
+  }
+  // Amplify by consecutive extreme funding cycles
+  if (signals.fundingPressureCycles >= 3) {
+    fundingScore *= 1.3;
+  }
 
-  return Math.max(-1, Math.min(1, score)) as AgreementScore;
+  // 4. OI context — high OI = more fuel for squeeze, depressed = less conviction
+  let oiMult = 1.0;
+  switch (oiSignal) {
+    case "EXTREME":  oiMult = 1.2; break;
+    case "ELEVATED":  oiMult = 1.1; break;
+    case "DEPRESSED": oiMult = 0.7; break;
+    default:          oiMult = 1.0;
+  }
+
+  const rawScore =
+    posScore * DERIV_W_POSITIONING +
+    stressScore * DERIV_W_STRESS +
+    clamp(fundingScore, -100, 100) * DERIV_W_FUNDING +
+    0; // OI doesn't add its own score, it multiplies
+
+  // Apply OI multiplier and directional flip
+  const scaled = rawScore * oiMult;
+
+  // OI component adds a small direct contribution
+  const oiDirect = (oiMult - 1.0) * 50; // EXTREME: +10, ELEVATED: +5, DEPRESSED: -15
+
+  return clamp(
+    directional(scaled + oiDirect * DERIV_W_OI, direction),
+    -100, 100,
+  );
 }
 
-// ─── ETFs ────────────────────────────────────────────────────────────────────
-// Institutional flow direction = directional signal
+// ─── ETFs (-100 to +100) ────────────────────────────────────────────────────
+// Institutional flows:
+//   - Flow sigma is the strongest signal — a high σ inflow during an outflow
+//     regime = institutional reversal, very high probability
+//   - Streak exhaustion: long outflow streaks increase reversal probability
+//   - Regime gives base direction
+//   - Reversal ratio measures conviction of the reversal
 
-const ETF_LONG: EtfRegime[] = ["STRONG_INFLOW", "REVERSAL_TO_INFLOW"];
-const ETF_SHORT: EtfRegime[] = ["STRONG_OUTFLOW", "REVERSAL_TO_OUTFLOW"];
+const ETF_W_SIGMA = 0.40;
+const ETF_W_STREAK = 0.25;
+const ETF_W_REGIME = 0.20;
+const ETF_W_REVERSAL = 0.15;
 
-function scoreEtfs(regime: EtfRegime, direction: Direction): AgreementScore {
+function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   if (direction === "FLAT") return 0;
 
-  const agrees = direction === "LONG" ? ETF_LONG : ETF_SHORT;
-  const disagrees = direction === "LONG" ? ETF_SHORT : ETF_LONG;
+  const { regime, previousRegime, flow } = ctx;
 
-  if (agrees.includes(regime)) return 1;
-  if (disagrees.includes(regime)) return -1;
-  return 0;
-}
+  // 1. Flow sigma — strongest signal. σ > 2 is very significant.
+  //    Positive sigma = inflow day, negative sigma = outflow day.
+  //    Raw score is LONG-biased (positive sigma = agrees with LONG).
+  //    Extra bonus when sigma contradicts the prevailing regime (reversal signal).
+  let sigmaScore = clamp(flow.todaySigma * 35, -100, 100);
 
-// ─── HTF ─────────────────────────────────────────────────────────────────────
-// Trend structure alignment — note: for swing reversal, extended regimes
-// in the OPPOSITE direction can actually agree (mean-reversion setup)
-
-const HTF_LONG: HtfRegime[] = ["MACRO_BULLISH", "RECLAIMING", "ACCUMULATION"];
-const HTF_SHORT: HtfRegime[] = ["MACRO_BEARISH", "DISTRIBUTION"];
-
-// Extended regimes suggest mean-reversion in the opposite direction
-const HTF_REVERSION_LONG: HtfRegime[] = ["BEAR_EXTENDED"];
-const HTF_REVERSION_SHORT: HtfRegime[] = ["BULL_EXTENDED"];
-
-function scoreHtf(regime: HtfRegime, direction: Direction): AgreementScore {
-  if (direction === "FLAT") {
-    return regime === "RANGING" ? 1 : 0;
+  // Regime-contradiction bonus: outflow regime + high positive sigma = reversal
+  const regimeContradicts =
+    (flow.todaySigma > 1 && (regime === "STRONG_OUTFLOW" || previousRegime === "STRONG_OUTFLOW")) ||
+    (flow.todaySigma < -1 && (regime === "STRONG_INFLOW" || previousRegime === "STRONG_INFLOW"));
+  if (regimeContradicts) {
+    sigmaScore = clamp(sigmaScore * 1.5, -100, 100);
   }
 
-  const agrees = direction === "LONG"
-    ? [...HTF_LONG, ...HTF_REVERSION_LONG]
-    : [...HTF_SHORT, ...HTF_REVERSION_SHORT];
-  const disagrees = direction === "LONG"
-    ? [...HTF_SHORT, ...HTF_REVERSION_SHORT]
-    : [...HTF_LONG, ...HTF_REVERSION_LONG];
-
-  if (agrees.includes(regime)) return 1;
-  if (disagrees.includes(regime)) return -1;
-  return 0;
-}
-
-// ─── Sentiment ───────────────────────────────────────────────────────────────
-// Contrarian: extreme fear = agrees with LONG (crowd capitulation = buy)
-// Extreme greed = agrees with SHORT (crowd euphoria = sell)
-
-const SENTIMENT_LONG: SentimentRegime[] = ["EXTREME_FEAR", "FEAR", "CONSENSUS_BULLISH"];
-const SENTIMENT_SHORT: SentimentRegime[] = ["EXTREME_GREED", "GREED", "CONSENSUS_BEARISH"];
-
-function scoreSentiment(regime: SentimentRegime, direction: Direction): AgreementScore {
-  if (direction === "FLAT") {
-    return regime === "SENTIMENT_NEUTRAL" ? 1 : 0;
+  // 2. Streak exhaustion — longer streaks in one direction increase reversal probability.
+  //    This is a contrarian signal: long outflow streak = more likely to reverse to inflow = LONG.
+  let streakScore = 0;
+  if (flow.consecutiveOutflowDays >= 3) {
+    // Outflow exhaustion → favors LONG reversal. Exponential scaling.
+    streakScore = clamp(Math.pow(flow.consecutiveOutflowDays, 1.3) * 8, 0, 100);
+  } else if (flow.consecutiveInflowDays >= 3) {
+    // Inflow exhaustion → favors SHORT reversal
+    streakScore = -clamp(Math.pow(flow.consecutiveInflowDays, 1.3) * 8, 0, 100);
   }
 
-  const agrees = direction === "LONG" ? SENTIMENT_LONG : SENTIMENT_SHORT;
-  const disagrees = direction === "LONG" ? SENTIMENT_SHORT : SENTIMENT_LONG;
+  // 3. Regime base score
+  let regimeScore = 0;
+  switch (regime) {
+    case "STRONG_INFLOW":       regimeScore = 80; break;
+    case "REVERSAL_TO_INFLOW":  regimeScore = 60; break;
+    case "REVERSAL_TO_OUTFLOW": regimeScore = -60; break;
+    case "STRONG_OUTFLOW":      regimeScore = -80; break;
+    default:                    regimeScore = 0; // NEUTRAL, MIXED
+  }
 
-  if (agrees.includes(regime)) return 1;
-  if (disagrees.includes(regime)) return -1;
-  return 0;
+  // 4. Reversal ratio — how much of the prior streak has been reversed.
+  //    High ratio during a reversal regime = strong conviction.
+  let reversalScore = 0;
+  if (regime === "REVERSAL_TO_INFLOW" || regime === "REVERSAL_TO_OUTFLOW") {
+    const ratio = Math.min(flow.reversalRatio, 1.5);
+    const base = (ratio / 1.5) * 100;
+    reversalScore = regime === "REVERSAL_TO_INFLOW" ? base : -base;
+  }
+
+  const rawScore =
+    sigmaScore * ETF_W_SIGMA +
+    streakScore * ETF_W_STREAK +
+    regimeScore * ETF_W_REGIME +
+    reversalScore * ETF_W_REVERSAL;
+
+  return clamp(directional(rawScore, direction), -100, 100);
+}
+
+// ─── HTF (-100 to +100) ─────────────────────────────────────────────────────
+// Mean-reversion technical setup:
+//   - RSI confidence is the primary driver (how stretched the market is)
+//   - CVD divergence confirms the reversal thesis
+//   - Volatility compression ("coiled spring") amplifies conviction —
+//     after a big move, ATR decays, then the next big move fires
+//   - Regime and market structure are complementary, not primary
+
+const HTF_W_RSI = 0.30;
+const HTF_W_CVD = 0.30;
+const HTF_W_VOLATILITY = 0.20;
+const HTF_W_REGIME = 0.10;
+const HTF_W_STRUCTURE = 0.10;
+
+function scoreHtf(ctx: HtfContext, direction: Direction): number {
+  if (direction === "FLAT") {
+    // For FLAT: RANGING regime + RSI near 50 + no CVD divergence = supports flat
+    let flatScore = 0;
+    if (ctx.regime === "RANGING") flatScore += 30;
+    // RSI near 50 = no directional stretch = supports flat
+    const rsiNeutral = 1 - Math.abs(ctx.rsi.h4 - 50) / 50; // 0-1, 1 when RSI=50
+    flatScore += rsiNeutral * 30;
+    // No CVD divergence supports flat
+    if (ctx.cvd.futures.divergence === "NONE") flatScore += 20;
+    // High ATR = not flat, penalize. Low ATR without displacement = genuinely quiet.
+    if (ctx.volatility.atrPercentile > 70) flatScore -= 20;
+    else if (ctx.volatility.atrPercentile < 30 && !ctx.volatility.compressionAfterMove) flatScore += 20;
+    return clamp(flatScore, -100, 100);
+  }
+
+  // 1. RSI confidence — distance from 50.
+  //    For LONG: oversold (RSI < 50) = positive. RSI=20 → strong LONG signal.
+  //    For SHORT: overbought (RSI > 50) = positive. RSI=80 → strong SHORT signal.
+  //    Use 4h RSI for entry-level signal, daily RSI for trend confirmation.
+  const rsiDeviation4h = (50 - ctx.rsi.h4) / 50; // positive when oversold (LONG-biased)
+  const rsiDeviationDaily = (50 - ctx.rsi.daily) / 50;
+  const rsiRaw = (rsiDeviation4h * 0.7 + rsiDeviationDaily * 0.3) * 100;
+
+  // 2. CVD divergence — price falling but CVD rising = bullish divergence (LONG)
+  let cvdScore = 0;
+  const futDiv = ctx.cvd.futures.divergence;
+  const spotDiv = ctx.cvd.spot.divergence;
+  if (futDiv === "BULLISH") cvdScore += 60;
+  else if (futDiv === "BEARISH") cvdScore -= 60;
+  if (spotDiv === "BULLISH") cvdScore += 40;
+  else if (spotDiv === "BEARISH") cvdScore -= 40;
+
+  // R² quality: high R² = more reliable divergence signal
+  const r2Avg = (ctx.cvd.futures.short.r2 + ctx.cvd.futures.long.r2) / 2;
+  cvdScore *= (0.5 + r2Avg * 0.5); // scale 50%-100% based on fit quality
+
+  // 3. Volatility compression — "coiled spring" after big move.
+  //    Doesn't pick direction, but amplifies directional conviction.
+  //    compressionAfterMove = ATR compressed (bottom 30th pctl) + recent big displacement.
+  //    When the spring is coiled, the next directional move is high-probability.
+  let volScore = 0;
+  const vol = ctx.volatility;
+  if (vol.compressionAfterMove) {
+    // Strong coiled spring — big boost in the direction other signals point
+    // Scale by how compressed (lower percentile = tighter spring)
+    const compressionStrength = (30 - vol.atrPercentile) / 30; // 0-1
+    // Scale by displacement magnitude (bigger prior move = more energy stored)
+    const displacementStrength = clamp((vol.recentDisplacement - 2) / 3, 0, 1); // 2-5 ATR → 0-1
+    volScore = 100 * (0.5 + compressionStrength * 0.25 + displacementStrength * 0.25);
+  } else if (vol.atrRatio < 0.7) {
+    // Moderate compression without confirmed displacement — still worth something
+    volScore = 40 * ((0.7 - vol.atrRatio) / 0.3); // 0-40 as ratio drops from 0.7 to 0.4
+  } else if (vol.atrPercentile > 80) {
+    // High volatility — move is already happening, less edge for new entry
+    volScore = -30;
+  }
+  // volScore is unsigned (conviction amplifier) — signs it in the direction of other signals
+  const otherSignalDir = rsiRaw + cvdScore;
+  if (otherSignalDir < 0) volScore = -Math.abs(volScore);
+
+  // 4. Regime — complementary
+  let regimeScore = 0;
+  switch (ctx.regime) {
+    case "MACRO_BULLISH": regimeScore = 40; break;
+    case "RECLAIMING":    regimeScore = 50; break;
+    case "ACCUMULATION":  regimeScore = 60; break;
+    case "MACRO_BEARISH": regimeScore = -40; break;
+    case "DISTRIBUTION":  regimeScore = -60; break;
+    // Extended = contrarian (mean-reversion in opposite direction)
+    case "BEAR_EXTENDED": regimeScore = 70; break;
+    case "BULL_EXTENDED": regimeScore = -70; break;
+    case "RANGING":       regimeScore = 0; break;
+  }
+
+  // 5. Market structure — complementary
+  let structureScore = 0;
+  switch (ctx.structure) {
+    case "HH_HL": structureScore = 50; break;   // higher highs/lows → LONG
+    case "LH_LL": structureScore = -50; break;  // lower highs/lows → SHORT
+    case "HH_LL": structureScore = 10; break;   // mixed, slight LONG bias
+    case "LH_HL": structureScore = -10; break;  // mixed, slight SHORT bias
+    default:      structureScore = 0;
+  }
+
+  const rawScore =
+    rsiRaw * HTF_W_RSI +
+    clamp(cvdScore, -100, 100) * HTF_W_CVD +
+    clamp(volScore, -100, 100) * HTF_W_VOLATILITY +
+    regimeScore * HTF_W_REGIME +
+    structureScore * HTF_W_STRUCTURE;
+
+  return clamp(directional(rawScore, direction), -100, 100);
+}
+
+// ─── Sentiment (-100 to +100) ───────────────────────────────────────────────
+// Contrarian crowd signal:
+//   - Composite F&G extremes: extreme fear → LONG, extreme greed → SHORT
+//   - Component convergence: all components agreeing = stronger signal
+// Expert consensus excluded (disabled for now)
+
+const SENT_W_COMPOSITE = 0.55;
+const SENT_W_REGIME = 0.20;
+const SENT_W_CONVERGENCE = 0.25;
+
+function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
+  if (direction === "FLAT") {
+    // Neutral sentiment = supports flat
+    const neutrality = 1 - Math.abs(ctx.metrics.compositeIndex - 50) / 50;
+    return clamp(neutrality * 60, -100, 100);
+  }
+
+  // 1. Composite F&G — contrarian. Distance from 50 in the "right" direction.
+  //    Fear (< 50) agrees with LONG (buy when others are fearful).
+  //    Greed (> 50) agrees with SHORT (sell when others are greedy).
+  const fgDeviation = (50 - ctx.metrics.compositeIndex) / 50; // positive when fearful
+  const compositeScore = fgDeviation * 100;
+
+  // Non-linear boost at extremes (< 20 or > 80)
+  const extremity = Math.abs(ctx.metrics.compositeIndex - 50);
+  const extremeBoost = extremity > 30 ? ((extremity - 30) / 20) * 30 : 0;
+  const boostedComposite = compositeScore + (compositeScore > 0 ? extremeBoost : -extremeBoost);
+
+  // 2. Regime base — gives discrete signal
+  let regimeScore = 0;
+  switch (ctx.regime) {
+    case "EXTREME_FEAR":          regimeScore = 100; break;  // strong contrarian LONG
+    case "FEAR":                  regimeScore = 50; break;
+    case "EXTREME_GREED":         regimeScore = -100; break; // strong contrarian SHORT
+    case "GREED":                 regimeScore = -50; break;
+    case "CONSENSUS_BULLISH":     regimeScore = 30; break;   // experts agree bullish
+    case "CONSENSUS_BEARISH":     regimeScore = -30; break;
+    case "SENTIMENT_DIVERGENCE":  regimeScore = 0; break;    // mixed signals
+    default:                      regimeScore = 0;
+  }
+
+  // 3. Component convergence — how many F&G components agree on direction.
+  //    When 4+ components cluster in fear or greed territory, signal is stronger.
+  const components = ctx.metrics.components;
+  const componentValues = [
+    components.positioning,
+    components.trend,
+    components.momentumDivergence,
+    components.institutionalFlows,
+    components.exchangeFlows,
+    // expertConsensus excluded
+  ];
+
+  const fearCount = componentValues.filter((v) => v < 40).length;
+  const greedCount = componentValues.filter((v) => v > 60).length;
+  const maxConvergence = Math.max(fearCount, greedCount);
+  // 0-5 components converging → 0-100 score
+  const convergenceRaw = (maxConvergence / 5) * 100;
+  // Sign: positive if fear-converging (LONG), negative if greed-converging (SHORT)
+  const convergenceScore = fearCount > greedCount ? convergenceRaw : -convergenceRaw;
+
+  const rawScore =
+    clamp(boostedComposite, -100, 100) * SENT_W_COMPOSITE +
+    regimeScore * SENT_W_REGIME +
+    convergenceScore * SENT_W_CONVERGENCE;
+
+  return clamp(directional(rawScore, direction), -100, 100);
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -138,10 +379,16 @@ export function computeConfluence(
   const htf = outputs.find((o) => o.dimension === "HTF");
   const sent = outputs.find((o) => o.dimension === "SENTIMENT");
 
+  const derivatives = deriv ? scoreDerivatives(deriv.context, direction) : 0;
+  const etfScore = etfs ? scoreEtfs(etfs.context, direction) : 0;
+  const htfScore = htf ? scoreHtf(htf.context, direction) : 0;
+  const sentiment = sent ? scoreSentiment(sent.context, direction) : 0;
+
   return {
-    derivatives: deriv ? scoreDerivatives(deriv.regime, deriv.stress, direction) : 0,
-    etfs: etfs ? scoreEtfs(etfs.regime, direction) : 0,
-    htf: htf ? scoreHtf(htf.regime, direction) : 0,
-    sentiment: sent ? scoreSentiment(sent.regime, direction) : 0,
+    derivatives: Math.round(derivatives),
+    etfs: Math.round(etfScore),
+    htf: Math.round(htfScore),
+    sentiment: Math.round(sentiment),
+    total: Math.round(derivatives + etfScore + htfScore + sentiment),
   };
 }

@@ -18,6 +18,7 @@ interface SaveTradeIdeaInput {
   compositeTarget: number;
   levels: LevelResult[];
   confluence: Confluence;
+  skipped: boolean;
 }
 
 export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> {
@@ -29,6 +30,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       entryPrice: input.entryPrice,
       compositeTarget: input.compositeTarget,
       confluence: input.confluence as unknown as Prisma.InputJsonValue,
+      skipped: input.skipped,
       levels: {
         create: input.levels.map((l) => ({
           type: l.type,

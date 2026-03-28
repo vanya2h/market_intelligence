@@ -134,12 +134,15 @@ export function computeCompositeTarget(
   const { price, ma, vwap, rsi, atr } = htfContext;
   const entryPrice = price;
 
-  // FLAT: target is current price, levels are breakout thresholds at multiples of ATR
+  // FLAT: target is current price, levels are breakout thresholds based on ATR.
+  // Higher R:R ratio → tighter stop (same semantics as directional ideas).
+  // 1:2 = 1.5×ATR (loose), 1:3 = 1.25×ATR, 1:4 = 1.0×ATR, 1:5 = 0.75×ATR (tight)
   if (direction === "FLAT") {
+    const FLAT_ATR_MULTIPLIERS: Record<number, number> = { 2: 1.5, 3: 1.25, 4: 1.0, 5: 0.75 };
     const levels: LevelResult[] = RR_RATIOS.map((ratio) => ({
       type: "INVALIDATION" as const,
       label: `1:${ratio}`,
-      price: ratio * atr, // stored as distance — checker uses ±
+      price: (FLAT_ATR_MULTIPLIERS[ratio] ?? 1) * atr, // stored as distance — checker uses ±
     }));
 
     return { entryPrice, compositeTarget: entryPrice, levels };

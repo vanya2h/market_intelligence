@@ -99,6 +99,26 @@ export interface SignalStaleness {
   lastPivot: number | null;
 }
 
+/**
+ * Volatility compression context — detects "coiled spring" setups.
+ *
+ * After a big move, volatility decays (ATR drops). When ATR is compressed
+ * relative to its recent history AND a prior displacement exists, the market
+ * is coiling for the next big move.
+ */
+export interface VolatilityContext {
+  /** Current ATR-14 on 4h candles */
+  atr: number;
+  /** ATR percentile rank within last 50 4h candles (0–100). Low = compressed. */
+  atrPercentile: number;
+  /** ATR ratio: current ATR / mean ATR over last 50 candles. < 0.7 = compressed. */
+  atrRatio: number;
+  /** Max absolute price displacement (ATR-normalized) in last 30 candles. High = recent big move. */
+  recentDisplacement: number;
+  /** True when compression detected after a big move (coiled spring). */
+  compressionAfterMove: boolean;
+}
+
 // Structured context passed to the LLM agent
 export interface HtfContext {
   asset: "BTC" | "ETH";
@@ -115,6 +135,8 @@ export interface HtfContext {
   events: HtfEvent[];
   /** ATR-14 on 4h candles — execution-timeframe volatility context */
   atr: number;
+  /** Volatility compression / coiled spring detection */
+  volatility: VolatilityContext;
   /** How fresh each key signal is (candles since peak) — null if not present */
   staleness: SignalStaleness;
 }

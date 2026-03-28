@@ -114,8 +114,16 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
         a: "Exchange flows track coins moving on and off exchanges across 20+ exchanges. Coins leaving exchanges (outflow) signal accumulation — investors moving to self-custody with no intent to sell. Coins entering exchanges (inflow) signal distribution — positioning to sell. The score maps 7-day reserve change to a 0–100 scale (outflow = bullish/high, inflow = bearish/low), boosted by trend confirmation (falling reserves = bullish), 30-day extremes (reserves at 30d low = strong accumulation), and regime state. States: ACCUMULATION, DISTRIBUTION, EF_NEUTRAL, HEAVY_INFLOW, HEAVY_OUTFLOW.",
       },
       {
+        q: "What timeframe does the analysis use?",
+        a: "4-hour candles are the primary execution timeframe: SMA-50/200, RSI-14 (entry), CVD dual-window analysis, ATR-14, VWAP anchoring, and volatility compression are all computed on 4H bars (~300 candle history). Daily candles provide structural context: RSI-14 (trend bias) and ATR-filtered pivot detection for market structure (~104 candle history). This matches the swing trading horizon — 4H is granular enough for precise entries while daily filters noise from structural reads. The outcome checker also tracks on 4H candles.",
+      },
+      {
         q: "How are the technical indicators computed?",
         a: "SMA-50 and SMA-200 on 4H candles (300 candle history). RSI-14 on daily candles (104 candle history) plus 4H for momentum. CVD uses dual-window analysis (20-candle short, 75-candle long) with slope and R² thresholds. Market structure is detected via pivot analysis (higher-highs/higher-lows vs lower-highs/lower-lows). VWAP is anchored weekly and monthly. ATR-14 on 4H candles measures volatility.",
+      },
+      {
+        q: "What is the volatility compression (coiled spring) signal?",
+        a: "After a big price move, volatility tends to decay — ATR drops as the market consolidates. This 'coiled spring' often precedes the next explosive move. The system detects it by comparing current ATR to its recent 50-candle distribution: when ATR is in the bottom 30th percentile AND a recent displacement of 2+ ATR units exists within the last 30 candles, the compression flag fires. This doesn't pick direction — it amplifies conviction in whichever direction other signals (RSI, CVD) point. The idea: catch the moment the market transitions from turbulence decay into the next big move.",
       },
       {
         q: "How does the Momentum Divergence detection work?",
@@ -147,8 +155,8 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
         a: "All classifiers use different thresholds for entering vs exiting a state. CROWDED_LONG triggers at funding percentile above 80 but only exits at below 75. This prevents 'flickering' — rapid state changes right at the boundary that would generate false signals. For swing trading, you need regime readings stable enough to act on over multi-day timeframes.",
       },
       {
-        q: "How does confluence work as a swing filter?",
-        a: "Each dimension (Derivatives, ETFs, Exchange Flows, HTF, Sentiment) scores +1 (agrees with direction), 0 (neutral), or -1 (disagrees). When all five align, the signal has genuine predictive power. When only one or two agree, the edge is marginal. This keeps you out of choppy, low-conviction setups and in high-conviction swing trades where multiple independent data sources confirm the same directional bias.",
+        q: "How does confluence scoring and the conviction gate work?",
+        a: "Each of four dimensions (Derivatives, ETFs, HTF, Sentiment) produces a conviction score from -100 to +100 relative to the trade direction — not a simple agree/disagree, but a granular measure of how strongly each dimension supports the trade. Derivatives scores on positioning crowding, stress events, funding pressure, and OI context. ETFs scores on flow sigma (strongest signal — a high σ inflow during an outflow regime is very high probability), streak exhaustion (longer outflow streaks increase reversal probability), regime, and reversal ratio. HTF scores on RSI confidence, CVD divergence, volatility compression, regime, and market structure. Sentiment scores on composite F&G extremity, component convergence, and regime. The total conviction ranges from -400 to +400. A directional trade is only taken when total >= 300 — this keeps you out of low-conviction noise and ensures multiple independent data sources strongly agree before risking capital.",
       },
     ],
   },

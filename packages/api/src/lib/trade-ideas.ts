@@ -32,6 +32,7 @@ export interface Confluence {
   etfs: number;
   htf: number;
   sentiment: number;
+  total: number;
 }
 
 export interface TradeIdeaLevel {
@@ -58,6 +59,7 @@ export interface TradeIdea {
   entryPrice: number;
   compositeTarget: number;
   confluence: Confluence | null;
+  skipped: boolean;
   createdAt: Date;
   levels: TradeIdeaLevel[];
   returns: TradeIdeaReturn[];
@@ -72,6 +74,7 @@ export function parseTradeIdea(raw: Jsonify<TradeIdeaRaw>): TradeIdea {
     entryPrice: raw.entryPrice,
     compositeTarget: raw.compositeTarget,
     confluence: raw.confluence as Confluence | null,
+    skipped: raw.skipped,
     createdAt: new Date(raw.createdAt),
     levels: raw.levels.map((l) => ({
       type: l.type as LevelType,

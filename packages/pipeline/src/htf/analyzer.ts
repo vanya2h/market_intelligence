@@ -33,6 +33,7 @@ import {
   MarketStructure,
   RsiContext,
   SignalStaleness,
+  VolatilityContext,
   VwapContext,
 } from "./types.js";
 
@@ -231,6 +232,81 @@ function atr14(candles: Candle[]): number {
   }
 
   return parseFloat(atr.toFixed(2));
+}
+
+// ─── Volatility compression ──────────────────────────────────────────────────
+
+/**
+ * Rolling ATR-14 series — computes ATR at each candle position for the
+ * last `window` candles. Requires at least `window + 14` candles.
+ */
+function atrSeries(candles: Candle[], window: number): number[] {
+  if (candles.length < 15) return [];
+
+  // Compute all true ranges
+  const trs: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c = candles[i]!;
+    const prevClose = candles[i - 1]!.close;
+    trs.push(Math.max(c.high - c.low, Math.abs(c.high - prevClose), Math.abs(c.low - prevClose)));
+  }
+
+  // Walk the Wilder-smoothed ATR forward, collecting the last `window` values
+  let atr = trs.slice(0, 14).reduce((s, v) => s + v, 0) / 14;
+  const series: number[] = [];
+  const startCollecting = Math.max(14, trs.length - window);
+
+  for (let i = 14; i < trs.length; i++) {
+    atr = (atr * 13 + trs[i]!) / 14;
+    if (i >= startCollecting) series.push(atr);
+  }
+
+  return series;
+}
+
+/**
+ * Detect volatility compression after a big move ("coiled spring").
+ *
+ * 1. Compute rolling ATR series over last 50 4h candles
+ * 2. ATR percentile: where current ATR sits in that distribution
+ * 3. ATR ratio: current / mean (< 0.7 = compressed)
+ * 4. Recent displacement: max price move (ATR-normalized) in last 30 candles
+ * 5. Coiled spring = low ATR percentile + high recent displacement
+ */
+function analyzeVolatility(candles: Candle[], currentAtr: number): VolatilityContext {
+  const LOOKBACK = 50;
+  const DISPLACEMENT_WINDOW = 30;
+
+  const series = atrSeries(candles, LOOKBACK);
+  if (series.length < 10) {
+    return { atr: currentAtr, atrPercentile: 50, atrRatio: 1, recentDisplacement: 0, compressionAfterMove: false };
+  }
+
+  // ATR percentile: what fraction of recent ATR values is current ATR below
+  const belowCount = series.filter((v) => v <= currentAtr).length;
+  const atrPercentile = Math.round((belowCount / series.length) * 100);
+
+  // ATR ratio: current vs mean
+  const meanAtr = series.reduce((s, v) => s + v, 0) / series.length;
+  const atrRatio = parseFloat((currentAtr / meanAtr).toFixed(3));
+
+  // Recent displacement: max absolute price move over DISPLACEMENT_WINDOW candles,
+  // normalized by the mean ATR (so it's in "ATR units")
+  const recent = candles.slice(-DISPLACEMENT_WINDOW);
+  let maxDisplacement = 0;
+  if (recent.length >= 2 && meanAtr > 0) {
+    const basePrice = recent[0]!.close;
+    for (const c of recent) {
+      const disp = Math.abs(c.close - basePrice) / meanAtr;
+      if (disp > maxDisplacement) maxDisplacement = disp;
+    }
+  }
+  const recentDisplacement = parseFloat(maxDisplacement.toFixed(2));
+
+  // Coiled spring: ATR in bottom 30th percentile + displacement > 2 ATR units
+  const compressionAfterMove = atrPercentile <= 30 && recentDisplacement >= 2;
+
+  return { atr: currentAtr, atrPercentile, atrRatio, recentDisplacement, compressionAfterMove };
 }
 
 // ─── Market structure ─────────────────────────────────────────────────────────
@@ -618,6 +694,7 @@ export function analyze(
     structure,
     events,
     atr: h4Atr,
+    volatility: analyzeVolatility(h4, h4Atr),
     staleness,
   };
 
