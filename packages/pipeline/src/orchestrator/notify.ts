@@ -42,10 +42,7 @@ const TELEGRAM_API = "https://api.telegram.org";
 const MAX_MESSAGE_LENGTH = 4096;
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function markdownToTelegramHtml(text: string): string {
@@ -153,9 +150,7 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
     } else {
       ctx.artifacts.briefId = await saveBrief(ctx.asset, briefText!, outputs!, richBrief);
     }
-    ctx.artifacts.briefUrl = ctx.webAppUrl
-      ? `${ctx.webAppUrl}/brief/${ctx.artifacts.briefId}`
-      : undefined;
+    ctx.artifacts.briefUrl = ctx.webAppUrl ? `${ctx.webAppUrl}/brief/${ctx.artifacts.briefId}` : undefined;
     if (ctx.artifacts.briefUrl) note(`brief URL: ${ctx.artifacts.briefUrl}`);
   },
 
@@ -203,9 +198,7 @@ export async function runNotify(assets: ("BTC" | "ETH")[], opts: NotifyOptions =
     const ageMs = Date.now() - run.createdAt.getTime();
     if (ageMs > 2 * 60 * 60 * 1000) {
       const hours = Math.round(ageMs / (60 * 60 * 1000));
-      console.warn(
-        chalk.yellow(`⚠ Run is ${hours}h old — dimension data may be stale. Use a fresh run if needed.`),
-      );
+      console.warn(chalk.yellow(`⚠ Run is ${hours}h old — dimension data may be stale. Use a fresh run if needed.`));
     }
 
     await executeStages(run.asset, run.id, run.artifacts, run.lastCompleted, {
@@ -243,9 +236,7 @@ export async function showFailedRuns(): Promise<void> {
   for (const r of runs) {
     const age = Math.round((Date.now() - r.createdAt.getTime()) / (60 * 1000));
     const ageStr = age < 60 ? `${age}m ago` : `${Math.round(age / 60)}h ago`;
-    console.log(
-      `  ${chalk.cyan(r.id)}  ${r.asset}  stage=${chalk.red(r.failedStage ?? "?")}  ${ageStr}`,
-    );
+    console.log(`  ${chalk.cyan(r.id)}  ${r.asset}  stage=${chalk.red(r.failedStage ?? "?")}  ${ageStr}`);
     if (r.error) console.log(`    ${chalk.dim(r.error)}`);
   }
   console.log(chalk.dim(`\nResume with: pnpm notify --resume <runId>`));

@@ -43,21 +43,43 @@ ${sections.join("\n\n")}`;
 
 async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[], briefUrl?: string): Promise<string> {
   const urlBudget = briefUrl ? briefUrl.length + 2 : 0; // +2 for "\n\n"
-  const charLimit = MAX_TWEET_LENGTH - urlBudget;
+  const charLimit = MAX_TWEET_LENGTH - urlBudget - 10; // 10 char safety margin
 
   const res = await callLlm({
-    system: `Crypto analyst writing ONE tweet (max ${charLimit} chars) about ${asset}. Swing-trade reversal focus.
+    system: `You write a single ${asset} market tweet (max ${charLimit} chars). Your audience is crypto traders who want a quick, clear read on what's happening and what to watch.
 
-Include: directional bias, key price level, 1-2 strongest signals (cite exact numbers: funding rate, RSI, F&G, flows).
+Structure:
+1. Open with what ${asset} is doing right now and the key price level (e.g. "BTC rejected at $87k — sellers defending this level hard")
+2. Explain WHY in plain English — what's driving the move? Use cause-and-effect, not just listing signals.
+3. Close with what comes next — what level or event decides the next move?
 
-Style: direct, data-heavy, no hashtags, no emojis. Use → • | for structure. Return ONLY the tweet text.`,
+Clarity rules:
+- Write like you're explaining to a smart friend, not a terminal. Every sentence should be immediately understandable.
+- BAD: "shorts pile in at consensus levels" — vague, what does this mean?
+- GOOD: "most traders are betting on a drop, which often sets up a squeeze"
+- Use exact prices for levels. For everything else, describe what it means rather than citing the number.
+- No jargon without context. If you mention funding rate, say what it implies. If you mention OI, say what the positioning tells us.
+- No hashtags, no emojis, no cashtags except for the asset price.
+- Keep it punchy. Short sentences. Use → • | for structure.
+- HARD LIMIT: your tweet MUST be under ${charLimit} characters. Finish your thought cleanly within this limit.
+- Return ONLY the tweet text, nothing else.`,
     user: buildPrompt(asset, outputs),
     maxTokens: 256,
   });
 
   let tweet = res.text.trim();
   if (tweet.length > charLimit) {
-    tweet = tweet.slice(0, charLimit - 1) + "…";
+    // Trim to last sentence boundary that fits
+    const truncated = tweet.slice(0, charLimit - 1);
+    const lastBreak = Math.max(
+      truncated.lastIndexOf(". "),
+      truncated.lastIndexOf(" — "),
+      truncated.lastIndexOf(" • "),
+      truncated.lastIndexOf("\n"),
+    );
+    tweet = lastBreak > charLimit * 0.5
+      ? truncated.slice(0, lastBreak + 1).trimEnd()
+      : truncated + "…";
   }
   return tweet;
 }
