@@ -18,6 +18,7 @@ import type { DerivativesContext } from "../../types.js";
 import type { EtfContext } from "../../etfs/types.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { SentimentContext } from "../../sentiment/types.js";
+import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { DimensionOutput } from "../types.js";
 import type { Direction } from "./composite-target.js";
 
@@ -28,6 +29,7 @@ export interface Confluence {
   etfs: number;
   htf: number;
   sentiment: number;
+  exchangeFlows: number;
   total: number;
 }
 
@@ -368,6 +370,59 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
   return clamp(directional(rawScore, direction), -100, 100);
 }
 
+// ─── Exchange Flows (-100 to +100) ───────────────────────────────────────────
+// On-chain supply pressure:
+//   - Coins leaving exchanges = accumulation (bullish / agrees with LONG)
+//   - Coins entering exchanges = distribution (bearish / agrees with SHORT)
+//   - Flow sigma and reserve trend drive the score
+//   - 30d extremes (low/high) amplify the signal
+
+const EF_W_REGIME = 0.30;
+const EF_W_TREND = 0.25;
+const EF_W_SIGMA = 0.25;
+const EF_W_EXTREME = 0.20;
+
+function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): number {
+  if (direction === "FLAT") {
+    // Neutral flows support flat
+    return ctx.regime === "EF_NEUTRAL" ? 30 : 0;
+  }
+
+  const m = ctx.metrics;
+
+  // 1. Regime — direct signal. Outflows = accumulation = LONG-biased.
+  let regimeScore = 0;
+  switch (ctx.regime) {
+    case "ACCUMULATION":   regimeScore = 70; break;   // coins leaving → bullish
+    case "HEAVY_OUTFLOW":  regimeScore = 90; break;   // aggressive accumulation
+    case "DISTRIBUTION":   regimeScore = -70; break;  // coins entering → bearish
+    case "HEAVY_INFLOW":   regimeScore = -90; break;  // aggressive distribution
+    default:               regimeScore = 0;
+  }
+
+  // 2. Balance trend — sustained direction
+  let trendScore = 0;
+  if (m.balanceTrend === "FALLING") trendScore = 60;       // reserves shrinking → bullish
+  else if (m.balanceTrend === "RISING") trendScore = -60;   // reserves growing → bearish
+
+  // 3. Flow sigma — today's flow intensity relative to 30d distribution
+  //    Negative sigma = outflow day (bullish), positive = inflow day (bearish)
+  const sigmaScore = clamp(-m.todaySigma * 30, -100, 100); // flip: outflow (negative sigma) → positive score
+
+  // 4. 30d extremes — reserves at monthly low/high = strong signal
+  let extremeScore = 0;
+  if (m.isAt30dLow) extremeScore = 80;         // reserves at lowest in 30d → strong accumulation
+  else if (m.isAt30dHigh) extremeScore = -80;   // reserves at highest → strong distribution
+
+  const rawScore =
+    regimeScore * EF_W_REGIME +
+    trendScore * EF_W_TREND +
+    sigmaScore * EF_W_SIGMA +
+    extremeScore * EF_W_EXTREME;
+
+  return clamp(directional(rawScore, direction), -100, 100);
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function computeConfluence(
@@ -378,17 +433,20 @@ export function computeConfluence(
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");
   const sent = outputs.find((o) => o.dimension === "SENTIMENT");
+  const ef = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
   const derivatives = deriv ? scoreDerivatives(deriv.context, direction) : 0;
   const etfScore = etfs ? scoreEtfs(etfs.context, direction) : 0;
   const htfScore = htf ? scoreHtf(htf.context, direction) : 0;
   const sentiment = sent ? scoreSentiment(sent.context, direction) : 0;
+  const exchangeFlows = ef ? scoreExchangeFlows(ef.context, direction) : 0;
 
   return {
     derivatives: Math.round(derivatives),
     etfs: Math.round(etfScore),
     htf: Math.round(htfScore),
     sentiment: Math.round(sentiment),
-    total: Math.round(derivatives + etfScore + htfScore + sentiment),
+    exchangeFlows: Math.round(exchangeFlows),
+    total: Math.round(derivatives + etfScore + htfScore + sentiment + exchangeFlows),
   };
 }

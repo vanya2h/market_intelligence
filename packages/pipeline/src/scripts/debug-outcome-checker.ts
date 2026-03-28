@@ -127,7 +127,7 @@ async function main() {
     // Confluence
     if (idea.confluence) {
       const c = idea.confluence as Record<string, number>;
-      const dims = ["derivatives", "etfs", "htf", "sentiment"] as const;
+      const dims = ["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const;
       const parts = dims.map((k) => {
         const v = c[k] ?? 0;
         const icon = v > 0 ? chalk.green(`+${v}`) : v < 0 ? chalk.red(`${v}`) : chalk.dim("0");

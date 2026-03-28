@@ -1,12 +1,13 @@
 import type { Confluence } from "@market-intel/api";
 
-const DIMENSION_KEYS = ["derivatives", "etfs", "htf", "sentiment"] as const;
+const DIMENSION_KEYS = ["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const;
 
 const LABELS: Record<string, string> = {
   derivatives: "Derivatives",
   etfs: "ETF Flows",
   htf: "HTF Structure",
   sentiment: "Sentiment",
+  exchangeFlows: "Exchange Flows",
 };
 
 const SHORT_LABELS: Record<string, string> = {
@@ -14,6 +15,7 @@ const SHORT_LABELS: Record<string, string> = {
   etfs: "ETFs",
   htf: "HTF",
   sentiment: "Sent",
+  exchangeFlows: "ExFlow",
 };
 
 function scoreColor(score: number): string {
@@ -36,12 +38,15 @@ function totalColor(total: number): string {
   return "var(--text-muted)";
 }
 
-/** Inline badges — compact row of dimension scores + total */
+const CONVICTION_THRESHOLD = 200;
+
+/** Inline badges — compact row of dimension scores + total / threshold */
 export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
+  const total = confluence.total ?? 0;
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {DIMENSION_KEYS.map((dim) => {
-        const score = confluence[dim];
+        const score = confluence[dim] ?? 0;
         return (
           <span
             key={dim}
@@ -59,9 +64,9 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
       })}
       <span
         className="text-[0.625rem] font-bold font-mono-jb tabular-nums"
-        style={{ color: totalColor(confluence.total) }}
+        style={{ color: totalColor(total) }}
       >
-        {"\u03A3"}{confluence.total}
+        {"\u03A3"}{total}/{CONVICTION_THRESHOLD}
       </span>
     </div>
   );
@@ -70,15 +75,17 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
 /** Full breakdown — visual bars with dimension scores and conviction meter */
 export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) {
   const maxScore = 100;
-  const convictionPct = Math.max(0, Math.min(100, (confluence.total / 400) * 100));
-  const thresholdPct = (200 / 400) * 100;
-  const passesThreshold = confluence.total >= 200;
+  const total = confluence.total ?? 0;
+  const maxTotal = 500;
+  const convictionPct = Math.max(0, Math.min(100, (total / maxTotal) * 100));
+  const thresholdPct = (CONVICTION_THRESHOLD / maxTotal) * 100;
+  const passesThreshold = total >= CONVICTION_THRESHOLD;
 
   return (
     <div className="flex flex-col gap-2">
       {/* Per-dimension bars */}
       {DIMENSION_KEYS.map((dim) => {
-        const score = confluence[dim];
+        const score = confluence[dim] ?? 0;
         const absPct = Math.abs(score) / maxScore;
         const isPositive = score >= 0;
 
@@ -168,7 +175,7 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
               width: `${convictionPct}%`,
               background: passesThreshold
                 ? "var(--green)"
-                : confluence.total > 0
+                : total > 0
                   ? "var(--amber)"
                   : "var(--red)",
               opacity: 0.6,
@@ -177,10 +184,10 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
         </div>
 
         <span
-          className="w-10 shrink-0 text-right font-mono-jb tabular-nums text-[0.625rem] font-bold"
-          style={{ color: totalColor(confluence.total) }}
+          className="w-16 shrink-0 text-right font-mono-jb tabular-nums text-[0.625rem] font-bold"
+          style={{ color: totalColor(total) }}
         >
-          {confluence.total}
+          {total}/{CONVICTION_THRESHOLD}
         </span>
       </div>
     </div>

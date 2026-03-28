@@ -136,7 +136,7 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   // Trade decision gaps
   if (decision?.skipped) {
     const conf = decision.confluence;
-    const weakest = (["derivatives", "etfs", "htf", "sentiment"] as const)
+    const weakest = (["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const)
       .map((d) => ({ dim: d, score: conf[d] }))
       .sort((a, b) => a.score - b.score);
     const worst = weakest[0]!;
@@ -183,7 +183,7 @@ async function main() {
     }));
 
     for (const s of scored) {
-      const dims = ["derivatives", "etfs", "htf", "sentiment"] as const;
+      const dims = ["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const;
       const parts = dims.map((d) => `${d}=${scoreStr(s.confluence[d])}`).join("  ");
       const totalColor = s.confluence.total >= CONVICTION_THRESHOLD ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
       const passIcon = s.confluence.total >= CONVICTION_THRESHOLD ? chalk.green(" ✓ TAKE") : "";

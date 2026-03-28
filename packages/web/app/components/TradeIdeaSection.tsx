@@ -1,6 +1,7 @@
 import type { TradeIdea, TradeIdeaReturn } from "@market-intel/api";
 import { SectionBlock } from "./SectionBlock";
 import { UsdValue } from "./UsdValue";
+import { InlineLink } from "./InlineLink";
 import { ConfluenceBadges, ConfluenceBreakdown } from "./ConfluenceBadges";
 import { LevelStatus } from "./LevelStatus";
 import { ReturnsCurve } from "./ReturnsCurve";
@@ -9,15 +10,8 @@ import { ReturnsCurve } from "./ReturnsCurve";
  * Shows how wrong a skip decision was.
  * Uses peak quality (returnPct × e^(-t/72)) — fast moves score high, slow moves decay.
  */
-function MissedMoveIndicator({
-  peak,
-  lastReturn,
-}: {
-  peak: TradeIdeaReturn;
-  lastReturn: TradeIdeaReturn | null;
-}) {
+function MissedMoveIndicator({ peak, lastReturn }: { peak: TradeIdeaReturn; lastReturn: TradeIdeaReturn | null }) {
   const absQuality = Math.abs(peak.qualityAtPoint);
-  // Severity: >3 = bad miss, >1 = notable, <1 = negligible
   const severity = absQuality >= 3 ? "bad" : absQuality >= 1 ? "notable" : "negligible";
   const severityColor =
     severity === "bad" ? "var(--red)" : severity === "notable" ? "var(--amber)" : "var(--text-muted)";
@@ -30,7 +24,10 @@ function MissedMoveIndicator({
   return (
     <div
       className="mt-2 rounded px-3 py-2 flex items-center gap-3 flex-wrap text-[0.625rem]"
-      style={{ background: `color-mix(in srgb, ${severityColor} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${severityColor} 20%, transparent)` }}
+      style={{
+        background: `color-mix(in srgb, ${severityColor} 8%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${severityColor} 20%, transparent)`,
+      }}
     >
       <span className="font-medium uppercase tracking-wider" style={{ color: severityColor }}>
         {severityLabel}
@@ -38,17 +35,27 @@ function MissedMoveIndicator({
       <span style={{ color: "var(--text-muted)" }}>
         Peak{" "}
         <span className="font-mono-jb font-semibold" style={{ color: severityColor }}>
-          {peak.returnPct >= 0 ? "+" : ""}{peak.returnPct.toFixed(2)}%
-        </span>
-        {" "}at {peakTime}
+          {peak.returnPct >= 0 ? "+" : ""}
+          {peak.returnPct.toFixed(2)}%
+        </span>{" "}
+        at {peakTime}
         <span style={{ opacity: 0.6 }}> (quality: {peak.qualityAtPoint.toFixed(2)})</span>
       </span>
       {lastReturn && (
         <span className="ml-auto font-mono-jb" style={{ color: "var(--text-muted)" }}>
-          Now: {lastReturn.returnPct >= 0 ? "+" : ""}{lastReturn.returnPct.toFixed(2)}%
+          Now: {lastReturn.returnPct >= 0 ? "+" : ""}
+          {lastReturn.returnPct.toFixed(2)}%
         </span>
       )}
     </div>
+  );
+}
+
+function LearnLink() {
+  return (
+    <InlineLink to="/faq#trade-ideas" className="mt-3 inline-flex items-center gap-1 text-[0.8rem]">
+      Learn how it works <span>{"\u2192"}</span>
+    </InlineLink>
   );
 }
 
@@ -67,49 +74,72 @@ function formatAge(createdAt: Date): string {
   return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
 }
 
-function ideaStatus(levels: TradeIdea["levels"], skipped: boolean): {
-  label: string;
-  color: string;
-  resolved: number;
-  total: number;
-  wins: number;
-  losses: number;
-} {
-  const total = levels.length;
-  const wins = levels.filter((l) => l.outcome === "WIN").length;
-  const losses = levels.filter((l) => l.outcome === "LOSS").length;
-  const resolved = wins + losses;
-
-  if (skipped) {
-    return { label: "Skipped", color: "var(--text-muted)", resolved, total, wins, losses };
-  }
-  if (resolved === total) {
-    return { label: "Resolved", color: "var(--text-muted)", resolved, total, wins, losses };
-  }
-  return { label: "Tracking", color: "var(--amber)", resolved, total, wins, losses };
-}
-
-export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea; compact?: boolean }) {
+/** Skipped trade idea — just a banner with confluence scores */
+function SkippedTradeIdea({ tradeIdea }: { tradeIdea: TradeIdea }) {
   const dir = directionStyle(tradeIdea.direction);
-  const age = formatAge(tradeIdea.createdAt);
-  const status = ideaStatus(tradeIdea.levels, tradeIdea.skipped);
-
-  // Compute target distance percentage
-  const targetDistPct = ((tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
-
-  // Latest return if available
   const lastReturn = tradeIdea.returns.length > 0 ? tradeIdea.returns[tradeIdea.returns.length - 1] : null;
-
-  // For skipped ideas: find peak quality-weighted return (measures how wrong the skip was)
-  // quality = returnPct × e^(-hours/72) — fast moves score high, slow moves decay
-  const peakQuality = tradeIdea.skipped && tradeIdea.returns.length > 0
-    ? tradeIdea.returns.reduce((best, r) => Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best)
-    : null;
+  const peakQuality =
+    tradeIdea.returns.length > 0
+      ? tradeIdea.returns.reduce((best, r) => (Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best))
+      : null;
 
   return (
     <SectionBlock
       title="Trade Idea"
-      tooltip="Directional trade idea extracted when confluence conviction exceeds 300/400. Levels are tracked independently with time-decay quality scoring."
+      tooltip="Trade idea was computed but conviction was insufficient. Tracked for accuracy measurement."
+    >
+      <div
+        className="rounded-md p-3"
+        style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
+      >
+        {/* Skip banner */}
+        <div className="flex items-center gap-2 mb-3">
+          <span
+            className="inline-flex items-center rounded px-2 py-0.5 text-[0.625rem] font-bold font-mono-jb"
+            style={{ color: dir.color, background: dir.bg, border: `1px solid ${dir.color}33`, opacity: 0.6 }}
+          >
+            {dir.label}
+          </span>
+          <span className="text-[0.6875rem] font-medium" style={{ color: "var(--text-muted)" }}>
+            Trade skipped — low conviction
+          </span>
+        </div>
+
+        {/* Confluence badges */}
+        {tradeIdea.confluence && <ConfluenceBadges confluence={tradeIdea.confluence} />}
+
+        {/* Missed move indicator if returns data exists */}
+        {peakQuality && <MissedMoveIndicator peak={peakQuality} lastReturn={lastReturn ?? null} />}
+
+        <LearnLink />
+      </div>
+    </SectionBlock>
+  );
+}
+
+/** Active (taken) trade idea — full display */
+export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea; compact?: boolean }) {
+  // Skipped ideas get a simple banner
+  if (tradeIdea.skipped) {
+    return <SkippedTradeIdea tradeIdea={tradeIdea} />;
+  }
+
+  const dir = directionStyle(tradeIdea.direction);
+  const age = formatAge(tradeIdea.createdAt);
+  const totalLevels = tradeIdea.levels.length;
+  const wins = tradeIdea.levels.filter((l) => l.outcome === "WIN").length;
+  const losses = tradeIdea.levels.filter((l) => l.outcome === "LOSS").length;
+  const resolved = wins + losses;
+  const statusLabel = resolved === totalLevels ? "Resolved" : "Tracking";
+  const statusColor = resolved === totalLevels ? "var(--text-muted)" : "var(--amber)";
+
+  const targetDistPct = ((tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
+  const lastReturn = tradeIdea.returns.length > 0 ? tradeIdea.returns[tradeIdea.returns.length - 1] : null;
+
+  return (
+    <SectionBlock
+      title="Trade Idea"
+      tooltip="Directional trade idea taken when confluence conviction exceeds 200/400. Levels are tracked independently with time-decay quality scoring."
     >
       {/* Header: direction + prices + status */}
       <div
@@ -117,7 +147,6 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
       >
         <div className="flex items-center gap-3 flex-wrap mb-2">
-          {/* Direction badge */}
           <span
             className="inline-flex items-center rounded px-2.5 py-1 text-xs font-bold font-mono-jb"
             style={{ color: dir.color, background: dir.bg, border: `1px solid ${dir.color}33` }}
@@ -125,84 +154,93 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
             {dir.label}
           </span>
 
-          {/* Age + status */}
           <span className="text-[0.625rem] font-mono-jb" style={{ color: "var(--text-muted)" }}>
             {age}
           </span>
           <span
             className="rounded px-1.5 py-0.5 text-[0.5625rem] font-medium uppercase tracking-wider"
-            style={{ color: status.color, background: "var(--bg-hover)" }}
+            style={{ color: statusColor, background: "var(--bg-hover)" }}
           >
-            {status.label}
+            {statusLabel}
           </span>
 
           <span className="grow" />
 
-          {/* Resolved counter */}
-          {(status.wins > 0 || status.losses > 0) && (
+          {(wins > 0 || losses > 0) && (
             <span className="text-[0.625rem] font-mono-jb" style={{ color: "var(--text-muted)" }}>
-              {status.wins > 0 && <span style={{ color: "var(--green)" }}>{status.wins}W</span>}
-              {status.wins > 0 && status.losses > 0 && " "}
-              {status.losses > 0 && <span style={{ color: "var(--red)" }}>{status.losses}L</span>}
-              <span style={{ opacity: 0.5 }}> / {status.total}</span>
+              {wins > 0 && <span style={{ color: "var(--green)" }}>{wins}W</span>}
+              {wins > 0 && losses > 0 && " "}
+              {losses > 0 && <span style={{ color: "var(--red)" }}>{losses}L</span>}
+              <span style={{ opacity: 0.5 }}> / {totalLevels}</span>
             </span>
           )}
         </div>
 
-        {/* Price row */}
         <div className="flex items-baseline gap-4 flex-wrap">
           <div className="flex flex-col">
-            <span className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5" style={{ color: "var(--text-muted)" }}>
+            <span
+              className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5"
+              style={{ color: "var(--text-muted)" }}
+            >
               Entry
             </span>
-            <UsdValue value={tradeIdea.entryPrice} style={{ color: "var(--text-primary)", fontSize: "0.8125rem", fontWeight: 600 }} />
+            <UsdValue
+              value={tradeIdea.entryPrice}
+              style={{ color: "var(--text-primary)", fontSize: "0.8125rem", fontWeight: 600 }}
+            />
           </div>
 
           {tradeIdea.direction !== "FLAT" && (
             <>
               <div className="flex flex-col">
-                <span className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5" style={{ color: "var(--text-muted)" }}>
+                <span
+                  className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Target
                 </span>
-                <UsdValue value={tradeIdea.compositeTarget} style={{ color: dir.color, fontSize: "0.8125rem", fontWeight: 600 }} />
+                <UsdValue
+                  value={tradeIdea.compositeTarget}
+                  style={{ color: dir.color, fontSize: "0.8125rem", fontWeight: 600 }}
+                />
               </div>
 
               <div className="flex flex-col">
-                <span className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5" style={{ color: "var(--text-muted)" }}>
+                <span
+                  className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Distance
                 </span>
-                <span
-                  className="font-mono-jb tabular-nums text-[0.8125rem] font-semibold"
-                  style={{ color: dir.color }}
-                >
-                  {targetDistPct > 0 ? "+" : ""}{targetDistPct.toFixed(2)}%
+                <span className="font-mono-jb tabular-nums text-[0.8125rem] font-semibold" style={{ color: dir.color }}>
+                  {targetDistPct > 0 ? "+" : ""}
+                  {targetDistPct.toFixed(2)}%
                 </span>
               </div>
             </>
           )}
 
-          {lastReturn && !tradeIdea.skipped && (
+          {lastReturn && (
             <div className="flex flex-col ml-auto">
-              <span className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5" style={{ color: "var(--text-muted)" }}>
+              <span
+                className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5"
+                style={{ color: "var(--text-muted)" }}
+              >
                 Current P&L
               </span>
               <span
                 className="font-mono-jb tabular-nums text-[0.8125rem] font-semibold"
                 style={{ color: lastReturn.returnPct >= 0 ? "var(--green)" : "var(--red)" }}
               >
-                {lastReturn.returnPct >= 0 ? "+" : ""}{lastReturn.returnPct.toFixed(2)}%
+                {lastReturn.returnPct >= 0 ? "+" : ""}
+                {lastReturn.returnPct.toFixed(2)}%
               </span>
             </div>
           )}
         </div>
-
-        {/* Missed move indicator for skipped ideas */}
-        {tradeIdea.skipped && peakQuality && (
-          <MissedMoveIndicator peak={peakQuality} lastReturn={lastReturn ?? null} />
-        )}
       </div>
 
-      {/* Confluence — full breakdown or compact badges */}
+      {/* Confluence */}
       {tradeIdea.confluence && (
         <div className="mb-4">
           {compact ? (
@@ -226,11 +264,7 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
 
       {/* Levels + chart */}
       <div className={compact ? "" : "grid gap-4 md:grid-cols-[13.75rem_1fr]"}>
-        <LevelStatus
-          levels={tradeIdea.levels}
-          entryPrice={tradeIdea.entryPrice}
-          direction={tradeIdea.direction}
-        />
+        <LevelStatus levels={tradeIdea.levels} entryPrice={tradeIdea.entryPrice} direction={tradeIdea.direction} />
         {!compact && (
           <div
             className="rounded-md p-3"
@@ -249,6 +283,8 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
           </div>
         )}
       </div>
+
+      <LearnLink />
     </SectionBlock>
   );
 }

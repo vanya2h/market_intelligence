@@ -31,8 +31,7 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
     { key: "faq", label: "FAQ", to: "/faq" },
   ];
 
-  const activeKey =
-    tabs.find((t) => t.to && t.to !== "/" && pathname.startsWith(t.to))?.key ?? "home";
+  const activeKey = tabs.find((t) => t.to && t.to !== "/" && pathname.startsWith(t.to))?.key ?? "home";
 
   function handleTabSelect(key: string) {
     if (key === "history") setHistoryOpen(true);
@@ -52,15 +51,10 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
               className="hidden text-sm font-semibold tracking-tight sm:inline"
               style={{ color: "var(--text-primary)" }}
             >
-              Vanya2h's Intelligence System
+              Vanya2h's Intel
             </span>
           </Link>
-          <TabBar
-            items={tabs}
-            className="h-full"
-            activeKey={activeKey}
-            onSelect={handleTabSelect}
-          />
+          <TabBar items={tabs} className="h-full" activeKey={activeKey} onSelect={handleTabSelect} />
           <BriefHistoryDialog currentBriefId={currentBriefId} open={historyOpen} onOpenChange={setHistoryOpen} />
         </div>
         <div className="flex items-center gap-3">

@@ -32,6 +32,7 @@ export interface Confluence {
   etfs: number;
   htf: number;
   sentiment: number;
+  exchangeFlows: number;
   total: number;
 }
 
