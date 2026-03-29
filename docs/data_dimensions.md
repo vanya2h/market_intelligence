@@ -313,11 +313,22 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 - **SMAs:** 50 & 200-period on 4H candles (300 candle history)
 - **RSI-14:** Daily (trend bias, 104 candle history) + 4H (momentum)
-- **CVD (Cumulative Volume Delta):** Dual-window analysis on futures
+- **CVD (Cumulative Volume Delta):** Dual-window analysis — futures (authoritative) + spot (demand validation)
+  - Formula: `CVD = cumsum(2 × takerBuyVolume − totalVolume)` per candle
   - Short window: 20 candles (~3.3 days) — catches regime turns early
   - Long window: 75 candles (~12.5 days) — confirms swing holds
-  - Divergence: price-CVD disagreement (bullish = accumulation, bearish = distribution)
-  - Thresholds: slope 0.02, R² 0.3
+  - Regime classification: RISING / DECLINING / FLAT (normalized slope ≥ 0.02, R² ≥ 0.3)
+  - **Divergence (pivot-based):** compares last two swing highs/lows of price vs CVD curve (lookback 3 candles each side), classifying both direction and mechanism:
+    - **BEARISH + ABSORPTION:** CVD making higher high, price fails higher high → buyers being absorbed by large limit sellers (distribution)
+    - **BEARISH + EXHAUSTION:** price making higher high, CVD fails → buyer aggression disappearing, thin-liquidity move
+    - **BULLISH + ABSORPTION:** CVD making lower low, price holds → sellers being absorbed by large limit buyers (accumulation)
+    - **BULLISH + EXHAUSTION:** price making lower low, CVD holds → seller aggression disappearing, longs-closing move
+    - Absorption is a stronger signal than exhaustion — requires active opposing side; exhaustion only means aggression dried up
+  - **Spot/Futures divergence:** compares short-window regimes of spot CVD (Binance spot) vs futures CVD (Binance futures) to validate whether a move has real demand:
+    - `CONFIRMED_BUYING`: both rising — genuine buy-side pressure
+    - `CONFIRMED_SELLING`: both falling — genuine sell-side pressure
+    - `SUSPECT_BOUNCE`: futures rising + spot flat/falling — short covering, no real demand (bearish for sustainability)
+    - `SPOT_LEADS`: spot rising + futures flat/falling — organic accumulation without leverage
 - **Market structure:** HH_HL (bullish) · LH_LL (bearish) · HH_LL (expanding) · LH_HL (contracting) · STRUCTURE_UNKNOWN
 - **VWAP:** Weekly & monthly anchored
 - **ATR-14:** Execution-timeframe volatility (4H)
@@ -346,7 +357,9 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
 
 **Events tracked:**
 
-- Golden/death crosses, 200 SMA reclaim/break, RSI extremes, structure shifts, CVD divergence
+- Golden/death crosses, 200 SMA reclaim/break, RSI extremes, structure shifts
+- CVD divergence (direction + mechanism: absorption vs exhaustion)
+- `cvd_suspect_bounce`: futures CVD rising while spot CVD flat/falling — flags short-covering bounces with no real demand
 
 **Source:** Binance spot public API (300 4H candles + 104 daily candles), Binance futures public API (750 4H candles for CVD + volume profile)
 

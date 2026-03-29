@@ -11,7 +11,7 @@ import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
-import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput } from "../orchestrator/types.js";
+import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput, ExchangeFlowsOutput } from "../orchestrator/types.js";
 import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -87,6 +87,24 @@ function printHtfDetail(out: HtfOutput) {
   console.log(chalk.dim("    └──────────────────────────────────────────────"));
 }
 
+function printExchangeFlowsDetail(out: ExchangeFlowsOutput) {
+  const ctx = out.context;
+  const m = ctx.metrics;
+  console.log(chalk.dim("    ┌─ Exchange Flows Context ─────────────────────"));
+  console.log(`    │ Regime        : ${chalk.bold(ctx.regime)}  (prev: ${ctx.previousRegime ?? "—"})`);
+  console.log(`    │ Duration      : ${ctx.durationDays}d`);
+  console.log(`    │ Net flow 1d   : ${(m.netFlow1d >= 0 ? "+" : "") + m.netFlow1d.toFixed(2)}  7d: ${(m.netFlow7d >= 0 ? "+" : "") + m.netFlow7d.toFixed(2)}`);
+  console.log(`    │ Reserve 1d%   : ${pct(m.reserveChange1dPct)}  7d: ${pct(m.reserveChange7dPct)}  30d: ${pct(m.reserveChange30dPct)}`);
+  console.log(`    │ Today σ       : ${chalk.bold(m.todaySigma.toFixed(2))}   pctl 1m: ${m.flowPercentile1m}th`);
+  console.log(`    │ Balance trend : ${chalk.bold(m.balanceTrend)}   at 30d low: ${m.isAt30dLow}   at 30d high: ${m.isAt30dHigh}`);
+  if (ctx.events.length > 0) {
+    for (const e of ctx.events) {
+      console.log(`    │ Event         : [${e.type}] ${e.detail}`);
+    }
+  }
+  console.log(chalk.dim("    └──────────────────────────────────────────────"));
+}
+
 function printSentimentDetail(out: SentimentOutput) {
   const ctx = out.context;
   const m = ctx.metrics;
@@ -118,6 +136,7 @@ async function main() {
   const etfs = outputs.find((o): o is EtfsOutput => o.dimension === "ETFS");
   const htf = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
   const sent = outputs.find((o): o is SentimentOutput => o.dimension === "SENTIMENT");
+  const ef = outputs.find((o): o is ExchangeFlowsOutput => o.dimension === "EXCHANGE_FLOWS");
 
   // Print dimension contexts
   console.log("═══════════════════════════════════════════════════════════════");
@@ -127,6 +146,7 @@ async function main() {
   if (deriv) printDerivativesDetail(deriv);
   if (etfs) printEtfsDetail(etfs);
   if (htf) printHtfDetail(htf);
+  if (ef) printExchangeFlowsDetail(ef);
   if (sent) printSentimentDetail(sent);
 
   // Score for each direction
@@ -151,6 +171,7 @@ async function main() {
       { name: "Derivatives", score: confluence.derivatives },
       { name: "ETFs       ", score: confluence.etfs },
       { name: "HTF        ", score: confluence.htf },
+      { name: "Exch Flows ", score: confluence.exchangeFlows },
       { name: "Sentiment  ", score: confluence.sentiment },
     ];
 

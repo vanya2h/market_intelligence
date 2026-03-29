@@ -119,7 +119,11 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How are the technical indicators computed?",
-        a: "SMA-50 and SMA-200 on 4H candles (300 candle history). RSI-14 on daily candles (104 candle history) plus 4H for momentum. CVD uses dual-window analysis (20-candle short, 75-candle long) with slope and R² thresholds. Market structure is detected via pivot analysis (higher-highs/higher-lows vs lower-highs/lower-lows). VWAP is anchored weekly and monthly. ATR-14 on 4H candles measures volatility. Volume Profile is computed from futures 4H candles (750 candle history, ~4 months) with displacement-based range detection — see the Volume Profile section below.",
+        a: "SMA-50 and SMA-200 on 4H candles (300 candle history). RSI-14 on daily candles (104 candle history) plus 4H for momentum. CVD uses dual-window analysis (20-candle short, 75-candle long) with pivot-based divergence detection — see the CVD question below. Market structure is detected via pivot analysis (higher-highs/higher-lows vs lower-highs/lower-lows). VWAP is anchored weekly and monthly. ATR-14 on 4H candles measures volatility. Volume Profile is computed from futures 4H candles (750 candle history, ~4 months) with displacement-based range detection — see the Volume Profile section below.",
+      },
+      {
+        q: "How does CVD divergence detection work?",
+        a: "CVD (Cumulative Volume Delta) measures the difference between aggressive buying and selling: buy volume hits the ask, sell volume hits the bid. The system compares swing highs/lows of price vs CVD to detect two distinct mechanisms. Absorption: CVD makes a new extreme but price does not — the opposing side is actively absorbing aggression (e.g. CVD higher high while price stalls = buyers being absorbed by large limit sellers). This is the stronger signal because heavy hands are actively working. Exhaustion: price makes a new extreme but CVD does not — aggression is simply disappearing (e.g. price higher high while CVD stalls = buyers are gone, move running on thin liquidity). Both are divergences, but absorption implies active distribution/accumulation while exhaustion implies the trend is running out of fuel. The system also compares spot CVD vs futures CVD: if futures CVD rises during a bounce while spot CVD stays flat or falls, the bounce is classified as a suspect bounce driven by short covering with no real demand behind it.",
       },
       {
         q: "How does the Momentum Divergence detection work?",

@@ -502,7 +502,23 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
       const cross = get(ctx, "ma.crossType") as string;
       const structure = get(ctx, "structure") as string;
       const futDiv = get(ctx, "cvd.futures.divergence") as string;
+      const futDivMech = get(ctx, "cvd.futures.divergenceMechanism") as string;
       const spotDiv = get(ctx, "cvd.spot.divergence") as string;
+      const spotFutDiv = get(ctx, "cvd.spotFuturesDivergence") as string;
+
+      const CVD_DIV_SIGNAL: Record<string, MetricSignal | undefined> = {
+        BULLISH: "bullish",
+        BEARISH: "bearish",
+        NONE:    undefined,
+      };
+
+      const SPOT_FUT_SIGNAL: Record<string, MetricSignal> = {
+        CONFIRMED_BUYING:  "bullish",
+        CONFIRMED_SELLING: "bearish",
+        SUSPECT_BOUNCE:    "bearish",
+        SPOT_LEADS:        "bullish",
+        NONE:              "neutral",
+      };
 
       /** Format a price level with % distance from current price */
       const fmtLevel = (level: number) => {
@@ -561,8 +577,23 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
         {
           label: "Futures Divergence",
           group: "CVD",
-          value: safe(() => (futDiv === "NONE" ? "—" : futDiv)),
-          signal: futDiv === "BULLISH" ? "bullish" : futDiv === "BEARISH" ? "bearish" : undefined,
+          value: safe(() => {
+            if (futDiv === "NONE") return "—";
+            if (futDivMech && futDivMech !== "NONE") return `${futDiv} (${futDivMech})`;
+            return futDiv;
+          }),
+          signal: CVD_DIV_SIGNAL[futDiv],
+          hint: safe(() => {
+            if (futDiv === "NONE" || !futDivMech || futDivMech === "NONE") return "";
+            if (futDivMech === "ABSORPTION") {
+              return futDiv === "BEARISH"
+                ? "CVD making higher highs while price stalls — buyers being absorbed by large limit sellers"
+                : "CVD making lower lows while price holds — sellers being absorbed by large limit buyers";
+            }
+            return futDiv === "BEARISH"
+              ? "Price making higher highs but CVD stalls — buyer aggression is disappearing"
+              : "Price making lower lows but CVD holds — seller aggression is disappearing";
+          }),
         },
         {
           label: "Spot Short/Long",
@@ -573,7 +604,30 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           label: "Spot Divergence",
           group: "CVD",
           value: safe(() => (spotDiv === "NONE" ? "—" : spotDiv)),
-          signal: spotDiv === "BULLISH" ? "bullish" : spotDiv === "BEARISH" ? "bearish" : undefined,
+          signal: CVD_DIV_SIGNAL[spotDiv],
+        },
+        {
+          label: "Spot/Futures Align",
+          group: "CVD",
+          value: safe(() => {
+            switch (spotFutDiv) {
+              case "CONFIRMED_BUYING":  return "Confirmed buying";
+              case "CONFIRMED_SELLING": return "Confirmed selling";
+              case "SUSPECT_BOUNCE":    return "Suspect bounce";
+              case "SPOT_LEADS":        return "Spot leads";
+              default:                  return "—";
+            }
+          }),
+          signal: SPOT_FUT_SIGNAL[spotFutDiv] ?? "neutral",
+          hint: safe(() => {
+            switch (spotFutDiv) {
+              case "CONFIRMED_BUYING":  return "Both spot and futures CVD rising — genuine buy-side pressure";
+              case "CONFIRMED_SELLING": return "Both spot and futures CVD falling — genuine sell-side pressure";
+              case "SUSPECT_BOUNCE":    return "Futures CVD rising but spot CVD flat/falling — bounce likely driven by short covering, not real demand";
+              case "SPOT_LEADS":        return "Spot CVD rising while futures CVD flat/falling — organic accumulation without leverage";
+              default: return "";
+            }
+          }),
         },
         {
           label: "Structure",

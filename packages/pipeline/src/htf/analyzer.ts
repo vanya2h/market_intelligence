@@ -20,6 +20,7 @@ import {
   Candle,
   CvdContext,
   CvdDivergence,
+  CvdDivergenceMechanism,
   CvdRegime,
   CvdSeries,
   CvdWindow,
@@ -33,6 +34,7 @@ import {
   MarketStructure,
   RsiContext,
   SignalStaleness,
+  SpotFuturesCvdDivergence,
   VolatilityContext,
   VolumeProfileContext,
   VolumeProfilePosition,
@@ -142,47 +144,126 @@ function classifyWindow(candles: Candle[], cvdCurve: number[]): CvdWindow {
 }
 
 /**
- * Detect price–CVD divergence over a window.
+ * Find swing highs in a numeric series.
+ * A swing high is a value strictly greater than `lookback` neighbors on each side.
+ */
+function swingHighs(values: number[], lookback = 3): { index: number; value: number }[] {
+  const results: { index: number; value: number }[] = [];
+  for (let i = lookback; i < values.length - lookback; i++) {
+    const v = values[i]!;
+    let isPivot = true;
+    for (let j = 1; j <= lookback; j++) {
+      if (values[i - j]! >= v || values[i + j]! >= v) { isPivot = false; break; }
+    }
+    if (isPivot) results.push({ index: i, value: v });
+  }
+  return results;
+}
+
+/**
+ * Find swing lows in a numeric series.
+ * A swing low is a value strictly less than `lookback` neighbors on each side.
+ */
+function swingLows(values: number[], lookback = 3): { index: number; value: number }[] {
+  const results: { index: number; value: number }[] = [];
+  for (let i = lookback; i < values.length - lookback; i++) {
+    const v = values[i]!;
+    let isPivot = true;
+    for (let j = 1; j <= lookback; j++) {
+      if (values[i - j]! <= v || values[i + j]! <= v) { isPivot = false; break; }
+    }
+    if (isPivot) results.push({ index: i, value: v });
+  }
+  return results;
+}
+
+/**
+ * Detect price–CVD divergence by comparing swing highs and lows.
  *
- * Compares the linear-regression slope of price closes vs CVD curve.
- * Both must show a confident trend (R² ≥ 0.3) in opposite directions.
- *   price rising  + CVD declining → BEARISH (distribution)
- *   price falling + CVD rising    → BULLISH (accumulation)
+ * Identifies both the direction (BULLISH/BEARISH) and the mechanism:
+ *
+ *   ABSORPTION: CVD makes new extreme, price does not.
+ *     → opposing side is absorbing aggression (stronger signal)
+ *     · Bearish absorption: CVD higher high, price fails higher high
+ *     · Bullish absorption: CVD lower low, price fails lower low
+ *
+ *   EXHAUSTION: Price makes new extreme, CVD does not.
+ *     → aggression is disappearing, move driven by thin liquidity
+ *     · Bearish exhaustion: price higher high, CVD lower high
+ *     · Bullish exhaustion: price lower low, CVD higher low
+ *
+ * Absorption takes priority over exhaustion when both could apply.
  */
 function detectDivergence(
   candles: Candle[],
   cvdCurve: number[]
-): CvdDivergence {
-  if (candles.length < 10) return "NONE";
+): { divergence: CvdDivergence; mechanism: CvdDivergenceMechanism } {
+  const NONE = { divergence: "NONE" as CvdDivergence, mechanism: "NONE" as CvdDivergenceMechanism };
+  const MIN_PIVOTS = 2;
+  const LOOKBACK = 3;
 
-  const priceReg = linreg(candles.map((c) => c.close));
-  const cvdReg   = linreg(cvdCurve);
+  if (candles.length < LOOKBACK * 2 + MIN_PIVOTS + 1) return NONE;
 
-  // Both trends must be confident
-  if (priceReg.r2 < R2_THRESHOLD || cvdReg.r2 < R2_THRESHOLD) return "NONE";
+  const priceHighValues = candles.map((c) => c.high);
+  const priceLowValues  = candles.map((c) => c.low);
 
-  // Normalize price slope the same way: per-unit of mean price
-  const meanPrice = candles.reduce((s, c) => s + c.close, 0) / candles.length;
-  const pSlope = meanPrice === 0 ? 0 : priceReg.slope / meanPrice;
+  const pH = swingHighs(priceHighValues, LOOKBACK);
+  const pL = swingLows(priceLowValues, LOOKBACK);
+  const cH = swingHighs(cvdCurve, LOOKBACK);
+  const cL = swingLows(cvdCurve, LOOKBACK);
 
-  const avgVolume = candles.reduce((s, c) => s + c.volume, 0) / candles.length;
-  const cSlope = avgVolume === 0 ? 0 : cvdReg.slope / avgVolume;
+  if (pH.length < MIN_PIVOTS || pL.length < MIN_PIVOTS ||
+      cH.length < MIN_PIVOTS || cL.length < MIN_PIVOTS) return NONE;
 
-  // Both must have meaningful magnitude and opposite signs
-  if (Math.abs(pSlope) < 0.001 || Math.abs(cSlope) < SLOPE_THRESHOLD) return "NONE";
+  const priceHH = pH.at(-1)!.value > pH.at(-2)!.value; // price making higher high
+  const cvdHH   = cH.at(-1)!.value > cH.at(-2)!.value; // CVD making higher high
+  const priceLL = pL.at(-1)!.value < pL.at(-2)!.value; // price making lower low
+  const cvdLL   = cL.at(-1)!.value < cL.at(-2)!.value; // CVD making lower low
 
-  if (pSlope > 0 && cSlope < 0) return "BEARISH";
-  if (pSlope < 0 && cSlope > 0) return "BULLISH";
+  // Bearish: absorption (CVD HH, price fails) — stronger than exhaustion
+  if (cvdHH && !priceHH) return { divergence: "BEARISH", mechanism: "ABSORPTION" };
+  // Bullish: absorption (CVD LL, price holds) — stronger than exhaustion
+  if (cvdLL && !priceLL) return { divergence: "BULLISH", mechanism: "ABSORPTION" };
+  // Bearish: exhaustion (price HH, CVD fails)
+  if (priceHH && !cvdHH) return { divergence: "BEARISH", mechanism: "EXHAUSTION" };
+  // Bullish: exhaustion (price LL, CVD holds)
+  if (priceLL && !cvdLL) return { divergence: "BULLISH", mechanism: "EXHAUSTION" };
+
+  return NONE;
+}
+
+/**
+ * Compare spot and futures CVD short-window regimes to detect
+ * whether a price move has real demand behind it.
+ *
+ *   CONFIRMED_BUYING:  both rising  → genuine buyers
+ *   CONFIRMED_SELLING: both falling → genuine sellers
+ *   SUSPECT_BOUNCE:    futures rising + spot flat/falling
+ *                      → short covering, no real spot demand
+ *   SPOT_LEADS:        spot rising  + futures flat/falling
+ *                      → organic accumulation without leverage
+ */
+function computeSpotFuturesDivergence(
+  spotShort: CvdWindow,
+  futuresShort: CvdWindow
+): SpotFuturesCvdDivergence {
+  const f = futuresShort.regime;
+  const s = spotShort.regime;
+
+  if (f === "RISING"   && s === "RISING")   return "CONFIRMED_BUYING";
+  if (f === "DECLINING" && s === "DECLINING") return "CONFIRMED_SELLING";
+  if (f === "RISING"   && s !== "RISING")   return "SUSPECT_BOUNCE";
+  if (s === "RISING"   && f !== "RISING")   return "SPOT_LEADS";
 
   return "NONE";
 }
 
 /**
- * Full CVD analysis: dual-window regime + divergence.
+ * Full CVD analysis: dual-window regime + pivot-based divergence.
  *
  * Short window (20 candles ≈ 3.3d): detects early regime shifts for entries.
  * Long window  (75 candles ≈ 12.5d): confirms the trend across a swing hold.
- * Divergence checked on the long window — more reliable over larger samples.
+ * Divergence checked on the long window using swing high/low comparison.
  */
 function cvdAnalysis(candles: Candle[]): CvdSeries {
   const longSlice  = candles.slice(-CVD_LONG_LOOKBACK);
@@ -195,9 +276,9 @@ function cvdAnalysis(candles: Candle[]): CvdSeries {
   const shortWindow = classifyWindow(shortSlice, shortCurve);
 
   const value = longCurve.length > 0 ? parseFloat(longCurve.at(-1)!.toFixed(2)) : 0;
-  const divergence = detectDivergence(longSlice, longCurve);
+  const { divergence, mechanism: divergenceMechanism } = detectDivergence(longSlice, longCurve);
 
-  return { value, short: shortWindow, long: longWindow, divergence };
+  return { value, short: shortWindow, long: longWindow, divergence, divergenceMechanism };
 }
 
 /**
@@ -883,17 +964,32 @@ function detectEvents(
     }
   }
 
-  // CVD divergence events (futures-only — the authoritative reversal signal)
+  // CVD divergence events (futures pivot-based — the authoritative reversal signal)
   if (cvd.futures.divergence === "BULLISH") {
+    const mech = cvd.futures.divergenceMechanism === "ABSORPTION"
+      ? "CVD making lower lows while price holds — sellers being absorbed"
+      : "price making lower lows but CVD holds — seller exhaustion";
     events.push({
       type: "cvd_divergence_bullish",
-      detail: `Futures CVD rising while price falling (R²=${cvd.futures.long.r2}) — accumulation divergence`,
+      detail: `Bullish CVD divergence (${cvd.futures.divergenceMechanism}): ${mech}`,
       at,
     });
   } else if (cvd.futures.divergence === "BEARISH") {
+    const mech = cvd.futures.divergenceMechanism === "ABSORPTION"
+      ? "CVD making higher highs while price stalls — buyers being absorbed"
+      : "price making higher highs but CVD stalls — buyer exhaustion";
     events.push({
       type: "cvd_divergence_bearish",
-      detail: `Futures CVD declining while price rising (R²=${cvd.futures.long.r2}) — distribution divergence`,
+      detail: `Bearish CVD divergence (${cvd.futures.divergenceMechanism}): ${mech}`,
+      at,
+    });
+  }
+
+  // Spot vs futures CVD divergence — detect short-covering bounces
+  if (cvd.spotFuturesDivergence === "SUSPECT_BOUNCE") {
+    events.push({
+      type: "cvd_suspect_bounce",
+      detail: "Futures CVD rising but spot CVD flat/falling — bounce likely short covering, no real demand",
       at,
     });
   }
@@ -969,12 +1065,15 @@ export function analyze(
   // ATR-14 on daily candles — used internally for pivot filtering (pivots are daily)
   const dailyAtr = atr14(daily);
 
-  // CVD — dual-window regime detection + price divergence
-  // Fix #2: use futures candles for the primary reversal signal (leveraged intent),
-  // spot CVD kept for reference but futures is authoritative for divergence.
+  // CVD — dual-window regime detection + pivot-based divergence
+  // Futures is authoritative for reversal signals (leveraged intent).
+  // Spot is used alongside futures to detect short-covering vs real demand.
+  const futuresCvd = cvdAnalysis(snapshot.futuresH4Candles);
+  const spotCvd    = cvdAnalysis(h4);
   const cvdData: CvdContext = {
-    futures: cvdAnalysis(snapshot.futuresH4Candles),
-    spot:    cvdAnalysis(h4),
+    futures: futuresCvd,
+    spot:    spotCvd,
+    spotFuturesDivergence: computeSpotFuturesDivergence(spotCvd.short, futuresCvd.short),
   };
 
   // Anchored VWAPs — weekly (Monday 00:00 UTC) and monthly (1st 00:00 UTC)

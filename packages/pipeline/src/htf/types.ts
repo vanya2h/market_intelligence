@@ -46,6 +46,37 @@ export interface RsiContext {
 export type CvdRegime = "RISING" | "DECLINING" | "FLAT";
 export type CvdDivergence = "BULLISH" | "BEARISH" | "NONE";
 
+/**
+ * Mechanism behind a CVD divergence signal.
+ *
+ * ABSORPTION: CVD makes new extreme but price does not.
+ *   Aggressive buying/selling exists but is being absorbed by the opposing side.
+ *   Strong signal — heavy hands are active.
+ *
+ * EXHAUSTION: Price makes new extreme but CVD does not.
+ *   Price moves on thin liquidity or short/long covering, not real aggression.
+ *   Trend running out of fuel.
+ */
+export type CvdDivergenceMechanism = "ABSORPTION" | "EXHAUSTION" | "NONE";
+
+/**
+ * Spot vs futures CVD divergence — distinguishes real demand from leveraged noise.
+ *
+ * CONFIRMED_BUYING:  both rising  → genuine buy-side pressure
+ * CONFIRMED_SELLING: both falling → genuine sell-side pressure
+ * SUSPECT_BOUNCE:    futures rising + spot flat/falling
+ *                    → price bounce driven by short covering, not real demand
+ * SPOT_LEADS:        spot rising  + futures flat/falling
+ *                    → organic spot accumulation without leverage
+ * NONE:              no clear alignment or divergence
+ */
+export type SpotFuturesCvdDivergence =
+  | "CONFIRMED_BUYING"
+  | "CONFIRMED_SELLING"
+  | "SUSPECT_BOUNCE"
+  | "SPOT_LEADS"
+  | "NONE";
+
 export interface CvdWindow {
   regime: CvdRegime; // trend direction based on linear regression
   slope: number; // normalized slope (delta per candle / avg volume)
@@ -56,12 +87,15 @@ export interface CvdSeries {
   value: number; // cumulative volume delta (long window)
   short: CvdWindow; // 20 candles (~3.3d) — catches turns early
   long: CvdWindow; // 75 candles (~12.5d) — confirmed swing trend
-  divergence: CvdDivergence; // price vs CVD trend disagreement
+  divergence: CvdDivergence; // price vs CVD swing-point disagreement
+  divergenceMechanism: CvdDivergenceMechanism; // absorption or exhaustion
 }
 
 export interface CvdContext {
   futures: CvdSeries; // CVD analysis on futures 4h
   spot: CvdSeries; // CVD analysis on spot 4h
+  /** Whether futures and spot CVD agree — detects short-covering bounces */
+  spotFuturesDivergence: SpotFuturesCvdDivergence;
 }
 
 export interface VwapContext {
@@ -80,7 +114,8 @@ export interface HtfEvent {
     | "structure_shift_bullish"
     | "structure_shift_bearish"
     | "cvd_divergence_bullish"
-    | "cvd_divergence_bearish";
+    | "cvd_divergence_bearish"
+    | "cvd_suspect_bounce";
   detail: string;
   at: string;
 }
