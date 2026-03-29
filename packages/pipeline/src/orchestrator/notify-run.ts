@@ -11,12 +11,14 @@ import type { $Enums } from "../generated/prisma/client.js";
 import type { DimensionOutput } from "./types.js";
 import type { TradeDecision } from "./trade-idea/index.js";
 import type { RichBrief } from "./rich-synthesizer.js";
+import type { DeltaSummary } from "./delta.js";
 
 // ─── Artifact shape stored in the JSON column ───────────────────────────────
 
 export interface RunArtifacts {
   outputs?: DimensionOutput[];
   decision?: TradeDecision | null;
+  deltaSummary?: DeltaSummary | null;
   briefId?: string;
   richBrief?: RichBrief | null;
   briefText?: string;

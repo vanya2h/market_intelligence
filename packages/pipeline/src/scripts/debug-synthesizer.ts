@@ -286,7 +286,7 @@ async function main() {
   // ─── LLM input: user prompt ────────────────────────────────────────
   section("LLM INPUT: USER PROMPT");
 
-  const userPrompt = buildPrompt(asset, richBrief, outputs, decision);
+  const userPrompt = buildPrompt(asset, outputs, decision);
   console.log(chalk.dim("  (Rich brief minified JSON + trade decision)\n"));
 
   // The prompt is now minified — show it line by line with coloring
@@ -312,7 +312,7 @@ async function main() {
   section("SYNTHESIZED BRIEF OUTPUT");
 
   const synthStart = Date.now();
-  const brief = await synthesize(asset, outputs, decision, richBrief);
+  const brief = await synthesize(asset, outputs, decision);
   const synthElapsed = ((Date.now() - synthStart) / 1000).toFixed(1);
 
   const rendered = brief

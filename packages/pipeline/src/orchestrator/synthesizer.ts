@@ -7,6 +7,11 @@
  * The rich brief already contains all the analysis — this just condenses
  * it into a human-readable format with the trade idea appended.
  *
+ * Delta-aware: when nothing meaningful changed since the last brief,
+ * returns a deterministic one-liner instead of calling the LLM.
+ * When changes are moderate, the LLM prompt is augmented with a delta
+ * summary so it leads with what actually changed.
+ *
  * Cached by content-hash (1h TTL).
  */
 
@@ -16,17 +21,13 @@ import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 import type { TradeDecision } from "./trade-idea/index.js";
 import { CONVICTION_THRESHOLD } from "./trade-idea/confluence.js";
-import type { RichBrief } from "./rich-synthesizer.js";
 import { $Enums } from "../generated/prisma/client.js";
+import type { DeltaSummary } from "./delta.js";
 
 const SYNTH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
-function buildCacheKey(asset: string, richBrief: RichBrief | null, decision: TradeDecision | null): string {
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify({ asset, richBrief, decision }))
-    .digest("hex")
-    .slice(0, 12);
+function buildCacheKey(asset: string, decision: TradeDecision | null): string {
+  const hash = crypto.createHash("sha256").update(JSON.stringify({ asset, decision })).digest("hex").slice(0, 12);
   return `orchestrator-${asset.toLowerCase()}-${hash}`;
 }
 
@@ -61,22 +62,30 @@ Describe the trade setup: what's driving conviction in each dimension and what t
 
 export function buildPrompt(
   asset: "BTC" | "ETH",
-  richBrief: RichBrief | null,
   outputs: DimensionOutput[],
   decision: TradeDecision | null,
+  delta: DeltaSummary | null = null,
 ): string {
-  const richSection = richBrief
-    ? `### Rich Brief (infographic data)
-${JSON.stringify(richBrief.blocks)}`
-    : `### Rich Brief
-Not available — using dimension interpretations as fallback.
+  const richSection = `### Dimension Analysis
 
 ${outputs.map((o) => `**${DIMENSION_LABELS[o.dimension]}** (${o.regime}): ${o.interpretation}`).join("\n\n")}`;
+
+  const deltaSection =
+    delta && delta.tier !== "low"
+      ? `
+
+---
+
+### What changed since last brief
+${delta.changeSummary}
+
+IMPORTANT: Lead your brief with what changed. The reader saw the previous brief — don't repeat unchanged context. Focus on the delta.`
+      : "";
 
   return `Write a Telegram-friendly market brief for ${asset}.
 Current time: ${new Date().toUTCString()}
 
-${richSection}${
+${richSection}${deltaSection}${
     decision && !decision.skipped
       ? `
 
@@ -87,56 +96,84 @@ ${buildTradeSection(decision)}`
   }`;
 }
 
-export function buildSystemPrompt(decision: TradeDecision | null): string {
+export function buildSystemPrompt(decision: TradeDecision | null, isDelta: boolean = false): string {
   const tradeSection =
     decision && !decision.skipped
-      ? `\n4. End with the trade idea: what direction, why it makes sense given the above, and what price would prove it wrong.`
+      ? `\n4. End with the trade idea: direction, why the setup makes sense right now, and what price proves it wrong.`
       : ``;
 
-  return `You write a short Telegram market update. Your audience is crypto traders who want a quick, clear read on what's happening and what to watch.
+  const structure = isDelta
+    ? `Structure (delta update — reader already saw the last brief):
+1. Cold start — open directly with the change itself. No setup, no preamble. "Funding just flipped positive while OI is thinning — longs are paying to stay in a shrinking crowd." One sentence, no fluff.
+2. What does this change do to the current setup? Does it strengthen the existing move, contradict it, open a new scenario? One tight paragraph.
+3. Only list levels affected by the change. Skip anything that hasn't moved since the last brief.${tradeSection}`
+    : `Structure (full brief — no recent context):
+1. Open with what the asset is doing right now and the key price level (e.g. "BTC sitting at $87k after getting rejected — sellers still in control").
+2. Explain WHY in plain English. What's driving it? Connect the dots — cause and effect, not a list of signals.
+3. Close with 2-3 key levels and a short "why it matters" for each.${tradeSection}`;
 
-Your input is a rich infographic brief (JSON blocks) with the full analysis. Your job is to distill it into something a human actually wants to read.
+  return `You write a Telegram market update for crypto traders. They want a quick, clear read on what's happening — write like you're explaining it to a smart friend, not filing a report.
 
-Structure:
-1. Open with what the asset is doing right now and the key price level (e.g. "BTC sitting at $87k after getting rejected — sellers still in control here")
-2. Explain WHY in plain English — what's driving the move? Connect the dots between signals. Use cause-and-effect, not lists of metrics.
-3. Close with what comes next — what level or event decides the next move? Give 2-3 key prices with a short "why it matters" for each.${tradeSection}
+${structure}
 
-Clarity rules:
-- Tone: clear and direct, like a senior analyst briefing a peer. Not casual ("here's the story"), not robotic. State what's happening and why — no filler transitions.
-- BAD: "OI delta at 85th percentile with negative funding divergence" — what does this mean?
-- GOOD: "traders are piling into new positions but paying to be short — that mismatch often triggers a squeeze"
-- Use exact prices for levels. For everything else, describe what it means rather than citing the number.
-- No jargon without context. If you mention funding rate, say what it implies. If you mention flows, say what the positioning tells us.
-- Maximum 100 words. Short paragraphs. No headers, no bold formatting. The only exception: key levels at the end should be a bullet list (e.g. "• $65,500 — first support, losing it opens $63k").
-- You can use emojis if it makes your message more readable.
-- The trade decision (if present) was made mechanically — describe it, don't override it. Trade ideas are setups, not financial advice.`;
+Rules:
+- Every sentence must be immediately understandable. No jargon without explanation.
+- BAD: "OI delta at 85th percentile with negative funding divergence" — meaningless without context.
+- GOOD: "traders piling into longs while spot buyers disappear — that gap usually gets closed violently."
+- Use exact prices only for key levels. Everything else: describe what it means, not the number.
+- No headers. No bold. Short paragraphs. Key levels at the end as a bullet list only (e.g. "• $65,500 — first support, losing it opens $63k").
+- Don't use emojis
+- 150 words max — count before you finish. If you're over, cut the weakest sentence. Do not truncate mid-thought.
+- The trade decision (if present) is mechanical output — describe it, don't override it.`;
 }
 
 async function callClaude(
   asset: $Enums.Asset,
-  richBrief: RichBrief | null,
   outputs: DimensionOutput[],
   decision: TradeDecision | null,
+  delta: DeltaSummary | null,
 ): Promise<string> {
+  const isDelta = delta !== null && delta.tier !== "low";
   const res = await callLlm({
-    system: buildSystemPrompt(decision),
-    user: buildPrompt(asset, richBrief, outputs, decision),
-    maxTokens: 350,
+    system: buildSystemPrompt(decision, isDelta),
+    user: buildPrompt(asset, outputs, decision, delta),
+    maxTokens: 450,
   });
   return res.text;
+}
+
+/**
+ * Build a deterministic one-liner for the "low" significance tier.
+ * No LLM call — just states that nothing dramatic changed and
+ * highlights the most significant current tension.
+ */
+function buildOneLiner(asset: string, delta: DeltaSummary, outputs: DimensionOutput[]): string {
+  const htf = outputs.find((o) => o.dimension === "HTF");
+  const priceStr =
+    htf && "snapshotPrice" in htf && htf.snapshotPrice
+      ? ` at $${htf.snapshotPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+      : "";
+
+  const tension = delta.topTension ? ` ${delta.topTension}.` : "";
+
+  return `${asset}${priceStr} — no dramatic changes since last brief.${tension}`;
 }
 
 export async function synthesize(
   asset: "BTC" | "ETH",
   outputs: DimensionOutput[],
   decision: TradeDecision | null = null,
-  richBrief: RichBrief | null = null,
+  delta: DeltaSummary | null = null,
 ): Promise<string> {
   if (outputs.length === 0) {
     return "No dimension data available — all pipelines failed.";
   }
-  return getCached(buildCacheKey(asset, richBrief, decision), SYNTH_CACHE_TTL, () =>
-    callClaude(asset, richBrief, outputs, decision),
-  );
+
+  // Low significance → deterministic one-liner, skip LLM
+  if (delta && delta.tier === "low") {
+    return buildOneLiner(asset, delta, outputs);
+  }
+
+  // High or medium significance → LLM call (medium injects delta into prompt)
+  return getCached(buildCacheKey(asset, decision), SYNTH_CACHE_TTL, () => callClaude(asset, outputs, decision, delta));
 }

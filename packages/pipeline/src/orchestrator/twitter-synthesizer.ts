@@ -11,42 +11,55 @@ import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
+import type { DeltaSummary } from "./delta.js";
 
 const CACHE_TTL = 1 * 60 * 60 * 1000;
 const MAX_TWEET_LENGTH = 280;
 
-function buildCacheKey(asset: string, outputs: DimensionOutput[]): string {
+function buildCacheKey(asset: string, outputs: DimensionOutput[], delta: DeltaSummary | null): string {
   const fingerprint = outputs.map((o) => ({
     dim: o.dimension,
     regime: o.regime,
     interp: o.interpretation.slice(0, 100),
   }));
+  const deltaKey = delta ? { tier: delta.tier, changeSummary: delta.changeSummary } : null;
   const hash = crypto
     .createHash("sha256")
-    .update(JSON.stringify({ asset, fingerprint, channel: "twitter" }))
+    .update(JSON.stringify({ asset, fingerprint, channel: "twitter", deltaKey }))
     .digest("hex")
     .slice(0, 12);
   return `twitter-${asset.toLowerCase()}-${hash}`;
 }
 
-function buildPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[]): string {
+export function buildPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[], delta: DeltaSummary | null): string {
   const sections = outputs.map((o) => {
     return `### ${DIMENSION_LABELS[o.dimension]}
 Regime: ${o.regime}
 ${o.interpretation}`;
   });
 
+  const deltaSection =
+    delta && delta.tier !== "low"
+      ? `\n\n---\n\n### What changed since last tweet\n${delta.changeSummary}\n\nIMPORTANT: Your tweet must be about these changes only. Don't rehash what hasn't moved.`
+      : "";
+
   return `${asset} | ${new Date().toUTCString()}
 
-${sections.join("\n\n")}`;
+${sections.join("\n\n")}${deltaSection}`;
 }
 
-async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[], briefUrl?: string): Promise<string> {
+async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[], briefUrl?: string, delta: DeltaSummary | null = null): Promise<string> {
   const urlBudget = briefUrl ? briefUrl.length + 2 : 0; // +2 for "\n\n"
   const charLimit = MAX_TWEET_LENGTH - urlBudget - 10; // 10 char safety margin
 
+  const isDelta = delta !== null && delta.tier !== "low";
+
+  const deltaInstructions = isDelta
+    ? `\n\nDELTA MODE: Followers already saw the previous tweet. Lead with what just changed — not what's been true for hours. If only one thing shifted, one sharp sentence is enough.`
+    : "";
+
   const res = await callLlm({
-    system: `You write a single ${asset} market tweet (max ${charLimit} chars). Your audience is crypto traders who want a quick, clear read on what's happening and what to watch.
+    system: `You write a single ${asset} market tweet (max ${charLimit} chars). Your audience is crypto traders who want a quick, clear read on what's happening and what to watch.${deltaInstructions}
 
 Structure:
 1. Open with what ${asset} is doing right now and the key price level (e.g. "BTC rejected at $87k — sellers defending this level hard")
@@ -63,7 +76,7 @@ Clarity rules:
 - Keep it punchy. Short sentences. Use → • | for structure.
 - HARD LIMIT: your tweet MUST be under ${charLimit} characters. Finish your thought cleanly within this limit.
 - Return ONLY the tweet text, nothing else.`,
-    user: buildPrompt(asset, outputs),
+    user: buildPrompt(asset, outputs, delta),
     maxTokens: 256,
   });
 
@@ -88,13 +101,19 @@ export async function synthesizeTweet(
   asset: "BTC" | "ETH",
   outputs: DimensionOutput[],
   briefUrl?: string,
-): Promise<string> {
+  delta: DeltaSummary | null = null,
+): Promise<string | null> {
   if (outputs.length === 0) {
-    return "No dimension data available.";
+    return null;
   }
 
-  const tweet = await getCached(buildCacheKey(asset, outputs), CACHE_TTL, () =>
-    callClaude(asset, outputs, briefUrl),
+  // Low significance → nothing new worth tweeting
+  if (delta && delta.tier === "low") {
+    return null;
+  }
+
+  const tweet = await getCached(buildCacheKey(asset, outputs, delta), CACHE_TTL, () =>
+    callClaude(asset, outputs, briefUrl, delta),
   );
 
   return briefUrl ? `${tweet}\n\n${briefUrl}` : tweet;

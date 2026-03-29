@@ -24,6 +24,7 @@ import { processTradeIdea } from "./trade-idea/index.js";
 import type { HtfOutput } from "./types.js";
 import { postTweet } from "./twitter.js";
 import { synthesizeTweet } from "./twitter-synthesizer.js";
+import { computeDelta } from "./delta.js";
 import {
   type RunArtifacts,
   type NotifyStage,
@@ -132,12 +133,22 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
   },
 
   async SYNTHESIS(ctx, idx, total) {
-    step(idx, total, "Synthesizing market brief...");
+    step(idx, total, "Computing delta & synthesizing market brief...");
     const outputs = ctx.artifacts.outputs!;
+
+    // Compute delta against previous brief
+    const deltaSummary = await computeDelta(ctx.asset, outputs);
+    ctx.artifacts.deltaSummary = deltaSummary;
+    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
+
+    // Rich brief always generated (web dashboard needs full data)
     const richBrief = await synthesizeRich(ctx.asset, outputs);
     if (richBrief) note("rich brief generated");
-    const briefText = await synthesize(ctx.asset, outputs, ctx.artifacts.decision ?? null, richBrief);
-    note("text brief generated");
+
+    // Text brief is delta-aware: one-liner / delta-focused / full
+    const briefText = await synthesize(ctx.asset, outputs, ctx.artifacts.decision ?? null, deltaSummary);
+    note(`text brief generated (${deltaSummary.tier} significance)`);
+
     ctx.artifacts.richBrief = richBrief;
     ctx.artifacts.briefText = briefText;
   },
@@ -166,7 +177,11 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
   async TWITTER(ctx, idx, total) {
     if (!ctx.twitterEnabled || ctx.asset !== "BTC") return;
     step(idx, total, `Synthesizing Twitter/X post (${ctx.asset})...`);
-    const tweet = await synthesizeTweet(ctx.asset, ctx.artifacts.outputs!, ctx.artifacts.briefUrl);
+    const tweet = await synthesizeTweet(ctx.asset, ctx.artifacts.outputs!, ctx.artifacts.briefUrl, ctx.artifacts.deltaSummary ?? null);
+    if (!tweet) {
+      note(`tweet skipped (low delta significance)`);
+      return;
+    }
     note(`tweet: ${tweet.length} chars`);
     const tweetId = await postTweet(tweet);
     ctx.artifacts.tweetText = tweet;

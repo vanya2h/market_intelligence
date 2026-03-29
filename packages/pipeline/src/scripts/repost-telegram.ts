@@ -86,7 +86,7 @@ async function main() {
     const start = Date.now();
     const res = await callLlm({
       system: buildSystemPrompt(decision ?? null),
-      user: buildPrompt(run.asset, richBrief ?? null, outputs, decision ?? null),
+      user: buildPrompt(run.asset, outputs, decision ?? null),
       maxTokens: 350,
     });
     if (res.stopReason !== "end_turn") {

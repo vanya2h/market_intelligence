@@ -17,6 +17,7 @@ import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief, updateBrief } from "./persist.js";
 import { processTradeIdea, type TradeDecision } from "./trade-idea/index.js";
 import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
+import { computeDelta } from "./delta.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -140,11 +141,13 @@ export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
       note("no HTF output — trade idea skipped");
     }
 
-    step(3, totalSteps, "Synthesizing market brief...");
+    step(3, totalSteps, "Computing delta & synthesizing market brief...");
+    const deltaSummary = await computeDelta(asset, outputs);
+    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
     const richBrief = await synthesizeRich(asset, outputs);
     if (richBrief) note("rich brief generated");
-    const brief = await synthesize(asset, outputs, decision, richBrief);
-    note("text brief generated");
+    const brief = await synthesize(asset, outputs, decision, deltaSummary);
+    note(`text brief generated (${deltaSummary.tier} significance)`);
 
     step(4, totalSteps, "Saving to database...");
     if (briefId) {
