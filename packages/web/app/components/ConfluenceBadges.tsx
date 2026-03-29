@@ -1,22 +1,12 @@
 import type { Confluence } from "@market-intel/api";
+import { CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_LABELS, CONFLUENCE_KEY_MAP } from "../lib/dimensions";
 
-const DIMENSION_KEYS = ["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const;
-
-const LABELS: Record<string, string> = {
-  derivatives: "Derivatives",
-  etfs: "ETF Flows",
-  htf: "HTF Structure",
-  sentiment: "Sentiment",
-  exchangeFlows: "Exchange Flows",
-};
-
-const SHORT_LABELS: Record<string, string> = {
-  derivatives: "Deriv",
-  etfs: "ETFs",
-  htf: "HTF",
-  sentiment: "Sent",
-  exchangeFlows: "ExFlow",
-};
+const LABELS: Record<string, string> = Object.fromEntries(
+  CONFLUENCE_KEYS.map((k) => {
+    const dim = Object.entries(CONFLUENCE_KEY_MAP).find(([, v]) => v === k)?.[0] as string;
+    return [k, DIMENSION_LABELS[dim as keyof typeof DIMENSION_LABELS]];
+  }),
+);
 
 function scoreColor(score: number): string {
   if (score >= 50) return "var(--green)";
@@ -45,7 +35,7 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
   const total = confluence.total ?? 0;
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {DIMENSION_KEYS.map((dim) => {
+      {CONFLUENCE_KEYS.map((dim) => {
         const score = confluence[dim] ?? 0;
         return (
           <span
@@ -57,7 +47,7 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
               border: "1px solid var(--border-subtle)",
             }}
           >
-            {SHORT_LABELS[dim]}
+            {DIMENSION_SHORT_LABELS[dim]}
             <span className="font-mono-jb tabular-nums">{scoreLabel(score)}</span>
           </span>
         );
@@ -84,7 +74,7 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
   return (
     <div className="flex flex-col gap-2">
       {/* Per-dimension bars */}
-      {DIMENSION_KEYS.map((dim) => {
+      {CONFLUENCE_KEYS.map((dim) => {
         const score = confluence[dim] ?? 0;
         const absPct = Math.abs(score) / maxScore;
         const isPositive = score >= 0;

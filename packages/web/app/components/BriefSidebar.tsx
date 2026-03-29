@@ -7,16 +7,9 @@ import { regimeColor, regimeLabel } from "../lib/regime-colors";
 import { RelativeTime } from "./RelativeTime";
 import type { Brief } from "@market-intel/api";
 
-export const DIMENSION_TABS = ["DERIVATIVES", "ETFS", "EXCHANGE_FLOWS", "SENTIMENT", "HTF"] as const;
-export type DimensionTab = (typeof DIMENSION_TABS)[number];
-
-export const TAB_LABELS: Record<DimensionTab, string> = {
-  DERIVATIVES: "Derivatives",
-  ETFS: "ETFs",
-  EXCHANGE_FLOWS: "Exchange Flows",
-  SENTIMENT: "Sentiment",
-  HTF: "HTF Structure",
-};
+export { DIMENSIONS as DIMENSION_TABS, DIMENSION_LABELS as TAB_LABELS } from "../lib/dimensions";
+export type { Dimension as DimensionTab } from "../lib/dimensions";
+import { DIMENSIONS as DIMENSION_TABS, DIMENSION_LABELS as TAB_LABELS } from "../lib/dimensions";
 
 const REGIME_DESCRIPTIONS: Record<string, Record<string, string>> = {
   DERIVATIVES: {

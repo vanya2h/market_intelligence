@@ -45,14 +45,14 @@ function renderMetricGroups(metrics: MetricDef[]) {
       {ungrouped.length > 0 && (
         <div>
           {ungrouped.map((m) => (
-            <MetricRow key={m.label} label={m.label} value={m.value} signal={m.signal} />
+            <MetricRow key={m.label} label={m.label} value={m.value} signal={m.signal} hint={m.hint} />
           ))}
         </div>
       )}
       {Object.entries(groups).map(([groupName, rows]) => (
         <SectionBlock key={groupName} title={groupName}>
           {rows.map((m) => (
-            <MetricRow key={m.label} label={m.label} value={m.value} signal={m.signal} />
+            <MetricRow key={m.label} label={m.label} value={m.value} signal={m.signal} hint={m.hint} />
           ))}
         </SectionBlock>
       ))}

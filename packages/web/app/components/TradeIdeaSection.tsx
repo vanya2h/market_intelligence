@@ -53,8 +53,8 @@ function MissedMoveIndicator({ peak, lastReturn }: { peak: TradeIdeaReturn; last
 
 function LearnLink() {
   return (
-    <InlineLink to="/faq#trade-ideas" className="mt-3 inline-flex items-center gap-1 text-[0.8rem]">
-      Learn how it works <span>{"\u2192"}</span>
+    <InlineLink to="/faq#trade-ideas" className="mt-3 inline-flex items-center gap-1 text-[0.725rem]">
+      <span>{"\u2192"}</span> Learn how Trade Ideas works
     </InlineLink>
   );
 }
@@ -84,36 +84,38 @@ function SkippedTradeIdea({ tradeIdea }: { tradeIdea: TradeIdea }) {
       : null;
 
   return (
-    <SectionBlock
-      title="Trade Idea"
-      tooltip="Trade idea was computed but conviction was insufficient. Tracked for accuracy measurement."
-    >
-      <div
-        className="rounded-md p-3"
-        style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
+    <div>
+      <SectionBlock
+        title="Trade Idea"
+        tooltip="Trade idea was computed but conviction was insufficient. Tracked for accuracy measurement."
       >
-        {/* Skip banner */}
-        <div className="flex items-center gap-2 mb-3">
-          <span
-            className="inline-flex items-center rounded px-2 py-0.5 text-[0.625rem] font-bold font-mono-jb"
-            style={{ color: dir.color, background: dir.bg, border: `1px solid ${dir.color}33`, opacity: 0.6 }}
-          >
-            {dir.label}
-          </span>
-          <span className="text-[0.6875rem] font-medium" style={{ color: "var(--text-muted)" }}>
-            Trade skipped — low conviction
-          </span>
+        <div
+          className="rounded-md p-3"
+          style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
+        >
+          {/* Skip banner */}
+          <div className="flex items-center gap-2 mb-3">
+            <span
+              className="inline-flex items-center rounded px-2 py-0.5 text-[0.625rem] font-bold font-mono-jb"
+              style={{ color: dir.color, background: dir.bg, border: `1px solid ${dir.color}33`, opacity: 0.6 }}
+            >
+              {dir.label}
+            </span>
+            <span className="text-[0.6875rem] font-medium" style={{ color: "var(--text-muted)" }}>
+              Trade skipped — low conviction
+            </span>
+          </div>
+
+          {/* Confluence badges */}
+          {tradeIdea.confluence && <ConfluenceBadges confluence={tradeIdea.confluence} />}
+
+          {/* Missed move indicator if returns data exists */}
+          {peakQuality && <MissedMoveIndicator peak={peakQuality} lastReturn={lastReturn ?? null} />}
         </div>
+      </SectionBlock>
 
-        {/* Confluence badges */}
-        {tradeIdea.confluence && <ConfluenceBadges confluence={tradeIdea.confluence} />}
-
-        {/* Missed move indicator if returns data exists */}
-        {peakQuality && <MissedMoveIndicator peak={peakQuality} lastReturn={lastReturn ?? null} />}
-
-        <LearnLink />
-      </div>
-    </SectionBlock>
+      <LearnLink />
+    </div>
   );
 }
 

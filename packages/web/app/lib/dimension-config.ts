@@ -8,6 +8,8 @@ export interface MetricDef {
   value: string;
   group?: string;
   signal?: MetricSignal;
+  /** Shown in a tooltip behind a ? icon */
+  hint?: string;
 }
 
 export interface DimensionEvent {
@@ -492,6 +494,7 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
     key: "HTF",
     label: "HTF Technical Structure",
     extractMetrics: (ctx) => {
+      const price = get(ctx, "price") as number;
       const vs50 = get(ctx, "ma.priceVsSma50Pct") as number;
       const vs200 = get(ctx, "ma.priceVsSma200Pct") as number;
       const rsiDaily = get(ctx, "rsi.daily") as number;
@@ -500,29 +503,27 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
       const structure = get(ctx, "structure") as string;
       const futDiv = get(ctx, "cvd.futures.divergence") as string;
       const spotDiv = get(ctx, "cvd.spot.divergence") as string;
+
+      /** Format a price level with % distance from current price */
+      const fmtLevel = (level: number) => {
+        const pct = Math.abs((level / price - 1) * 100).toFixed(1);
+        const dir = level >= price ? "above" : "below";
+        return `${formatUsd(level)} (${pct}% ${dir})`;
+      };
+
       return [
-        { label: "Price", value: safe(() => formatUsd(get(ctx, "price") as number)) },
-        {
-          label: "vs SMA 50",
-          group: "Moving Averages",
-          value: safe(() => formatPercent(vs50)),
-          signal: vs50 > 0 ? "bullish" : "bearish",
-        },
-        {
-          label: "vs SMA 200",
-          group: "Moving Averages",
-          value: safe(() => formatPercent(vs200)),
-          signal: vs200 > 0 ? "bullish" : "bearish",
-        },
+        { label: "Price", value: safe(() => formatUsd(price)) },
         {
           label: "SMA 50",
           group: "Moving Averages",
-          value: safe(() => formatUsd(get(ctx, "ma.sma50") as number)),
+          value: safe(() => fmtLevel(get(ctx, "ma.sma50") as number)),
+          signal: vs50 > 0 ? "bullish" : ("bearish" as MetricSignal),
         },
         {
           label: "SMA 200",
           group: "Moving Averages",
-          value: safe(() => formatUsd(get(ctx, "ma.sma200") as number)),
+          value: safe(() => fmtLevel(get(ctx, "ma.sma200") as number)),
+          signal: vs200 > 0 ? "bullish" : ("bearish" as MetricSignal),
         },
         {
           label: "MA Cross",
@@ -545,12 +546,12 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
         {
           label: "Weekly VWAP",
           group: "VWAP",
-          value: safe(() => formatUsd(get(ctx, "vwap.weekly") as number)),
+          value: safe(() => fmtLevel(get(ctx, "vwap.weekly") as number)),
         },
         {
           label: "Monthly VWAP",
           group: "VWAP",
-          value: safe(() => formatUsd(get(ctx, "vwap.monthly") as number)),
+          value: safe(() => fmtLevel(get(ctx, "vwap.monthly") as number)),
         },
         {
           label: "Futures Short/Long",
@@ -579,6 +580,15 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           group: "Structure",
           value: safe(() => structure),
           signal: structure === "HH_HL" ? "bullish" : structure === "LH_LL" ? "bearish" : "neutral",
+          hint: (() => {
+            switch (structure) {
+              case "HH_HL": return "Higher Highs + Higher Lows — bullish trend structure";
+              case "LH_LL": return "Lower Highs + Lower Lows — bearish trend structure";
+              case "HH_LL": return "Higher Highs + Lower Lows — expanding range, indecisive";
+              case "LH_HL": return "Lower Highs + Higher Lows — contracting range (squeeze)";
+              default: return "Not enough pivots to classify structure";
+            }
+          })(),
         },
         {
           label: "ATR (4h)",
@@ -590,17 +600,17 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
               {
                 label: "POC",
                 group: "Volume Profile",
-                value: safe(() => formatUsd(get(ctx, "volumeProfile.profile.poc") as number)),
+                value: safe(() => fmtLevel(get(ctx, "volumeProfile.profile.poc") as number)),
               },
               {
                 label: "VA High",
                 group: "Volume Profile",
-                value: safe(() => formatUsd(get(ctx, "volumeProfile.profile.vaHigh") as number)),
+                value: safe(() => fmtLevel(get(ctx, "volumeProfile.profile.vaHigh") as number)),
               },
               {
                 label: "VA Low",
                 group: "Volume Profile",
-                value: safe(() => formatUsd(get(ctx, "volumeProfile.profile.vaLow") as number)),
+                value: safe(() => fmtLevel(get(ctx, "volumeProfile.profile.vaLow") as number)),
               },
               {
                 label: "Price Position",
@@ -610,17 +620,6 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
                   const pos = get(ctx, "volumeProfile.profile.pricePosition") as string;
                   if (pos === "BELOW_VA") return "bullish" as MetricSignal;
                   if (pos === "ABOVE_VA") return "bearish" as MetricSignal;
-                  return "neutral" as MetricSignal;
-                })(),
-              },
-              {
-                label: "Price vs POC",
-                group: "Volume Profile",
-                value: safe(() => formatPercent(get(ctx, "volumeProfile.profile.priceVsPocPct") as number)),
-                signal: (() => {
-                  const pct = get(ctx, "volumeProfile.profile.priceVsPocPct") as number;
-                  if (pct < -3) return "bullish" as MetricSignal;
-                  if (pct > 3) return "bearish" as MetricSignal;
                   return "neutral" as MetricSignal;
                 })(),
               },
@@ -644,15 +643,11 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
               {
                 label: "Month/Week High",
                 group: "Sweep Levels",
-                value: safe(() => formatUsd(get(ctx, "sweep.nearestHigh.price") as number)),
+                value: safe(() => fmtLevel(get(ctx, "sweep.nearestHigh.price") as number)),
                 signal: "bullish" as MetricSignal,
-              },
-              {
-                label: "High Details",
-                group: "Sweep Levels",
-                value: safe(() => {
+                hint: safe(() => {
                   const lvl = get(ctx, "sweep.nearestHigh") as Record<string, unknown>;
-                  return `${(lvl.period as string).toLowerCase()} · ${formatNumber(lvl.ageDays as number, 0)}d old · ${formatNumber(lvl.distancePct as number, 1)}% away · attraction ${formatNumber(lvl.attraction as number, 0)}`;
+                  return `${(lvl.period as string).toLowerCase()} · ${formatNumber(lvl.ageDays as number, 0)}d old · attraction ${formatNumber(lvl.attraction as number, 0)}`;
                 }),
               },
             ]
@@ -662,15 +657,11 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
               {
                 label: "Month/Week Low",
                 group: "Sweep Levels",
-                value: safe(() => formatUsd(get(ctx, "sweep.nearestLow.price") as number)),
+                value: safe(() => fmtLevel(get(ctx, "sweep.nearestLow.price") as number)),
                 signal: "bearish" as MetricSignal,
-              },
-              {
-                label: "Low Details",
-                group: "Sweep Levels",
-                value: safe(() => {
+                hint: safe(() => {
                   const lvl = get(ctx, "sweep.nearestLow") as Record<string, unknown>;
-                  return `${(lvl.period as string).toLowerCase()} · ${formatNumber(lvl.ageDays as number, 0)}d old · ${formatNumber(lvl.distancePct as number, 1)}% away · attraction ${formatNumber(lvl.attraction as number, 0)}`;
+                  return `${(lvl.period as string).toLowerCase()} · ${formatNumber(lvl.ageDays as number, 0)}d old · attraction ${formatNumber(lvl.attraction as number, 0)}`;
                 }),
               },
             ]
