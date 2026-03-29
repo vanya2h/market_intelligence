@@ -161,6 +161,27 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     ],
   },
   {
+    title: "Liquidity Sweep Levels",
+    items: [
+      {
+        q: "What are liquidity sweep levels?",
+        a: "Stale weekly and monthly highs and lows that accumulate stop orders over time. Traders place stops above highs and below lows — the longer a level sits untested, the more orders cluster around it. Market makers and large players are incentivized to push price through these levels to trigger the accumulated orders, creating a 'sweep.' The system tracks these levels as directional price magnets.",
+      },
+      {
+        q: "How is sweep attraction calculated?",
+        a: "Sweep attraction = log2(age in days) / (distance % + 0.5) × 100. Closer and older levels score highest — a nearby level with weeks of accumulated stops is the most likely to be swept. Age uses log2 for diminishing returns (a 30-day-old level is much more attractive than a 7-day one, but 90-day vs 60-day matters less). Distance is in the denominator: levels close to current price score higher because they're easier to reach. Levels less than 3 days old are ignored (too fresh to accumulate meaningful liquidity).",
+      },
+      {
+        q: "How do sweep levels affect trade ideas?",
+        a: "Two ways. First, the highest-attraction sweep level in the trade direction gets 10% weight in the composite target — for a LONG idea, the nearest unswept high above price pulls the target up; for SHORT, the nearest unswept low below pulls it down. Second, when price is within 1.5×ATR of a high-attraction sweep level, a ±15 point proximity bonus is added to the HTF confluence score, nudging the system toward that direction.",
+      },
+      {
+        q: "What timeframes are tracked?",
+        a: "Current calendar month and current calendar week highs and lows, computed from daily candles. When a new month starts on the 1st, the counter resets and new highs/lows begin forming. Same for weeks on Monday. Only the actively forming period is tracked — previous months/weeks are discarded. Near-duplicate levels (weekly and monthly within 0.5% of each other) are deduplicated, keeping the one with higher attraction.",
+      },
+    ],
+  },
+  {
     title: "Trade ideas",
     items: [
       {
@@ -185,7 +206,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How are price targets computed?",
-        a: "A weighted median of five mean-reversion structure levels: POC (25%), SMA-50 (20%), SMA-200 (20%), weekly VWAP (20%), monthly VWAP (15%). The POC (Point of Control) from the volume profile is the highest-weighted level because it represents the strongest empirical price magnet — where the most volume traded. RSI confidence scales the target distance — when RSI is extreme (near 0 or 100), the target stands at full distance; when RSI is near 50, it compresses toward entry (0.3x floor). Each idea produces seven tracked levels: four invalidation stops at R:R 1:2 through 1:5, and three targets at 50%, 100%, and 150% of target distance.",
+        a: "A weighted median of up to six mean-reversion and directional levels: POC (25%), SMA-200 (20%), SMA-50 (15%), weekly VWAP (15%), monthly VWAP (15%), and the directional sweep level (10%). The POC from the volume profile is the highest-weighted level — the strongest empirical price magnet. The sweep level is directional: for LONG ideas, the highest-attraction unswept high above price; for SHORT, the highest-attraction unswept low below. RSI confidence scales the target distance — when RSI is extreme (near 0 or 100), the target stands at full distance; when RSI is near 50, it compresses toward entry (0.3x floor). Each idea produces seven tracked levels: four invalidation stops at R:R 1:2 through 1:5, and three targets at 50%, 100%, and 150% of target distance.",
       },
       {
         q: "What role does the LLM play in trade ideas?",
@@ -227,7 +248,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "How are trade ideas tracked?",
-        a: "Each idea generates seven independently-tracked price levels: four invalidation stops (at 1:2, 1:3, 1:4, and 1:5 risk-reward ratios) and three targets (T1 at 50% of target distance, T2 at 100%, T3 at 150% extension). The composite target is a weighted median of five mean-reversion levels: POC (25%), SMA-50 (20%), SMA-200 (20%), weekly VWAP (20%), and monthly VWAP (15%), compressed by an RSI confidence multiplier. Each level resolves independently when price touches it.",
+        a: "Each idea generates seven independently-tracked price levels: four invalidation stops (at 1:2, 1:3, 1:4, and 1:5 risk-reward ratios) and three targets (T1 at 50% of target distance, T2 at 100%, T3 at 150% extension). The composite target is a weighted median of up to six levels: POC (25%), SMA-200 (20%), SMA-50 (15%), weekly VWAP (15%), monthly VWAP (15%), and the directional sweep level (10%), compressed by an RSI confidence multiplier. Each level resolves independently when price touches it.",
       },
       {
         q: "How does automated outcome checking work?",

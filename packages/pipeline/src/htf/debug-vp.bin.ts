@@ -53,7 +53,32 @@ async function main() {
   console.log(`  │  SMA 200:            $${context.ma.sma200.toLocaleString()}`);
   console.log(`  │  VWAP weekly:        $${context.vwap.weekly.toLocaleString()}`);
   console.log(`  │  VWAP monthly:       $${context.vwap.monthly.toLocaleString()}`);
-  console.log(`  │  POC:                $${vp.poc.toLocaleString()}  ← NEW`);
+  console.log(`  │  POC:                $${vp.poc.toLocaleString()}`);
+
+  // ─── Sweep levels ────────────────────────────────────────────────────────
+  const { sweep } = context;
+  console.log("\n  ── Liquidity Sweep Levels ───────────────────────────");
+  if (sweep.nearestHigh) {
+    const h = sweep.nearestHigh;
+    console.log(`  │  Sweep High:         $${h.price.toLocaleString()}  (${h.period.toLowerCase()}, ${h.ageDays.toFixed(0)}d old, attraction: ${h.attraction.toFixed(1)})`);
+  } else {
+    console.log("  │  Sweep High:         (none)");
+  }
+  if (sweep.nearestLow) {
+    const l = sweep.nearestLow;
+    console.log(`  │  Sweep Low:          $${l.price.toLocaleString()}  (${l.period.toLowerCase()}, ${l.ageDays.toFixed(0)}d old, attraction: ${l.attraction.toFixed(1)})`);
+  } else {
+    console.log("  │  Sweep Low:          (none)");
+  }
+  console.log(`  │  Total levels:       ${sweep.levels.length}`);
+  if (sweep.levels.length > 0) {
+    console.log("  │");
+    console.log("  │  All levels (by attraction):");
+    for (const lvl of sweep.levels.slice(0, 8)) {
+      const dir = lvl.type === "HIGH" ? "▲" : "▼";
+      console.log(`  │    ${dir} $${lvl.price.toLocaleString().padEnd(10)} ${lvl.period.padEnd(8)} ${lvl.ageDays.toFixed(0).padStart(3)}d old  dist: ${lvl.distancePct.toFixed(1)}%  attr: ${lvl.attraction.toFixed(1)}`);
+    }
+  }
 
   // ─── ASCII volume profile ────────────────────────────────────────────────
   printAsciiProfile(vp, price);

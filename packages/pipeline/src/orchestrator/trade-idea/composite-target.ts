@@ -39,11 +39,12 @@ interface WeightedSample {
 // ─── Weights for structure levels ────────────────────────────────────────────
 
 const LEVEL_WEIGHTS = {
-  sma50: 0.2,
+  sma50: 0.15,
   sma200: 0.2,
-  vwapWeekly: 0.2,
+  vwapWeekly: 0.15,
   vwapMonthly: 0.15,
   poc: 0.25,
+  sweep: 0.1,
 } as const;
 
 // RSI confidence: when RSI is at 50 → floor only; at extremes → full weight
@@ -128,7 +129,7 @@ function rsiConfidence(rsiH4: number): number {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function computeCompositeTarget(htfContext: HtfContext, direction: Direction): CompositeTargetResult {
-  const { price, ma, vwap, rsi, atr, volumeProfile } = htfContext;
+  const { price, ma, vwap, rsi, atr, volumeProfile, sweep } = htfContext;
   const entryPrice = price;
 
   // FLAT: target is current price, levels are breakout thresholds based on ATR.
@@ -158,6 +159,12 @@ export function computeCompositeTarget(htfContext: HtfContext, direction: Direct
     value: volumeProfile.profile.poc,
     weight: LEVEL_WEIGHTS.poc,
   });
+
+  // Sweep level — directional liquidity magnet (stale high/low with accumulated stops)
+  const sweepLevel = direction === "LONG" ? sweep.nearestHigh : sweep.nearestLow;
+  if (sweepLevel && sweepLevel.attraction > 0) {
+    samples.push({ value: sweepLevel.price, weight: LEVEL_WEIGHTS.sweep });
+  }
 
   const rawTarget = weightedMedian(samples);
 

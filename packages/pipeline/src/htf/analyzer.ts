@@ -38,6 +38,10 @@ import {
   VolumeProfilePosition,
   VolumeProfileResult,
   VwapContext,
+  SweepContext,
+  SweepLevel,
+  SweepLevelType,
+  SweepPeriod,
 } from "./types.js";
 
 // ─── Technical indicators ─────────────────────────────────────────────────────
@@ -690,6 +694,142 @@ function computeVolumeProfileContext(
   };
 }
 
+// ─── Liquidity Sweep Levels ─────────────────────────────────────────────────
+
+const SWEEP_MIN_AGE_DAYS = 3; // ignore levels formed in the last 3 days
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Compute liquidity sweep levels from calendar weekly/monthly highs and lows.
+ *
+ * Stale highs/lows accumulate stop orders over time, making them progressively
+ * stronger price magnets. Sweep attraction = distancePct × log2(ageDays).
+ */
+function computeSweepLevels(dailyCandles: Candle[], currentPrice: number): SweepContext {
+  if (dailyCandles.length < 7) {
+    return { levels: [], nearestHigh: null, nearestLow: null };
+  }
+
+  const now = Date.now();
+  const raw: SweepLevel[] = [];
+
+  // Group candles by calendar period
+  const monthGroups = new Map<string, Candle[]>();
+  const weekGroups = new Map<string, Candle[]>();
+
+  for (const c of dailyCandles) {
+    const d = new Date(c.time);
+    const monthKey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const weekKey = isoWeekKey(d);
+
+    if (!monthGroups.has(monthKey)) monthGroups.set(monthKey, []);
+    monthGroups.get(monthKey)!.push(c);
+
+    if (!weekGroups.has(weekKey)) weekGroups.set(weekKey, []);
+    weekGroups.get(weekKey)!.push(c);
+  }
+
+  // Only track the current forming period — resets when a new month/week starts.
+  const nowDate = new Date(now);
+  const currentMonthKey = `${nowDate.getUTCFullYear()}-${String(nowDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const currentWeekKey = isoWeekKey(nowDate);
+
+  if (monthGroups.has(currentMonthKey)) {
+    addPeriodLevels(raw, monthGroups.get(currentMonthKey)!, "MONTHLY", currentPrice, now);
+  }
+  if (weekGroups.has(currentWeekKey)) {
+    addPeriodLevels(raw, weekGroups.get(currentWeekKey)!, "WEEKLY", currentPrice, now);
+  }
+
+  // Filter: HIGHs only above price (unswept highs to sweep upward),
+  //         LOWs only below price (unswept lows to sweep downward)
+  const directional = raw.filter(
+    (l) => (l.type === "HIGH" && l.price > currentPrice) || (l.type === "LOW" && l.price < currentPrice),
+  );
+
+  // Deduplicate: if weekly and monthly levels are within 0.5%, keep higher attraction
+  const deduped = deduplicateLevels(directional);
+
+  // Sort by attraction descending
+  deduped.sort((a, b) => b.attraction - a.attraction);
+
+  // Find nearest high/low by highest attraction
+  const nearestHigh = deduped.find((l) => l.type === "HIGH") ?? null;
+  const nearestLow = deduped.find((l) => l.type === "LOW") ?? null;
+
+  return { levels: deduped, nearestHigh, nearestLow };
+}
+
+/** ISO week key: YYYY-Www */
+function isoWeekKey(d: Date): string {
+  // ISO week: Monday-based, week 1 contains Jan 4
+  const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((tmp.getTime() - yearStart.getTime()) / MS_PER_DAY + 1) / 7);
+  return `${tmp.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+/** Extract high and low candles from a period, compute sweep levels. */
+function addPeriodLevels(
+  out: SweepLevel[],
+  candles: Candle[],
+  period: SweepPeriod,
+  currentPrice: number,
+  now: number,
+): void {
+  let highCandle = candles[0]!;
+  let lowCandle = candles[0]!;
+  for (const c of candles) {
+    if (c.high > highCandle.high) highCandle = c;
+    if (c.low < lowCandle.low) lowCandle = c;
+  }
+
+  for (const [candle, type, price] of [
+    [highCandle, "HIGH" as SweepLevelType, highCandle.high],
+    [lowCandle, "LOW" as SweepLevelType, lowCandle.low],
+  ] as const) {
+    const ageDays = (now - candle.time) / MS_PER_DAY;
+    if (ageDays < SWEEP_MIN_AGE_DAYS) return;
+
+    const distancePct = parseFloat((Math.abs(currentPrice / price - 1) * 100).toFixed(2));
+    // Closer + older = higher attraction (more likely to be swept)
+    const attraction = parseFloat(((Math.log2(Math.max(ageDays, 1)) / (distancePct + 0.5)) * 100).toFixed(2));
+
+    out.push({
+      price: parseFloat(price.toFixed(2)),
+      type,
+      period,
+      ageDays: parseFloat(ageDays.toFixed(1)),
+      distancePct,
+      attraction,
+    });
+  }
+}
+
+/** Remove near-duplicate levels (within 0.5%), keeping the one with higher attraction. */
+function deduplicateLevels(levels: SweepLevel[]): SweepLevel[] {
+  // Sort by price to make dedup easy
+  const sorted = [...levels].sort((a, b) => a.price - b.price);
+  const result: SweepLevel[] = [];
+
+  for (const level of sorted) {
+    const existing = result.find(
+      (r) => r.type === level.type && Math.abs(r.price / level.price - 1) < 0.005,
+    );
+    if (existing) {
+      // Keep higher attraction
+      if (level.attraction > existing.attraction) {
+        result.splice(result.indexOf(existing), 1, level);
+      }
+    } else {
+      result.push(level);
+    }
+  }
+
+  return result;
+}
+
 // ─── Event detection ─────────────────────────────────────────────────────────
 
 function detectEvents(
@@ -898,6 +1038,7 @@ export function analyze(
     atr: h4Atr,
     volatility: analyzeVolatility(h4, h4Atr),
     volumeProfile: computeVolumeProfileContext(snapshot.futuresH4Candles, h4Atr, price),
+    sweep: computeSweepLevels(daily, price),
     staleness,
   };
 

@@ -639,6 +639,42 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
               },
             ]
           : []),
+        ...(get(ctx, "sweep.nearestHigh") != null
+          ? [
+              {
+                label: "Month/Week High",
+                group: "Sweep Levels",
+                value: safe(() => formatUsd(get(ctx, "sweep.nearestHigh.price") as number)),
+                signal: "bullish" as MetricSignal,
+              },
+              {
+                label: "High Details",
+                group: "Sweep Levels",
+                value: safe(() => {
+                  const lvl = get(ctx, "sweep.nearestHigh") as Record<string, unknown>;
+                  return `${(lvl.period as string).toLowerCase()} · ${formatNumber(lvl.ageDays as number, 0)}d old · ${formatNumber(lvl.distancePct as number, 1)}% away · attraction ${formatNumber(lvl.attraction as number, 0)}`;
+                }),
+              },
+            ]
+          : []),
+        ...(get(ctx, "sweep.nearestLow") != null
+          ? [
+              {
+                label: "Month/Week Low",
+                group: "Sweep Levels",
+                value: safe(() => formatUsd(get(ctx, "sweep.nearestLow.price") as number)),
+                signal: "bearish" as MetricSignal,
+              },
+              {
+                label: "Low Details",
+                group: "Sweep Levels",
+                value: safe(() => {
+                  const lvl = get(ctx, "sweep.nearestLow") as Record<string, unknown>;
+                  return `${(lvl.period as string).toLowerCase()} · ${formatNumber(lvl.ageDays as number, 0)}d old · ${formatNumber(lvl.distancePct as number, 1)}% away · attraction ${formatNumber(lvl.attraction as number, 0)}`;
+                }),
+              },
+            ]
+          : []),
         ...(get(ctx, "ma.recentCross") !== "NONE" && get(ctx, "ma.recentCross") != null
           ? [
               {

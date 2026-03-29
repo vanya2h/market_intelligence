@@ -147,6 +147,33 @@ export interface VolumeProfileContext {
   rangeStartCandles: number;
 }
 
+export type SweepLevelType = "HIGH" | "LOW";
+export type SweepPeriod = "WEEKLY" | "MONTHLY";
+
+export interface SweepLevel {
+  /** The high or low price */
+  price: number;
+  /** HIGH = unswept high, LOW = unswept low */
+  type: SweepLevelType;
+  /** Calendar period this level belongs to */
+  period: SweepPeriod;
+  /** Days since the candle that formed this level */
+  ageDays: number;
+  /** % distance from current price (always positive) */
+  distancePct: number;
+  /** Sweep attraction score: distancePct × log2(ageDays) — higher = more likely to be swept */
+  attraction: number;
+}
+
+export interface SweepContext {
+  /** All sweep levels, sorted by attraction descending */
+  levels: SweepLevel[];
+  /** Highest-attraction level above current price (sweep target for longs) */
+  nearestHigh: SweepLevel | null;
+  /** Highest-attraction level below current price (sweep target for shorts) */
+  nearestLow: SweepLevel | null;
+}
+
 // Structured context passed to the LLM agent
 export interface HtfContext {
   asset: "BTC" | "ETH";
@@ -167,6 +194,8 @@ export interface HtfContext {
   volatility: VolatilityContext;
   /** Volume profile with displacement-anchored range detection */
   volumeProfile: VolumeProfileContext;
+  /** Liquidity sweep levels — stale weekly/monthly highs and lows that attract price */
+  sweep: SweepContext;
   /** How fresh each key signal is (candles since peak) — null if not present */
   staleness: SignalStaleness;
 }

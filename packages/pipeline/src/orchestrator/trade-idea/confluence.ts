@@ -360,13 +360,29 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
     vpScore *= clamp(vp.pocVolumePct / 5, 0.5, 1.5);
   }
 
+  // 7. Sweep proximity — price near a high-attraction sweep level = directional nudge
+  //    Price being pulled toward the level to sweep accumulated liquidity.
+  //    Fixed ±15 bonus (not weighted) — small but meaningful tiebreaker.
+  let sweepBonus = 0;
+  if (ctx.sweep) {
+    const { nearestHigh, nearestLow } = ctx.sweep;
+    const atrDist = 1.5 * ctx.atr;
+    if (nearestHigh && (nearestHigh.price - ctx.price) < atrDist && nearestHigh.attraction > 2) {
+      sweepBonus += 15; // LONG bias — price pulled up to sweep the high
+    }
+    if (nearestLow && (ctx.price - nearestLow.price) < atrDist && nearestLow.attraction > 2) {
+      sweepBonus -= 15; // SHORT bias — price pulled down to sweep the low
+    }
+  }
+
   const rawScore =
     rsiRaw * HTF_W_RSI +
     clamp(cvdScore, -100, 100) * HTF_W_CVD +
     clamp(volScore, -100, 100) * HTF_W_VOLATILITY +
     clamp(vpScore, -100, 100) * HTF_W_VP +
     regimeScore * HTF_W_REGIME +
-    structureScore * HTF_W_STRUCTURE;
+    structureScore * HTF_W_STRUCTURE +
+    sweepBonus;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }

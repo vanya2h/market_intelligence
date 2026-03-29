@@ -333,6 +333,16 @@ Auth: `X-API-Key` header. Free tier: 100 req/day, daily granularity, current dat
   - Price position: ABOVE_VA / INSIDE_VA / BELOW_VA
   - POC feeds into composite target at 25% weight (highest of all levels)
   - VP position contributes 20% of HTF confluence score
+- **Liquidity Sweep Levels:** Current month/week highs and lows from daily candles
+  - Tracks only the current forming month (resets on the 1st) and current week (resets Monday)
+  - Sweep attraction: `log2(ageDays) / (distancePct + 0.5) × 100` — closer and older = higher attraction
+  - Minimum age: 3 days (too fresh = insufficient liquidity accumulation)
+  - HIGHs filtered to above price only, LOWs filtered to below price only
+  - Deduplication: weekly/monthly levels within 0.5% merged, keeping higher attraction
+  - nearestHigh: highest-attraction level above price (LONG sweep target)
+  - nearestLow: highest-attraction level below price (SHORT sweep target)
+  - Directional sweep level feeds into composite target at 10% weight
+  - Proximity bonus: ±15 points in HTF confluence when price within 1.5×ATR of high-attraction level
 
 **Events tracked:**
 
