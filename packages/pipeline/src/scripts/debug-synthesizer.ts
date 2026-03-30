@@ -18,6 +18,7 @@ import { synthesize, buildPrompt, buildSystemPrompt } from "../orchestrator/synt
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { DIMENSION_LABELS, type DimensionOutput, type DerivativesOutput, type EtfsOutput, type HtfOutput, type SentimentOutput, type ExchangeFlowsOutput } from "../orchestrator/types.js";
 import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
+import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 
@@ -198,6 +199,10 @@ async function main() {
     const trackDirection = skipped ? bestDirectional : chosen;
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, trackDirection.direction);
 
+    const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
+    const shortConf = scored.find((s) => s.direction === "SHORT")!.confluence;
+    const bias = computeBias(longConf, shortConf);
+
     decision = {
       direction: trackDirection.direction,
       confluence: trackDirection.confluence,
@@ -207,6 +212,7 @@ async function main() {
       alternatives: scored
         .filter((s) => s.direction !== trackDirection.direction)
         .map((s) => ({ direction: s.direction, total: s.confluence.total })),
+      bias,
     };
 
     console.log();

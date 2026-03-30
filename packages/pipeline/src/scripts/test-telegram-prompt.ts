@@ -8,6 +8,7 @@ import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { callLlm } from "../llm.js";
 import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
+import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import type { HtfOutput } from "../orchestrator/types.js";
@@ -44,6 +45,10 @@ async function main() {
     const skipped = chosen.direction !== "FLAT" ? false : best.confluence.total < CONVICTION_THRESHOLD;
     const track = skipped ? best : chosen;
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, track.direction);
+    const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
+    const shortConf = scored.find((s) => s.direction === "SHORT")!.confluence;
+    const bias = computeBias(longConf, shortConf);
+
     decision = {
       direction: track.direction,
       confluence: track.confluence,
@@ -53,6 +58,7 @@ async function main() {
       alternatives: scored
         .filter((s) => s.direction !== track.direction)
         .map((s) => ({ direction: s.direction, total: s.confluence.total })),
+      bias,
     };
   }
 
@@ -75,9 +81,7 @@ async function main() {
 
   if (delta.tier === "low") {
     const htfPrice = htfOut?.context.price;
-    const priceStr = htfPrice
-      ? ` at $${htfPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-      : "";
+    const priceStr = htfPrice ? ` at $${htfPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "";
     const oneLiner = `${asset}${priceStr} — no dramatic changes since last brief. ${delta.topTension}.`;
     console.log(`\n🟢 NEW BRIEF — one-liner (no LLM call):\n`);
     console.log(sep);

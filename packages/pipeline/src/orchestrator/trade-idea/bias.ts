@@ -1,0 +1,99 @@
+/**
+ * Directional Bias
+ *
+ * Derived from already-computed LONG/SHORT confluence scores.
+ * Answers: "which way is this range likely to resolve, and how strongly?"
+ *
+ * This is a runtime computation — not persisted. Additive: the trade signal
+ * system (conviction threshold) is unchanged.
+ */
+
+import { CONVICTION_THRESHOLD, type Confluence } from "./confluence.js";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+/** Lean direction. NEUTRAL = signals are balanced, no edge detected. */
+export type BiasDirection = "LONG" | "SHORT" | "NEUTRAL";
+
+/** A dimension actively supporting the lean */
+export interface BiasFactor {
+  dimension: keyof Omit<Confluence, "total">;
+  /** Score of the lean direction in this dimension (always > 0) */
+  score: number;
+}
+
+export interface DirectionalBias {
+  /** Which way the market is leaning */
+  lean: BiasDirection;
+  /**
+   * Strength of the lean: 0–100.
+   * Derived from the margin between LONG total and SHORT total,
+   * normalized against a practical max margin of 500.
+   * 0 = perfectly balanced. 100 = all dimensions agree.
+   */
+  strength: number;
+  /**
+   * Top 1–3 dimensions driving the lean (positive score for the lean direction).
+   * Empty when lean is NEUTRAL.
+   */
+  topFactors: BiasFactor[];
+  /**
+   * Points separating the leading direction from CONVICTION_THRESHOLD.
+   * Negative = below threshold (how far still to go).
+   * Positive = threshold already exceeded (trade fires).
+   */
+  convictionGap: number;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+/**
+ * Practical normalizer for the LONG-minus-SHORT margin.
+ * When all 5 dims agree on one direction (each scoring +100 for LONG / -100 for SHORT),
+ * totals are +500 and -500 → margin = 1000. We use 500 so strength=100 is reachable
+ * at realistic extremes (all dims aligned, opponent neutral). Anything above is clamped.
+ */
+const MAX_MARGIN = 500;
+
+/** Dead-zone: margins within ±5 are treated as NEUTRAL to filter noise. */
+const LEAN_DEAD_ZONE = 5;
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * Compute directional bias from already-scored LONG and SHORT confluences.
+ * No re-scoring — purely derived arithmetic.
+ */
+export function computeBias(longConf: Confluence, shortConf: Confluence): DirectionalBias {
+  const margin = longConf.total - shortConf.total;
+
+  const lean: BiasDirection =
+    margin > LEAN_DEAD_ZONE ? "LONG" :
+    margin < -LEAN_DEAD_ZONE ? "SHORT" :
+    "NEUTRAL";
+
+  const strength = Math.round(Math.min((Math.abs(margin) / MAX_MARGIN) * 100, 100));
+
+  const leanConf = lean === "SHORT" ? shortConf : longConf;
+
+  const leadingTotal =
+    lean === "LONG" ? longConf.total :
+    lean === "SHORT" ? shortConf.total :
+    Math.max(longConf.total, shortConf.total);
+
+  const convictionGap = leadingTotal - CONVICTION_THRESHOLD;
+
+  const dims: ReadonlyArray<keyof Omit<Confluence, "total">> = [
+    "derivatives", "etfs", "htf", "sentiment", "exchangeFlows",
+  ];
+
+  const topFactors: BiasFactor[] = lean === "NEUTRAL"
+    ? []
+    : dims
+        .map((dimension) => ({ dimension, score: leanConf[dimension] }))
+        .filter((f) => f.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+
+  return { lean, strength, topFactors, convictionGap };
+}

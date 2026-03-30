@@ -11,8 +11,14 @@ import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
-import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput, ExchangeFlowsOutput } from "../orchestrator/types.js";
-import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
+import { computeBias } from "../orchestrator/trade-idea/bias.js";
+import type {
+  DerivativesOutput,
+  EtfsOutput,
+  HtfOutput,
+  SentimentOutput,
+  ExchangeFlowsOutput,
+} from "../orchestrator/types.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,9 +56,13 @@ function printDerivativesDetail(out: DerivativesOutput) {
   console.log(`    │ Positioning   : ${chalk.bold(ctx.positioning.state)}`);
   console.log(`    │ Stress        : ${chalk.bold(ctx.stress.state)}`);
   console.log(`    │ Funding pctl  : ${pct(ctx.signals.fundingPct1m)}`);
-  console.log(`    │ Funding side  : ${ctx.signals.fundingPressureSide ?? "—"}  cycles: ${ctx.signals.fundingPressureCycles}`);
+  console.log(
+    `    │ Funding side  : ${ctx.signals.fundingPressureSide ?? "—"}  cycles: ${ctx.signals.fundingPressureCycles}`,
+  );
   console.log(`    │ OI signal     : ${chalk.bold(ctx.oiSignal)}`);
-  console.log(`    │ OI Δ24h       : ${pct(ctx.signals.oiChange24h * 100)}  Δ7d: ${pct(ctx.signals.oiChange7d * 100)}  z: ${ctx.signals.oiZScore30d.toFixed(2)}`);
+  console.log(
+    `    │ OI Δ24h       : ${pct(ctx.signals.oiChange24h * 100)}  Δ7d: ${pct(ctx.signals.oiChange7d * 100)}  z: ${ctx.signals.oiZScore30d.toFixed(2)}`,
+  );
   console.log(`    │ Liq pctl 1m   : ${pct(ctx.signals.liqPct1m)}  3m: ${pct(ctx.signals.liqPct3m)}`);
   console.log(chalk.dim("    └──────────────────────────────────────────────"));
 }
@@ -64,7 +74,9 @@ function printEtfsDetail(out: EtfsOutput) {
   console.log(`    │ Regime        : ${chalk.bold(ctx.regime)}  (prev: ${ctx.previousRegime ?? "—"})`);
   console.log(`    │ Today σ       : ${chalk.bold(f.todaySigma.toFixed(2))}  ($${(f.today / 1e6).toFixed(1)}M)`);
   console.log(`    │ Inflow streak : ${f.consecutiveInflowDays}d   Outflow streak: ${f.consecutiveOutflowDays}d`);
-  console.log(`    │ 3d flow       : $${(f.d3Sum / 1e6).toFixed(1)}M   7d: $${(f.d7Sum / 1e6).toFixed(1)}M   30d: $${(f.d30Sum / 1e6).toFixed(1)}M`);
+  console.log(
+    `    │ 3d flow       : $${(f.d3Sum / 1e6).toFixed(1)}M   7d: $${(f.d7Sum / 1e6).toFixed(1)}M   30d: $${(f.d30Sum / 1e6).toFixed(1)}M`,
+  );
   console.log(`    │ Percentile 1m : ${pct(f.percentile1m)}`);
   console.log(`    │ Reversal ratio: ${(f.reversalRatio * 100).toFixed(1)}%`);
   console.log(chalk.dim("    └──────────────────────────────────────────────"));
@@ -77,13 +89,17 @@ function printHtfDetail(out: HtfOutput) {
   console.log(`    │ Structure     : ${chalk.bold(ctx.structure)}`);
   console.log(`    │ RSI 4h        : ${chalk.bold(ctx.rsi.h4.toFixed(1))}   daily: ${ctx.rsi.daily.toFixed(1)}`);
   console.log(`    │ Price vs SMA  : 50=${pct(ctx.ma.priceVsSma50Pct)}  200=${pct(ctx.ma.priceVsSma200Pct)}`);
-  console.log(`    │ CVD futures   : div=${chalk.bold(ctx.cvd.futures.divergence)}  R²=${ctx.cvd.futures.short.r2.toFixed(2)}/${ctx.cvd.futures.long.r2.toFixed(2)}`);
+  console.log(
+    `    │ CVD futures   : div=${chalk.bold(ctx.cvd.futures.divergence)}  R²=${ctx.cvd.futures.short.r2.toFixed(2)}/${ctx.cvd.futures.long.r2.toFixed(2)}`,
+  );
   console.log(`    │ CVD spot      : div=${chalk.bold(ctx.cvd.spot.divergence)}`);
   console.log(`    │ ATR           : ${ctx.atr.toFixed(1)}`);
   // Volatility compression
   const vol = ctx.volatility;
   const springIcon = vol.compressionAfterMove ? chalk.yellow.bold("⚡ COILED") : chalk.dim("—");
-  console.log(`    │ Vol pctl      : ${pct(vol.atrPercentile)}   ratio: ${vol.atrRatio.toFixed(3)}   displacement: ${vol.recentDisplacement.toFixed(1)} ATR   ${springIcon}`);
+  console.log(
+    `    │ Vol pctl      : ${pct(vol.atrPercentile)}   ratio: ${vol.atrRatio.toFixed(3)}   displacement: ${vol.recentDisplacement.toFixed(1)} ATR   ${springIcon}`,
+  );
   console.log(chalk.dim("    └──────────────────────────────────────────────"));
 }
 
@@ -93,10 +109,16 @@ function printExchangeFlowsDetail(out: ExchangeFlowsOutput) {
   console.log(chalk.dim("    ┌─ Exchange Flows Context ─────────────────────"));
   console.log(`    │ Regime        : ${chalk.bold(ctx.regime)}  (prev: ${ctx.previousRegime ?? "—"})`);
   console.log(`    │ Duration      : ${ctx.durationDays}d`);
-  console.log(`    │ Net flow 1d   : ${(m.netFlow1d >= 0 ? "+" : "") + m.netFlow1d.toFixed(2)}  7d: ${(m.netFlow7d >= 0 ? "+" : "") + m.netFlow7d.toFixed(2)}`);
-  console.log(`    │ Reserve 1d%   : ${pct(m.reserveChange1dPct)}  7d: ${pct(m.reserveChange7dPct)}  30d: ${pct(m.reserveChange30dPct)}`);
+  console.log(
+    `    │ Net flow 1d   : ${(m.netFlow1d >= 0 ? "+" : "") + m.netFlow1d.toFixed(2)}  7d: ${(m.netFlow7d >= 0 ? "+" : "") + m.netFlow7d.toFixed(2)}`,
+  );
+  console.log(
+    `    │ Reserve 1d%   : ${pct(m.reserveChange1dPct)}  7d: ${pct(m.reserveChange7dPct)}  30d: ${pct(m.reserveChange30dPct)}`,
+  );
   console.log(`    │ Today σ       : ${chalk.bold(m.todaySigma.toFixed(2))}   pctl 1m: ${m.flowPercentile1m}th`);
-  console.log(`    │ Balance trend : ${chalk.bold(m.balanceTrend)}   at 30d low: ${m.isAt30dLow}   at 30d high: ${m.isAt30dHigh}`);
+  console.log(
+    `    │ Balance trend : ${chalk.bold(m.balanceTrend)}   at 30d low: ${m.isAt30dLow}   at 30d high: ${m.isAt30dHigh}`,
+  );
   if (ctx.events.length > 0) {
     for (const e of ctx.events) {
       console.log(`    │ Event         : [${e.type}] ${e.detail}`);
@@ -112,9 +134,15 @@ function printSentimentDetail(out: SentimentOutput) {
   console.log(chalk.dim("    ┌─ Sentiment Context ──────────────────────────"));
   console.log(`    │ Regime        : ${chalk.bold(ctx.regime)}`);
   console.log(`    │ Composite F&G : ${chalk.bold(String(m.compositeIndex.toFixed(0)))} (${m.compositeLabel})`);
-  console.log(`    │ Components    : pos=${c.positioning.toFixed(0)} trend=${c.trend.toFixed(0)} mom=${c.momentumDivergence.toFixed(0)} etf=${c.institutionalFlows.toFixed(0)} exch=${c.exchangeFlows.toFixed(0)}`);
-  const fearCount = [c.positioning, c.trend, c.momentumDivergence, c.institutionalFlows, c.exchangeFlows].filter((v) => v < 40).length;
-  const greedCount = [c.positioning, c.trend, c.momentumDivergence, c.institutionalFlows, c.exchangeFlows].filter((v) => v > 60).length;
+  console.log(
+    `    │ Components    : pos=${c.positioning.toFixed(0)} trend=${c.trend.toFixed(0)} mom=${c.momentumDivergence.toFixed(0)} etf=${c.institutionalFlows.toFixed(0)} exch=${c.exchangeFlows.toFixed(0)}`,
+  );
+  const fearCount = [c.positioning, c.trend, c.momentumDivergence, c.institutionalFlows, c.exchangeFlows].filter(
+    (v) => v < 40,
+  ).length;
+  const greedCount = [c.positioning, c.trend, c.momentumDivergence, c.institutionalFlows, c.exchangeFlows].filter(
+    (v) => v > 60,
+  ).length;
   console.log(`    │ Convergence   : ${fearCount} fear / ${greedCount} greed (of 5)`);
   console.log(chalk.dim("    └──────────────────────────────────────────────"));
 }
@@ -154,14 +182,12 @@ async function main() {
   console.log("  SCORING BY DIRECTION");
   console.log("═══════════════════════════════════════════════════════════════");
 
-  const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
+  const directions = ["LONG", "SHORT"] as const;
 
   for (const dir of directions) {
     const confluence = computeConfluence(outputs, dir);
-    const passes = dir === "FLAT" || confluence.total >= CONVICTION_THRESHOLD;
-    const passIcon = dir === "FLAT"
-      ? chalk.yellow("TRACK")
-      : passes ? chalk.green.bold("TAKE ✓") : chalk.red("SKIP ✗");
+    const passes = confluence.total >= CONVICTION_THRESHOLD;
+    const passIcon = passes ? chalk.green.bold("TAKE ✓") : chalk.red("SKIP ✗");
 
     console.log(`\n  ── ${chalk.bold(dir)} ──────────────────────── ${passIcon}`);
     console.log();
@@ -176,18 +202,48 @@ async function main() {
     ];
 
     for (const dim of dims) {
-      console.log(
-        `    ${dim.name}  ${bar(dim.score, 100, 40)}  ${scoreStr(dim.score).padStart(12)}`,
-      );
+      console.log(`    ${dim.name}  ${bar(dim.score, 100, 40)}  ${scoreStr(dim.score).padStart(12)}`);
     }
 
     console.log();
-    const totalStr = confluence.total >= CONVICTION_THRESHOLD
-      ? chalk.green.bold(String(confluence.total))
-      : confluence.total > 0
-        ? chalk.yellow(String(confluence.total))
-        : chalk.red(String(confluence.total));
-    console.log(`    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalStr.padStart(12)} / ${CONVICTION_THRESHOLD}`);
+    const totalStr =
+      confluence.total >= CONVICTION_THRESHOLD
+        ? chalk.green.bold(String(confluence.total))
+        : confluence.total > 0
+          ? chalk.yellow(String(confluence.total))
+          : chalk.red(String(confluence.total));
+    console.log(
+      `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalStr.padStart(12)} / ${CONVICTION_THRESHOLD}`,
+    );
+  }
+
+  // Directional bias
+  const longConf = computeConfluence(outputs, "LONG");
+  const shortConf = computeConfluence(outputs, "SHORT");
+  const bias = computeBias(longConf, shortConf);
+
+  console.log("═══════════════════════════════════════════════════════════════");
+  console.log("  DIRECTIONAL BIAS");
+  console.log("═══════════════════════════════════════════════════════════════\n");
+
+  const leanColor = bias.lean === "LONG" ? chalk.green : bias.lean === "SHORT" ? chalk.red : chalk.yellow;
+  const gapAbs = Math.abs(bias.convictionGap);
+  const gapLabel =
+    bias.convictionGap < 0
+      ? chalk.yellow(`${gapAbs} pts below threshold`)
+      : chalk.green(`${gapAbs} pts above threshold — trade fires`);
+
+  console.log(`  Lean      : ${leanColor.bold(bias.lean)}`);
+  console.log(`  Strength  : ${bar(bias.strength, 100, 40)}  ${scoreStr(bias.strength).padStart(12)} / 100`);
+  console.log(`  Gap       : ${gapLabel}`);
+
+  if (bias.topFactors.length > 0) {
+    console.log(`\n  Top driving dimensions:`);
+    for (const f of bias.topFactors) {
+      console.log(`    ${f.dimension.padEnd(16)} ${bar(f.score, 100, 40)}  ${scoreStr(f.score).padStart(12)}`);
+    }
+  } else {
+    console.log(`\n  (signals balanced — no dominant lean)`);
   }
 
   console.log("\n═══════════════════════════════════════════════════════════════\n");

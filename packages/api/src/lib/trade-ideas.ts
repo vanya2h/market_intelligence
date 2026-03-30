@@ -27,6 +27,18 @@ export type TradeDirection = "LONG" | "SHORT" | "FLAT";
 export type TradeOutcome = "OPEN" | "WIN" | "LOSS";
 export type LevelType = "INVALIDATION" | "TARGET";
 
+export interface BiasFactor {
+  dimension: string;
+  score: number;
+}
+
+export interface DirectionalBias {
+  lean: "LONG" | "SHORT" | "NEUTRAL";
+  strength: number;
+  topFactors: BiasFactor[];
+  convictionGap: number;
+}
+
 export interface Confluence {
   derivatives: number;
   etfs: number;
@@ -34,6 +46,7 @@ export interface Confluence {
   sentiment: number;
   exchangeFlows: number;
   total: number;
+  bias?: DirectionalBias;
 }
 
 export interface TradeIdeaLevel {

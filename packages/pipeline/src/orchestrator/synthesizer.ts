@@ -37,15 +37,22 @@ function buildTradeSection(decision: TradeDecision | null): string {
 No HTF data available — trade idea could not be computed.`;
   }
   if (decision.skipped) {
-    return `### Trade Decision: SKIPPED (tracking for accuracy)
+    const { bias } = decision;
+    const gapAbs = Math.abs(bias.convictionGap);
+    const gapDir = bias.convictionGap < 0 ? "below" : "above";
+    const factorsStr = bias.topFactors.length > 0
+      ? bias.topFactors.map((f) => `${f.dimension} (+${f.score})`).join(", ")
+      : "none — signals balanced";
+    return `### Trade Decision: SKIPPED — directional bias ${bias.lean} (${bias.strength}/100 strength)
 **Best direction:** ${decision.direction}
-**Conviction:** ${decision.confluence.total} / ${CONVICTION_THRESHOLD} (below threshold)
-**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Sentiment=${decision.confluence.sentiment}
+**Conviction:** ${decision.confluence.total} / ${CONVICTION_THRESHOLD} (${gapAbs} pts ${gapDir} threshold)
+**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, ExchangeFlows=${decision.confluence.exchangeFlows}, Sentiment=${decision.confluence.sentiment}
+**Directional bias:** ${bias.lean} (strength ${bias.strength}/100)
+**Key bias drivers:** ${factorsStr}
 **Entry price:** $${decision.entryPrice.toFixed(2)}
 **Composite target:** $${decision.compositeTarget.toFixed(2)}
-**Alternatives:** ${decision.alternatives.map((a) => `${a.direction}=${a.total}`).join(", ")}
 
-The system identified ${decision.direction} as the best directional candidate but conviction is insufficient. Explain WHY each dimension scored the way it did and what would need to change for this to become a high-conviction trade.`;
+The system identified a ${bias.lean} bias at ${bias.strength}/100 strength but conviction is insufficient to trade. Lead with what this directional lean means for price action in the near term. Then explain what would push conviction above threshold.`;
   }
   const targetDist = Math.abs(decision.compositeTarget - decision.entryPrice);
   const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
@@ -86,7 +93,7 @@ IMPORTANT: Lead your brief with what changed. The reader saw the previous brief 
 Current time: ${new Date().toUTCString()}
 
 ${richSection}${deltaSection}${
-    decision && !decision.skipped
+    decision
       ? `
 
 ---
@@ -97,10 +104,11 @@ ${buildTradeSection(decision)}`
 }
 
 export function buildSystemPrompt(decision: TradeDecision | null, isDelta: boolean = false): string {
-  const tradeSection =
-    decision && !decision.skipped
-      ? `\n4. End with the trade idea: direction, why the setup makes sense right now, and what price proves it wrong.`
-      : ``;
+  const tradeSection = decision
+    ? decision.skipped
+      ? `\n4. End with the directional bias: which way the market is leaning, what's driving it, and what would need to change to confirm a trade.`
+      : `\n4. End with the trade idea: direction, why the setup makes sense right now, and what price proves it wrong.`
+    : ``;
 
   const structure = isDelta
     ? `Structure (delta update — reader already saw the last brief):
