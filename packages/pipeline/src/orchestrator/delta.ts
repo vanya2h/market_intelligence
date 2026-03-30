@@ -17,7 +17,7 @@ import type { DimensionOutput } from "./types.js";
 // ─── Thresholds ──────────────────────────────────────────────────────────────
 
 /** Max z-score above which we produce a full brief */
-const HIGH_THRESHOLD = 2.0;
+const HIGH_THRESHOLD = 3.5;
 /** Max z-score below which we produce a one-liner */
 const LOW_THRESHOLD = 0.5;
 /** Number of historical briefs to use for sigma calculation */

@@ -16,6 +16,7 @@ import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { synthesize, buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
+import { computeDelta } from "../orchestrator/delta.js";
 import { DIMENSION_LABELS, type DimensionOutput, type DerivativesOutput, type EtfsOutput, type HtfOutput, type SentimentOutput, type ExchangeFlowsOutput } from "../orchestrator/types.js";
 import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
@@ -164,6 +165,13 @@ async function main() {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`  ${outputs.length} dimensions completed in ${elapsed}s`);
 
+  // ─── Delta ─────────────────────────────────────────────────────────
+  section("DELTA ANALYSIS");
+  const deltaSummary = await computeDelta(asset, outputs);
+  const tierColor = deltaSummary.tier === "high" ? chalk.red : deltaSummary.tier === "medium" ? chalk.yellow : chalk.green;
+  console.log(`  Tier: ${tierColor.bold(deltaSummary.tier.toUpperCase())}  Max Z: ${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(3)}`);
+  console.log(`  ${chalk.dim(deltaSummary.changeSummary)}`);
+
   // ─── Dimension regimes ──────────────────────────────────────────────
   section("DIMENSION REGIMES");
   for (const o of outputs) {
@@ -284,7 +292,8 @@ async function main() {
   // ─── LLM input: system prompt ──────────────────────────────────────
   section("LLM INPUT: SYSTEM PROMPT");
 
-  const systemPrompt = buildSystemPrompt(decision);
+  const isDelta = deltaSummary.tier === "medium";
+  const systemPrompt = buildSystemPrompt(decision, isDelta);
   console.log(chalk.dim("  (This is the system message the text synthesizer receives)\n"));
   wordWrap(systemPrompt, "  ", 70);
   console.log(`\n  ${chalk.dim(`${systemPrompt.length} chars`)}`);
@@ -318,7 +327,7 @@ async function main() {
   section("SYNTHESIZED BRIEF OUTPUT");
 
   const synthStart = Date.now();
-  const brief = await synthesize(asset, outputs, decision);
+  const brief = await synthesize(asset, outputs, decision, deltaSummary);
   const synthElapsed = ((Date.now() - synthStart) / 1000).toFixed(1);
 
   const rendered = brief

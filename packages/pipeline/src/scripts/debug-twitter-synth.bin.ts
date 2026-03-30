@@ -1,20 +1,24 @@
 #!/usr/bin/env tsx
 /**
- * Debug script — Delta Analysis
+ * Debug script — Twitter Synthesizer
  *
- * Loads the two most recent briefs for an asset from DB, replays the delta
- * computation, and prints the full DeltaSummary with per-metric z-scores.
+ * Loads the most recent brief for an asset, replays delta computation,
+ * and shows what the twitter synthesizer would produce (or skip).
  *
  * Usage:
- *   pnpm tsx src/orchestrator/debug-delta.bin.ts
- *   pnpm tsx src/orchestrator/debug-delta.bin.ts --asset ETH
+ *   pnpm tsx src/orchestrator/debug-twitter-synth.bin.ts
+ *   pnpm tsx src/orchestrator/debug-twitter-synth.bin.ts --asset ETH
+ *   pnpm tsx src/orchestrator/debug-twitter-synth.bin.ts --id <briefId>
+ *   pnpm tsx src/orchestrator/debug-twitter-synth.bin.ts --id <briefId> --prev <prevId>
+ *   pnpm tsx src/orchestrator/debug-twitter-synth.bin.ts --prompt   # also print raw LLM prompt
  */
 
 import "../env.js";
 import chalk from "chalk";
 import { prisma } from "../storage/db.js";
-import { computeDelta } from "./delta.js";
-import type { DimensionOutput } from "./types.js";
+import { computeDelta } from "../orchestrator/delta.js";
+import { synthesizeTweet, buildPrompt } from "../orchestrator/twitter-synthesizer.js";
+import type { DimensionOutput } from "../orchestrator/types.js";
 
 const asset = process.argv.includes("--asset")
   ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
@@ -28,8 +32,10 @@ const prevId = process.argv.includes("--prev")
   ? process.argv[process.argv.indexOf("--prev") + 1]
   : undefined;
 
+const showPrompt = process.argv.includes("--prompt");
+
 async function main(): Promise<void> {
-  console.log(chalk.bold(`\nDelta debug for ${asset}\n`));
+  console.log(chalk.bold(`\nTwitter synth debug for ${asset}\n`));
 
   const briefInclude = {
     derivatives: true,
@@ -39,7 +45,6 @@ async function main(): Promise<void> {
     exchangeFlows: true,
   } as const;
 
-  // Load a specific brief or the most recent one
   const latest = briefId
     ? await prisma.brief.findUnique({ where: { id: briefId }, include: briefInclude })
     : await prisma.brief.findFirst({ where: { asset }, orderBy: { timestamp: "desc" }, include: briefInclude });
@@ -49,7 +54,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Load previous brief for side-by-side comparison
   const previous = prevId
     ? await prisma.brief.findUnique({ where: { id: prevId }, select: { id: true, timestamp: true, brief: true } })
     : await prisma.brief.findFirst({
@@ -137,74 +141,45 @@ async function main(): Promise<void> {
 
   console.log(chalk.dim(`Reconstructed ${outputs.length} dimension outputs\n`));
 
-  // ── Previous vs Current brief text ──
+  // ── Delta ──
 
-  const sep = "─".repeat(60);
-  if (previous) {
-    console.log(`\n${chalk.bold.yellow("PREVIOUS BRIEF")} ${chalk.dim(`(${previous.timestamp.toISOString()})`)}`);
-    console.log(sep);
-    console.log(previous.brief);
-    console.log(sep);
-  }
-
-  console.log(`\n${chalk.bold.cyan("CURRENT BRIEF")} ${chalk.dim(`(${latest.timestamp.toISOString()})`)}`);
-  console.log(sep);
-  console.log(latest.brief);
-  console.log(sep);
-
-  // Run delta computation (compares latest vs second-latest in DB)
   const delta = await computeDelta(asset, outputs, prevId ? { previousBriefId: prevId } : {});
 
-  // ── Delta results ──
-
   const tierColor = delta.tier === "high" ? chalk.red : delta.tier === "medium" ? chalk.yellow : chalk.green;
-  console.log(`${chalk.bold("Tier:")} ${tierColor.bold(delta.tier.toUpperCase())}`);
-  console.log(`${chalk.bold("Max Z:")} ${delta.maxZ === Infinity ? "∞" : delta.maxZ.toFixed(3)}`);
+  console.log(`${chalk.bold("Delta tier:")} ${tierColor.bold(delta.tier.toUpperCase())}  ${chalk.dim(`(maxZ=${delta.maxZ === Infinity ? "∞" : delta.maxZ.toFixed(3)})`)}`);
+  console.log(`${chalk.bold("Change summary:")} ${chalk.dim(delta.changeSummary)}`);
   console.log();
 
-  for (const dim of delta.dimensions) {
-    const regimeStr = dim.regimeFlipped
-      ? chalk.red(`${dim.prevRegime} → ${dim.currRegime}`)
-      : chalk.dim(dim.currRegime);
-    console.log(`${chalk.cyan.bold(dim.dimension)} — regime: ${regimeStr}`);
+  // ── Decision ──
 
-    if (dim.topMovers.length === 0) {
-      console.log(chalk.dim("  (no previous data to compare)"));
-    }
+  const sep = "─".repeat(60);
 
-    for (const m of dim.topMovers) {
-      const arrow = m.delta > 0 ? chalk.green("↑") : m.delta < 0 ? chalk.red("↓") : chalk.dim("→");
-      const zStr = m.zScore === Infinity ? chalk.red.bold("∞") : m.zScore.toFixed(2);
-      const sigStr = m.sigma > 0 ? m.sigma.toFixed(4) : chalk.dim("0");
-      console.log(
-        `  ${arrow} ${m.label.padEnd(35)} ` +
-          `${chalk.dim("prev=")}${m.prev.toFixed(4).padStart(12)} ` +
-          `${chalk.dim("curr=")}${m.curr.toFixed(4).padStart(12)} ` +
-          `${chalk.dim("Δ=")}${m.delta.toFixed(4).padStart(10)} ` +
-          `${chalk.dim("σ=")}${String(sigStr).padStart(8)} ` +
-          `${chalk.dim("z=")}${zStr}`,
-      );
-    }
+  if (delta.tier === "low") {
+    console.log(chalk.yellow.bold("→ SKIPPED") + chalk.dim(" (low delta — nothing new worth tweeting)"));
+    await prisma.$disconnect();
+    return;
+  }
+
+  if (showPrompt) {
+    console.log(chalk.bold("Raw LLM prompt:"));
+    console.log(sep);
+    console.log(buildPrompt(asset, outputs, delta));
+    console.log(sep);
     console.log();
   }
 
-  console.log(chalk.bold("Change summary:"));
-  console.log(chalk.dim(delta.changeSummary));
-  console.log();
-  console.log(chalk.bold("Top tension:"));
-  console.log(delta.topTension || chalk.dim("(none)"));
-  console.log();
+  console.log(chalk.bold(`Calling synthesizeTweet (${delta.tier} delta)...`));
+  const tweet = await synthesizeTweet(asset, outputs, undefined, delta);
 
-  // Show what the one-liner would look like
-  if (delta.tier === "low") {
-    const htf = outputs.find((o) => o.dimension === "HTF");
-    const priceStr =
-      htf && "snapshotPrice" in htf && htf.snapshotPrice
-        ? ` at $${htf.snapshotPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-        : "";
-    const oneLiner = `${asset}${priceStr} — no dramatic changes since last brief. ${delta.topTension}.`;
-    console.log(chalk.bold("One-liner output:"));
-    console.log(chalk.yellow(oneLiner));
+  console.log();
+  console.log(chalk.bold.cyan("TWEET OUTPUT"));
+  console.log(sep);
+  if (tweet) {
+    console.log(tweet);
+    console.log(sep);
+    console.log(chalk.dim(`${tweet.length} / 280 chars`));
+  } else {
+    console.log(chalk.yellow("(null — skipped by synthesizer)"));
   }
 
   await prisma.$disconnect();

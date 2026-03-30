@@ -126,24 +126,26 @@ export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
     console.log("");
     printDimensionSummary(outputs);
 
-    // Trade idea is computed BEFORE synthesis — mechanical decision drives the brief
-    step(2, totalSteps, "Computing trade idea (mechanical)...");
+    // Delta must be computed BEFORE saving the placeholder brief,
+    // otherwise loadPreviousBriefContexts picks up the placeholder
+    // (same context data) and all deltas come out as zero.
+    step(2, totalSteps, "Computing delta...");
+    const deltaSummary = await computeDelta(asset, outputs);
+    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
+
+    step(3, totalSteps, "Computing trade idea & synthesizing market brief...");
     const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
     let decision: TradeDecision | null = null;
     let briefId: string | undefined;
 
     if (htfOut) {
-      // Save a placeholder brief first (we need briefId for the trade idea)
+      // Save a placeholder brief (we need briefId for the trade idea)
       briefId = await saveBrief(asset, "", outputs, null);
       const result = await processTradeIdea(briefId, asset, htfOut.context, outputs);
       decision = result.decision;
     } else {
       note("no HTF output — trade idea skipped");
     }
-
-    step(3, totalSteps, "Computing delta & synthesizing market brief...");
-    const deltaSummary = await computeDelta(asset, outputs);
-    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
     const richBrief = await synthesizeRich(asset, outputs);
     if (richBrief) note("rich brief generated");
     const brief = await synthesize(asset, outputs, decision, deltaSummary);
