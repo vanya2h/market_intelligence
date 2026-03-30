@@ -120,6 +120,14 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
   async TRADE_IDEA(ctx, idx, total) {
     step(idx, total, "Computing trade idea (mechanical)...");
     const outputs = ctx.artifacts.outputs!;
+
+    // Delta must be computed BEFORE saving the placeholder brief,
+    // otherwise loadPreviousBriefContexts picks up the placeholder
+    // (same context data) and all deltas come out as zero.
+    const deltaSummary = await computeDelta(ctx.asset, outputs);
+    ctx.artifacts.deltaSummary = deltaSummary;
+    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
+
     const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
 
     if (htfOut) {
@@ -133,13 +141,11 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
   },
 
   async SYNTHESIS(ctx, idx, total) {
-    step(idx, total, "Computing delta & synthesizing market brief...");
+    step(idx, total, "Synthesizing market brief...");
     const outputs = ctx.artifacts.outputs!;
 
-    // Compute delta against previous brief
-    const deltaSummary = await computeDelta(ctx.asset, outputs);
-    ctx.artifacts.deltaSummary = deltaSummary;
-    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
+    // Delta was already computed in TRADE_IDEA (before placeholder save)
+    const deltaSummary = ctx.artifacts.deltaSummary!;
 
     // Rich brief always generated (web dashboard needs full data)
     const richBrief = await synthesizeRich(ctx.asset, outputs);
