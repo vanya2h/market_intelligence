@@ -1,4 +1,5 @@
 import { AppHeader } from "../components/AppHeader";
+import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
 
 function ZoneBadge({ color, label }: { color: string; label: string }) {
@@ -280,50 +281,36 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
 
 function FaqEntry({ q, a }: FaqItem) {
   return (
-    <details className="group rounded-md" style={{ background: "var(--bg-hover)" }}>
-      <summary
-        className="flex cursor-pointer select-none items-center gap-2 p-3 text-sm font-medium"
-        style={{ color: "var(--text-primary)" }}
-      >
-        <span
-          className="flex h-4 w-4 shrink-0 items-center justify-center text-[0.625rem] transition-transform group-open:rotate-90"
-          style={{ color: "var(--text-muted)" }}
-        >
-          ▶
-        </span>
-        {q}
-      </summary>
-      <div className="px-3 pb-3 pl-9">
-        {a === "zones" ? (
-          <div className="flex flex-col gap-2">
-            {zones.map((z) => (
-              <div
-                key={z.range}
-                className="flex flex-col gap-1 rounded p-2"
-                style={{ background: "var(--bg-surface)" }}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="font-mono-jb text-xs" style={{ color: "var(--text-muted)" }}>
-                    {z.range}
-                  </span>
-                  <ZoneBadge color={z.color} label={z.label} />
-                  <span className="ml-auto text-xs font-medium" style={{ color: z.color }}>
-                    {z.bias}
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                  {z.description}
-                </p>
+    <Collapsible title={q} variant="subtle">
+      {a === "zones" ? (
+        <div className="flex flex-col gap-2">
+          {zones.map((z) => (
+            <div
+              key={z.range}
+              className="flex flex-col gap-1 rounded p-2"
+              style={{ background: "var(--bg-surface)" }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="font-mono-jb text-xs" style={{ color: "var(--text-muted)" }}>
+                  {z.range}
+                </span>
+                <ZoneBadge color={z.color} label={z.label} />
+                <span className="ml-auto text-xs font-medium" style={{ color: z.color }}>
+                  {z.bias}
+                </span>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-            {a}
-          </p>
-        )}
-      </div>
-    </details>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {z.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+          {a}
+        </p>
+      )}
+    </Collapsible>
   );
 }
 

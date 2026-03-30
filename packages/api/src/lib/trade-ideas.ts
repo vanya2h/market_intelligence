@@ -122,3 +122,26 @@ export interface TradeIdeaStats {
   totalIdeas: number;
   levels: TradeIdeaLevelStats[];
 }
+
+// ─── Signal effectiveness ───────────────────────────────────────────────────
+
+export interface SignalBucket {
+  range: string;
+  min: number;
+  max: number;
+  count: number;
+  avgVelocity: number | null;
+}
+
+export interface DimensionEffectiveness {
+  dimension: string;
+  buckets: SignalBucket[];
+  correlation: number | null;
+  sampleSize: number;
+}
+
+export interface SignalEffectiveness {
+  dimensions: DimensionEffectiveness[];
+  totalIdeas: number;
+  totalWithReturns: number;
+}

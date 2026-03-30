@@ -9,7 +9,14 @@ import { describeRoute, validator } from "hono-openapi";
 import { prisma } from "@market-intel/pipeline";
 import { createController } from "../common/controller.js";
 import { AssetParamSchema, PaginationQuerySchema } from "../common/schemas.js";
-import { tradeIdeaInclude, TradeIdeaLevelStats, TradeIdeaStats } from "../lib/trade-ideas.js";
+import {
+  tradeIdeaInclude,
+  TradeIdeaLevelStats,
+  TradeIdeaStats,
+  SignalBucket,
+  DimensionEffectiveness,
+  SignalEffectiveness,
+} from "../lib/trade-ideas.js";
 import { AssetType } from "../lib/asset.js";
 
 // ─── GET /latest/:asset ──────────────────────────────────────────────────────
@@ -139,6 +146,34 @@ export const GetConfluenceStatsController = createController({
     }),
 });
 
+// ─── GET /signal-effectiveness/:asset ───────────────────────────────────────
+
+const signalEffectivenessRoute = describeRoute({
+  summary: "Get signal effectiveness",
+  description:
+    "Per-dimension score vs peak return velocity analysis — bucketed hit rates and correlation for weight tuning",
+  tags: ["Trade Ideas"],
+  responses: {
+    200: { description: "Per-dimension signal effectiveness data" },
+  },
+});
+
+export const GetSignalEffectivenessController = createController({
+  build: (factory) =>
+    factory
+      .createApp()
+      .get(
+        "/signal-effectiveness/:asset",
+        signalEffectivenessRoute,
+        validator("param", AssetParamSchema),
+        async (c) => {
+          const { asset } = c.req.valid("param");
+          const data = await getSignalEffectiveness(asset);
+          return c.json(data);
+        },
+      ),
+});
+
 // ─── Composite controller ────────────────────────────────────────────────────
 
 export const TradeIdeasController = createController({
@@ -149,7 +184,8 @@ export const TradeIdeasController = createController({
       .route("/", GetTradeIdeaHistoryController.build(factory))
       .route("/", GetTradeIdeaStatsController.build(factory))
       .route("/", GetConfluenceStatsController.build(factory))
-      .route("/", GetTradeIdeaByBriefController.build(factory)),
+      .route("/", GetTradeIdeaByBriefController.build(factory))
+      .route("/", GetSignalEffectivenessController.build(factory)),
 });
 
 export async function getTradeIdeaStats(asset: "BTC" | "ETH"): Promise<TradeIdeaStats> {
@@ -296,4 +332,99 @@ interface ConfluenceJson {
   htf?: number;
   sentiment?: number;
   exchangeFlows?: number;
+}
+
+// ─── Signal effectiveness ───────────────────────────────────────────────────
+
+const SCORE_BUCKETS = [
+  { range: "strong_against", min: -100, max: -50 },
+  { range: "weak_against", min: -50, max: -10 },
+  { range: "neutral", min: -10, max: 10 },
+  { range: "weak_for", min: 10, max: 50 },
+  { range: "strong_for", min: 50, max: 100 },
+] as const;
+
+/**
+ * Peak return velocity: max(returnPct / hoursAfter),
+ * signed positive when the move matches the predicted direction.
+ */
+function peakVelocity(
+  returns: { hoursAfter: number; returnPct: number }[],
+  direction: string,
+): number | null {
+  if (returns.length === 0) return null;
+  const sign = direction === "SHORT" ? -1 : 1;
+  let best: number | null = null;
+  for (const r of returns) {
+    if (r.hoursAfter === 0) continue;
+    const v = (r.returnPct * sign) / r.hoursAfter;
+    if (best === null || v > best) best = v;
+  }
+  return best;
+}
+
+/** Pearson correlation between two equal-length arrays. */
+function pearson(xs: number[], ys: number[]): number | null {
+  const n = xs.length;
+  if (n < 3) return null;
+  const mx = xs.reduce((s, x) => s + x, 0) / n;
+  const my = ys.reduce((s, y) => s + y, 0) / n;
+  let num = 0,
+    dx2 = 0,
+    dy2 = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i]! - mx;
+    const dy = ys[i]! - my;
+    num += dx * dy;
+    dx2 += dx * dx;
+    dy2 += dy * dy;
+  }
+  const denom = Math.sqrt(dx2 * dy2);
+  return denom === 0 ? null : num / denom;
+}
+
+/**
+ * Per-dimension signal effectiveness: score-bucketed average peak velocity
+ * and Pearson correlation between dimension score and peak velocity.
+ */
+async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffectiveness> {
+  const ideas = await prisma.tradeIdea.findMany({
+    where: { asset },
+    include: { returns: { orderBy: { hoursAfter: "asc" } } },
+  });
+
+  const scored: { confluence: ConfluenceJson; velocity: number }[] = [];
+  for (const idea of ideas) {
+    const conf = idea.confluence as ConfluenceJson | null;
+    if (!conf) continue;
+    const v = peakVelocity(idea.returns, idea.direction);
+    if (v === null) continue;
+    scored.push({ confluence: conf, velocity: v });
+  }
+
+  const dimensions: DimensionEffectiveness[] = DIMENSIONS.map((dim) => {
+    const pairs: { score: number; velocity: number }[] = [];
+    for (const s of scored) {
+      const score = s.confluence[dim] ?? 0;
+      pairs.push({ score, velocity: s.velocity });
+    }
+
+    const buckets: SignalBucket[] = SCORE_BUCKETS.map(({ range, min, max }) => {
+      const inBucket = pairs.filter((p) =>
+        range === "strong_for" ? p.score >= min : p.score >= min && p.score < max,
+      );
+      const count = inBucket.length;
+      const avgVelocity = count > 0 ? inBucket.reduce((s, p) => s + p.velocity, 0) / count : null;
+      return { range, min, max, count, avgVelocity };
+    });
+
+    const correlation = pearson(
+      pairs.map((p) => p.score),
+      pairs.map((p) => p.velocity),
+    );
+
+    return { dimension: dim, buckets, sampleSize: pairs.length, correlation };
+  });
+
+  return { dimensions, totalIdeas: ideas.length, totalWithReturns: scored.length };
 }

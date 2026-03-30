@@ -53,9 +53,14 @@ function MissedMoveIndicator({ peak, lastReturn }: { peak: TradeIdeaReturn; last
 
 function LearnLink() {
   return (
-    <InlineLink to="/faq#trade-ideas" className="mt-3 inline-flex items-center gap-1 text-[0.725rem]">
-      <span>{"\u2192"}</span> Learn how Trade Ideas works
-    </InlineLink>
+    <div className="mt-3 flex items-center gap-4">
+      <InlineLink to="/faq#trade-ideas" className="inline-flex items-center gap-1 text-[0.725rem]">
+        <span>{"\u2192"}</span> How Trade Ideas works
+      </InlineLink>
+      <InlineLink to="/signals" className="inline-flex items-center gap-1 text-[0.725rem]">
+        <span>{"\u2192"}</span> Signal Effectiveness
+      </InlineLink>
+    </div>
   );
 }
 
