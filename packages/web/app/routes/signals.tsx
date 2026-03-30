@@ -7,7 +7,8 @@ import { AssetSelector } from "../components/AssetSelector";
 import { getSignalEffectiveness } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { DIMENSION_SHORT_LABELS, type ConfluenceKey } from "../lib/dimensions";
-import type { DimensionEffectiveness, SignalBucket } from "@market-intel/api";
+import type { DimensionEffectiveness, SignalBucket, IdeaSummary } from "@market-intel/api";
+import { Link } from "react-router";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -65,6 +66,9 @@ export default function Signals() {
             <>
               {/* Correlation ranking */}
               <CorrelationRanking dimensions={data.dimensions} />
+
+              {/* Trade idea heatmap */}
+              {data.ideas.length > 0 && <IdeaHeatmap ideas={data.ideas} />}
 
               {/* Per-dimension bucket tables */}
               <div className="flex flex-col gap-4">
@@ -274,6 +278,131 @@ function MethodologyGuide() {
         </div>
       </div>
     </Collapsible>
+  );
+}
+
+// ─── Trade idea heatmap ─────────────────────────────────────────────────────
+
+function IdeaHeatmap({ ideas }: { ideas: IdeaSummary[] }) {
+  // Sort chronologically (oldest first)
+  const sorted = [...ideas].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  // Compute max absolute quality for scaling
+  const qualities = sorted.map((i) => i.peakQuality).filter((q): q is number => q !== null);
+  const maxAbsQ = qualities.length > 0 ? Math.max(...qualities.map(Math.abs), 0.01) : 1;
+
+  return (
+    <div
+      className="rounded-md p-4"
+      style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
+    >
+      <h2
+        className="text-[0.6875rem] font-medium uppercase tracking-wider mb-3"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Trade Idea History
+      </h2>
+
+      {/* Grid */}
+      <div className="flex flex-wrap gap-1">
+        {sorted.map((idea) => (
+          <HeatmapCell key={idea.id} idea={idea} maxAbsQ={maxAbsQ} />
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-3 flex items-center gap-4 text-[0.5625rem]" style={{ color: "var(--text-muted)" }}>
+        <div className="flex items-center gap-1.5">
+          <div
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ background: "color-mix(in srgb, var(--green) 50%, transparent)" }}
+          />
+          <span>Predicted move hit fast</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ background: "color-mix(in srgb, var(--red) 50%, transparent)" }}
+          />
+          <span>Adverse / wrong direction</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ background: "var(--bg-hover)", border: "1px solid var(--border-subtle)" }}
+          />
+          <span>No data / negligible</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ background: "var(--bg-hover)", border: "1px dashed var(--text-muted)" }}
+          />
+          <span>Skipped</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) {
+  const q = idea.peakQuality;
+  const hasData = q !== null;
+  const intensity = hasData ? Math.min(Math.abs(q) / maxAbsQ, 1) : 0;
+  const isPositive = hasData && q > 0;
+
+  // Color: green for positive quality (predicted move happened), red for negative
+  const baseColor = !hasData
+    ? "var(--bg-hover)"
+    : isPositive
+      ? `color-mix(in srgb, var(--green) ${Math.round(15 + intensity * 55)}%, transparent)`
+      : `color-mix(in srgb, var(--red) ${Math.round(15 + intensity * 55)}%, transparent)`;
+
+  const borderColor = !hasData
+    ? "var(--border-subtle)"
+    : isPositive
+      ? `color-mix(in srgb, var(--green) ${Math.round(30 + intensity * 40)}%, transparent)`
+      : `color-mix(in srgb, var(--red) ${Math.round(30 + intensity * 40)}%, transparent)`;
+
+  const date = new Date(idea.createdAt);
+  const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const timeStr = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
+  const dirLabel = idea.direction === "LONG" ? "\u25b2" : idea.direction === "SHORT" ? "\u25bc" : "\u2014";
+  const returnStr = idea.peakReturnPct !== null ? `${idea.peakReturnPct > 0 ? "+" : ""}${idea.peakReturnPct.toFixed(1)}%` : "";
+  const timeToStr = idea.peakHoursAfter !== null
+    ? idea.peakHoursAfter < 24
+      ? `${idea.peakHoursAfter}h`
+      : `${Math.floor(idea.peakHoursAfter / 24)}d`
+    : "";
+  const qualityStr = q !== null ? `q=${q.toFixed(2)}` : "";
+
+  const tooltip = [
+    `${dateStr} ${timeStr}`,
+    `${idea.direction}${idea.skipped ? " (skipped)" : ""}`,
+    returnStr && `Peak: ${returnStr} at ${timeToStr}`,
+    qualityStr,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Link
+      to={`/brief/${idea.briefId}`}
+      title={tooltip}
+      className="relative h-7 w-7 rounded-sm flex items-center justify-center text-[0.5rem] font-mono-jb transition-transform hover:scale-125 hover:z-10"
+      style={{
+        background: baseColor,
+        border: `1px ${idea.skipped ? "dashed" : "solid"} ${borderColor}`,
+        color: !hasData
+          ? "var(--text-muted)"
+          : isPositive
+            ? "var(--green)"
+            : "var(--red)",
+      }}
+    >
+      {dirLabel}
+    </Link>
   );
 }
 

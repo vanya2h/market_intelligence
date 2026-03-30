@@ -16,6 +16,7 @@ import {
   SignalBucket,
   DimensionEffectiveness,
   SignalEffectiveness,
+  IdeaSummary,
 } from "../lib/trade-ideas.js";
 import { AssetType } from "../lib/asset.js";
 
@@ -394,11 +395,33 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
   });
 
   const scored: { confluence: ConfluenceJson; velocity: number }[] = [];
+  const ideaSummaries: IdeaSummary[] = [];
+
   for (const idea of ideas) {
     const conf = idea.confluence as ConfluenceJson | null;
-    if (!conf) continue;
     const v = peakVelocity(idea.returns, idea.direction);
-    if (v === null) continue;
+
+    // Find the peak quality return snapshot
+    let peakReturn: (typeof idea.returns)[number] | null = null;
+    for (const r of idea.returns) {
+      if (!peakReturn || Math.abs(r.qualityAtPoint) > Math.abs(peakReturn.qualityAtPoint)) {
+        peakReturn = r;
+      }
+    }
+
+    ideaSummaries.push({
+      id: idea.id,
+      briefId: idea.briefId,
+      direction: idea.direction,
+      skipped: idea.skipped,
+      createdAt: idea.createdAt.toISOString(),
+      peakVelocity: v,
+      peakReturnPct: peakReturn?.returnPct ?? null,
+      peakHoursAfter: peakReturn?.hoursAfter ?? null,
+      peakQuality: peakReturn?.qualityAtPoint ?? null,
+    });
+
+    if (!conf || v === null) continue;
     scored.push({ confluence: conf, velocity: v });
   }
 
@@ -426,5 +449,5 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
     return { dimension: dim, buckets, sampleSize: pairs.length, correlation };
   });
 
-  return { dimensions, totalIdeas: ideas.length, totalWithReturns: scored.length };
+  return { dimensions, ideas: ideaSummaries, totalIdeas: ideas.length, totalWithReturns: scored.length };
 }

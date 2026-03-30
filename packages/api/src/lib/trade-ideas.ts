@@ -140,8 +140,21 @@ export interface DimensionEffectiveness {
   sampleSize: number;
 }
 
+export interface IdeaSummary {
+  id: string;
+  briefId: string;
+  direction: string;
+  skipped: boolean;
+  createdAt: string;
+  peakVelocity: number | null;
+  peakReturnPct: number | null;
+  peakHoursAfter: number | null;
+  peakQuality: number | null;
+}
+
 export interface SignalEffectiveness {
   dimensions: DimensionEffectiveness[];
+  ideas: IdeaSummary[];
   totalIdeas: number;
   totalWithReturns: number;
 }
