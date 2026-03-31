@@ -341,7 +341,9 @@ function computeDimensionDelta(
 
       const delta = curr - prev;
       const sigma = sigmas.get(path) ?? 0;
-      const zScore = sigma > MIN_SIGMA ? Math.abs(delta) / sigma : delta !== 0 ? Infinity : 0;
+      // When sigma is unknown (insufficient history), treat as non-significant
+      // rather than Infinity — we can't tell if the change is unusual.
+      const zScore = sigma > MIN_SIGMA ? Math.abs(delta) / sigma : 0;
 
       movers.push({ path, label, prev, curr, delta, sigma, zScore });
     }
