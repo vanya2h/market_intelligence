@@ -79,7 +79,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "What components make up the composite score?",
-        a: "Five active components, each scored 0–100 independently, combined with fixed weights: Positioning (37.5%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (20%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Exchange Flows (17.5%) from on-chain data — coins moving on/off exchanges, reserve trends, and 30-day extremes. Trend (15%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence (10%) from HTF technicals — price-RSI disagreement amplified by CVD divergence. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data. ATR volatility compression is not part of the composite score but is available to the LLM synthesizer as a contextual trade-setup signal.",
+        a: "Three active components, each scored 0–100 independently, combined with fixed weights: Positioning (50%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (30%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Trend (20%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence and Exchange Flows were removed as unreliable sentiment signals. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data. ATR volatility compression is not part of the composite score but is available to the LLM synthesizer as a contextual trade-setup signal.",
       },
       {
         q: "When is a reading of 45 vs 55 meaningful?",
@@ -116,7 +116,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How is the Exchange Flows score calculated?",
-        a: "Exchange flows track coins moving on and off exchanges across 20+ exchanges. Coins leaving exchanges (outflow) signal accumulation — investors moving to self-custody with no intent to sell. Coins entering exchanges (inflow) signal distribution — positioning to sell. The score maps 7-day reserve change to a 0–100 scale (outflow = bullish/high, inflow = bearish/low), boosted by trend confirmation (falling reserves = bullish), 30-day extremes (reserves at 30d low = strong accumulation), and regime state. States: ACCUMULATION, DISTRIBUTION, EF_NEUTRAL, HEAVY_INFLOW, HEAVY_OUTFLOW.",
+        a: "Exchange flows track coins moving on and off exchanges across 20+ exchanges. Coins leaving exchanges (outflow) signal accumulation — investors moving to self-custody with no intent to sell. Coins entering exchanges (inflow) signal distribution — positioning to sell. The score maps 7-day reserve change to a 0–100 scale (outflow = bullish/high, inflow = bearish/low), boosted by trend confirmation (falling reserves = bullish), 30-day extremes (reserves at 30d low = strong accumulation), and regime state. States: ACCUMULATION, DISTRIBUTION, EF_NEUTRAL, HEAVY_INFLOW, HEAVY_OUTFLOW. Note: Exchange Flows was removed from the sentiment composite (proved unreliable as a sentiment signal) but remains a standalone dimension and contributes to trade idea confluence scoring.",
       },
       {
         q: "How are the technical indicators computed?",
@@ -128,7 +128,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How does the Momentum Divergence detection work?",
-        a: "It detects when price direction and internal momentum disagree: price making new highs while RSI makes lower highs (bearish divergence / distribution), or price making new lows while RSI makes higher lows (bullish divergence / accumulation). CVD from Binance Futures amplifies the signal — if volume flow contradicts the price trend, the divergence is stronger. This component is explicitly reversal-predictive.",
+        a: "It detects when price direction and internal momentum disagree: price making new highs while RSI makes lower highs (bearish divergence / distribution), or price making new lows while RSI makes higher lows (bullish divergence / accumulation). CVD from Binance Futures amplifies the signal — if volume flow contradicts the price trend, the divergence is stronger. Note: this was removed from the sentiment composite score (proved unreliable as a sentiment signal) but the detection is still computed and available to the LLM synthesizer and trade idea confluence scoring.",
       },
       {
         q: "What does 'code computes, LLMs reason' mean?",
@@ -228,11 +228,11 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "Why is this system optimized for swing trading specifically?",
-        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 37.5% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Institutional and exchange flows together get 37.5% because capital flow direction (both on-chain and via ETFs) is a strong leading indicator. Trend only gets 15% because trend-following signals lag at reversal points. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
+        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 50% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Institutional Flows gets 30% because ETF capital flow direction is a strong leading indicator. Trend only gets 20% because trend-following signals lag at reversal points. Momentum Divergence and Exchange Flows were removed as they proved to be unreliable sentiment signals. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
       },
       {
         q: "Why does Positioning get 37.5% while Trend only gets 15%?",
-        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Exchange Flows (17.5%) captures on-chain supply pressure — a distinct signal from ETF-based institutional flows. Momentum Divergence (10%) is added specifically because it's reversal-predictive.",
+        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Institutional Flows (30%) captures ETF capital flow direction as a strong leading indicator. Exchange Flows and Momentum Divergence were removed from the sentiment composite after proving unreliable as sentiment signals — Exchange Flows still contributes to trade idea confluence scoring separately.",
       },
       {
         q: "What is the two-dimensional derivatives model?",
@@ -273,7 +273,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "Will the system change over time?",
-        a: "Yes, by design. The current weights and thresholds are a starting hypothesis. As outcome data accumulates, the system recalibrates based on what's actually predictive — not what seemed like it should be. Exchange Flows was recently added as the fifth dimension, capturing on-chain supply pressure that ETF flows alone don't cover. Additional data dimensions (options/IV, macro indicators, prediction markets, stablecoin flows) are planned and will be integrated as they prove additive to signal quality. Expert Consensus is included in the architecture but disabled at 0% weight until enough delta data exists to calibrate it properly.",
+        a: "Yes, by design. The current weights and thresholds are a starting hypothesis. As outcome data accumulates, the system recalibrates based on what's actually predictive — not what seemed like it should be. Momentum Divergence and Exchange Flows were recently removed from the sentiment composite after proving unreliable as sentiment signals — both still contribute to trade idea confluence scoring separately. The composite now uses three focused components: Positioning (50%), Institutional Flows (30%), and Trend (20%). Additional data dimensions (options/IV, macro indicators, prediction markets, stablecoin flows) are planned and will be integrated as they prove additive to signal quality. Expert Consensus is included in the architecture but disabled at 0% weight until enough delta data exists to calibrate it properly.",
       },
     ],
   },

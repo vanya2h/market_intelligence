@@ -315,18 +315,6 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           value: safe(() => formatNumber(flows, 0)),
           signal: numSignal(flows, 60, 40),
         },
-        {
-          label: "Exch. Flows",
-          group: "Components",
-          value: safe(() => formatNumber(get(ctx, "metrics.components.exchangeFlows") as number, 0)),
-          signal: numSignal(get(ctx, "metrics.components.exchangeFlows") as number, 60, 40),
-        },
-        {
-          label: "Mom. Divergence",
-          group: "Components",
-          value: safe(() => formatNumber(get(ctx, "metrics.components.momentumDivergence") as number, 0)),
-          signal: numSignal(get(ctx, "metrics.components.momentumDivergence") as number, 60, 40),
-        },
         // {
         //   label: "Consensus Index",
         //   group: "Unbias Consensus",
@@ -411,7 +399,8 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
       // For exchange flows: outflow (negative) = bullish, inflow (positive) = bearish
       const flowSignal = (v: number): MetricSignal => (v < 0 ? "bullish" : v > 0 ? "bearish" : "neutral");
 
-      const topExchanges = (get(ctx, "metrics.topExchanges") as { exchange: string; balance: number; changePct7d: number }[]) ?? [];
+      const topExchanges =
+        (get(ctx, "metrics.topExchanges") as { exchange: string; balance: number; changePct7d: number }[]) ?? [];
 
       return [
         {
@@ -472,10 +461,24 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           signal: balanceTrend === "FALLING" ? "bullish" : balanceTrend === "RISING" ? "bearish" : "neutral",
         },
         ...(get(ctx, "metrics.isAt30dLow") === true
-          ? [{ label: "30d Low", group: "Reserves", value: "Yes — at 30d reserve low", signal: "bullish" as MetricSignal }]
+          ? [
+              {
+                label: "30d Low",
+                group: "Reserves",
+                value: "Yes — at 30d reserve low",
+                signal: "bullish" as MetricSignal,
+              },
+            ]
           : []),
         ...(get(ctx, "metrics.isAt30dHigh") === true
-          ? [{ label: "30d High", group: "Reserves", value: "Yes — at 30d reserve high", signal: "bearish" as MetricSignal }]
+          ? [
+              {
+                label: "30d High",
+                group: "Reserves",
+                value: "Yes — at 30d reserve high",
+                signal: "bearish" as MetricSignal,
+              },
+            ]
           : []),
         ...topExchanges.slice(0, 5).map((ex) => ({
           label: ex.exchange,
@@ -509,15 +512,15 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
       const CVD_DIV_SIGNAL: Record<string, MetricSignal | undefined> = {
         BULLISH: "bullish",
         BEARISH: "bearish",
-        NONE:    undefined,
+        NONE: undefined,
       };
 
       const SPOT_FUT_SIGNAL: Record<string, MetricSignal> = {
-        CONFIRMED_BUYING:  "bullish",
+        CONFIRMED_BUYING: "bullish",
         CONFIRMED_SELLING: "bearish",
-        SUSPECT_BOUNCE:    "bearish",
-        SPOT_LEADS:        "bullish",
-        NONE:              "neutral",
+        SUSPECT_BOUNCE: "bearish",
+        SPOT_LEADS: "bullish",
+        NONE: "neutral",
       };
 
       /** Format a price level with % distance from current price */
@@ -611,21 +614,31 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           group: "CVD",
           value: safe(() => {
             switch (spotFutDiv) {
-              case "CONFIRMED_BUYING":  return "Confirmed buying";
-              case "CONFIRMED_SELLING": return "Confirmed selling";
-              case "SUSPECT_BOUNCE":    return "Suspect bounce";
-              case "SPOT_LEADS":        return "Spot leads";
-              default:                  return "—";
+              case "CONFIRMED_BUYING":
+                return "Confirmed buying";
+              case "CONFIRMED_SELLING":
+                return "Confirmed selling";
+              case "SUSPECT_BOUNCE":
+                return "Suspect bounce";
+              case "SPOT_LEADS":
+                return "Spot leads";
+              default:
+                return "—";
             }
           }),
           signal: SPOT_FUT_SIGNAL[spotFutDiv] ?? "neutral",
           hint: safe(() => {
             switch (spotFutDiv) {
-              case "CONFIRMED_BUYING":  return "Both spot and futures CVD rising — genuine buy-side pressure";
-              case "CONFIRMED_SELLING": return "Both spot and futures CVD falling — genuine sell-side pressure";
-              case "SUSPECT_BOUNCE":    return "Futures CVD rising but spot CVD flat/falling — bounce likely driven by short covering, not real demand";
-              case "SPOT_LEADS":        return "Spot CVD rising while futures CVD flat/falling — organic accumulation without leverage";
-              default: return "";
+              case "CONFIRMED_BUYING":
+                return "Both spot and futures CVD rising — genuine buy-side pressure";
+              case "CONFIRMED_SELLING":
+                return "Both spot and futures CVD falling — genuine sell-side pressure";
+              case "SUSPECT_BOUNCE":
+                return "Futures CVD rising but spot CVD flat/falling — bounce likely driven by short covering, not real demand";
+              case "SPOT_LEADS":
+                return "Spot CVD rising while futures CVD flat/falling — organic accumulation without leverage";
+              default:
+                return "";
             }
           }),
         },
@@ -636,11 +649,16 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           signal: structure === "HH_HL" ? "bullish" : structure === "LH_LL" ? "bearish" : "neutral",
           hint: (() => {
             switch (structure) {
-              case "HH_HL": return "Higher Highs + Higher Lows — bullish trend structure";
-              case "LH_LL": return "Lower Highs + Lower Lows — bearish trend structure";
-              case "HH_LL": return "Higher Highs + Lower Lows — expanding range, indecisive";
-              case "LH_HL": return "Lower Highs + Higher Lows — contracting range (squeeze)";
-              default: return "Not enough pivots to classify structure";
+              case "HH_HL":
+                return "Higher Highs + Higher Lows — bullish trend structure";
+              case "LH_LL":
+                return "Lower Highs + Lower Lows — bearish trend structure";
+              case "HH_LL":
+                return "Higher Highs + Lower Lows — expanding range, indecisive";
+              case "LH_HL":
+                return "Lower Highs + Higher Lows — contracting range (squeeze)";
+              default:
+                return "Not enough pivots to classify structure";
             }
           })(),
         },
@@ -687,7 +705,7 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
                 group: "Volume Profile",
                 value: safe(() => {
                   const candles = get(ctx, "volumeProfile.rangeStartCandles") as number;
-                  return `${candles} candles (~${formatNumber(candles * 4 / 24, 0)}d)`;
+                  return `${candles} candles (~${formatNumber((candles * 4) / 24, 0)}d)`;
                 }),
               },
             ]

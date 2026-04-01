@@ -57,9 +57,6 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
               { label: "Positioning", value: brief.positioning },
               { label: "Trend", value: brief.trend },
               { label: "Inst. Flows", value: brief.institutionalFlows },
-              { label: "Exch. Flows", value: brief.exchangeFlows },
-              { label: "Expert Cons.", value: brief.expertConsensus },
-              { label: "Mom. Div.", value: brief.momentumDivergence },
             ].map(({ label, value }) => {
               if (value == null) return null;
               const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
