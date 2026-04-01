@@ -52,32 +52,40 @@ function directional(score: number, direction: Direction): number {
 // Component weights
 const DERIV_W_POSITIONING = 0.4;
 const DERIV_W_STRESS = 0.25;
-const DERIV_W_FUNDING = 0.2;
-const DERIV_W_OI = 0.15;
+const DERIV_W_FUNDING = 0.35;
 
 function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number {
   if (direction === "FLAT") return 0;
 
-  const { positioning, stress, signals, oiSignal } = ctx;
+  const { positioning, stress, signals } = ctx;
 
-  // 1. Positioning regime → raw LONG bias score
+  // 1. Positioning — magnitude-based using continuous metrics
   let posScore = 0;
   switch (positioning.state) {
-    case "CROWDED_SHORT":
-      posScore = 100;
-      break; // short squeeze → LONG
-    case "CROWDED_LONG":
-      posScore = -100;
-      break; // long squeeze → SHORT
+    case "CROWDED_SHORT": {
+      // Squeeze potential scales with funding extremity + OI pressure.
+      // fundingPct1m < 20 for CROWDED_SHORT — lower = more extreme.
+      // oiZScore30d > 0.5 = elevated OI = more fuel.
+      const fundingDepth = clamp((20 - signals.fundingPct1m) / 20, 0, 1); // 20→0, 0→1
+      const oiPressure = clamp(signals.oiZScore30d / 2, 0, 1); // 0→0, 2+→1
+      posScore = 60 + 40 * (fundingDepth * 0.6 + oiPressure * 0.4); // 60–100
+      break;
+    }
+    case "CROWDED_LONG": {
+      // Mirror of CROWDED_SHORT. fundingPct1m > 80 — higher = more extreme.
+      const fundingDepth = clamp((signals.fundingPct1m - 80) / 20, 0, 1); // 80→0, 100→1
+      const oiPressure = clamp(signals.oiZScore30d / 2, 0, 1);
+      posScore = -(60 + 40 * (fundingDepth * 0.6 + oiPressure * 0.4)); // -60 to -100
+      break;
+    }
     case "HEATING_UP": {
-      // Magnitude-based: scale by how deep into the heating zone we are.
-      // fundingPct1m 40–70 range: 55 is center (mildest), edges are more significant.
+      // Scale by how deep into the heating zone.
+      // fundingPct1m 40–70: 55 is center (mildest), edges are more significant.
       // oiChange7d: 2% is threshold, higher = more heated.
-      // fundingPressureSide tells us WHO is paying — LONG paying = bearish, SHORT paying = bullish.
-      const fpDist = Math.abs(signals.fundingPct1m - 55) / 15; // 0 at center (55), 1 at edges (40/70)
+      // fundingPressureSide tells us WHO is paying.
+      const fpDist = Math.abs(signals.fundingPct1m - 55) / 15; // 0 at center, 1 at edges
       const oiHeat = clamp((signals.oiChange7d - 0.02) / 0.08, 0, 1); // 2%→0, 10%+→1
-      const heatMagnitude = (fpDist * 0.4 + oiHeat * 0.6) * 70; // max -70 at full heat
-      // Direction: longs paying → caution for LONG (negative), shorts paying → caution for SHORT (positive)
+      const heatMagnitude = (fpDist * 0.4 + oiHeat * 0.6) * 70; // max 70
       posScore = signals.fundingPressureSide === "SHORT" ? heatMagnitude : -heatMagnitude;
       break;
     }
@@ -85,67 +93,67 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
       posScore = 0;
   }
 
-  // 2. Stress → raw LONG bias score (capitulation = forced selling = buy opportunity)
+  // 2. Stress — magnitude-based using liq percentiles + OI drop
+  //    All stress states are LONG-biased (forced selling = buy opportunity).
   let stressScore = 0;
   switch (stress.state) {
-    case "CAPITULATION":
-      stressScore = 100;
+    case "CAPITULATION": {
+      // Scale with liquidation intensity + OI destruction.
+      // liqPct3m threshold is 90; higher = more extreme cascade.
+      // oiChange24h threshold is -10%; larger drop = more violent.
+      const liqIntensity = clamp((signals.liqPct3m - 90) / 10, 0, 1); // 90→0, 100→1
+      const oiDrop = clamp((-signals.oiChange24h - 0.10) / 0.10, 0, 1); // -10%→0, -20%+→1
+      stressScore = 70 + 30 * (liqIntensity * 0.5 + oiDrop * 0.5); // 70–100
       break;
-    case "UNWINDING":
-      stressScore = 70;
+    }
+    case "UNWINDING": {
+      // Scale with liq + OI drop magnitude.
+      // liqPct1m threshold is 70; oiChange24h threshold is -5%.
+      const liqIntensity = clamp((signals.liqPct1m - 70) / 30, 0, 1); // 70→0, 100→1
+      const oiDrop = clamp((-signals.oiChange24h - 0.05) / 0.10, 0, 1); // -5%→0, -15%+→1
+      stressScore = 40 + 40 * (liqIntensity * 0.5 + oiDrop * 0.5); // 40–80
       break;
-    case "DELEVERAGING":
-      stressScore = 20;
+    }
+    case "DELEVERAGING": {
+      // Mild — scale with funding pressure cycle count.
+      // Threshold is 3 cycles; more cycles = more sustained.
+      const cycleDepth = clamp((signals.fundingPressureCycles - 3) / 5, 0, 1); // 3→0, 8+→1
+      stressScore = 10 + 20 * cycleDepth; // 10–30
       break;
+    }
     default:
       stressScore = 0;
   }
 
-  // 3. Funding pressure — extreme funding percentile means one side is paying heavily
-  //    fundingPct1m: 0-100 percentile. >80 = longs paying (crowded long), <20 = shorts paying
+  // 3. Funding pressure — continuous from percentile extremes
+  //    fundingPct1m: >80 = longs paying (bearish), <20 = shorts paying (bullish)
   let fundingScore = 0;
   const fp = signals.fundingPct1m;
   if (fp > 80) {
-    // Longs paying heavy premium → disagrees with LONG
-    fundingScore = -((fp - 80) / 20) * 100;
+    fundingScore = -((fp - 80) / 20) * 100; // 80→0, 100→-100
   } else if (fp < 20) {
-    // Shorts paying → agrees with LONG
-    fundingScore = ((20 - fp) / 20) * 100;
+    fundingScore = ((20 - fp) / 20) * 100; // 20→0, 0→+100
   }
   // Amplify by consecutive extreme funding cycles
   if (signals.fundingPressureCycles >= 3) {
-    fundingScore *= 1.3;
+    fundingScore *= 1 + clamp((signals.fundingPressureCycles - 3) / 5, 0, 0.5); // 3→1.0×, 8+→1.5×
   }
 
-  // 4. OI context — high OI = more fuel for squeeze, depressed = less conviction
-  let oiMult = 1.0;
-  switch (oiSignal) {
-    case "EXTREME":
-      oiMult = 1.2;
-      break;
-    case "ELEVATED":
-      oiMult = 1.1;
-      break;
-    case "DEPRESSED":
-      oiMult = 0.7;
-      break;
-    default:
-      oiMult = 1.0;
-  }
+  // 4. OI context — continuous from z-score. Amplifies other signals.
+  //    High OI (positive z) = more fuel for squeeze.
+  //    Depressed OI (negative z) = less conviction, dampen signal.
+  const oiZ = signals.oiZScore30d;
+  const oiMult = clamp(1 + oiZ * 0.15, 0.7, 1.3); // z=0→1.0, z=2→1.3, z=-2→0.7
 
   const rawScore =
     posScore * DERIV_W_POSITIONING +
     stressScore * DERIV_W_STRESS +
-    clamp(fundingScore, -100, 100) * DERIV_W_FUNDING +
-    0; // OI doesn't add its own score, it multiplies
+    clamp(fundingScore, -100, 100) * DERIV_W_FUNDING;
 
   // Apply OI multiplier and directional flip
   const scaled = rawScore * oiMult;
 
-  // OI component adds a small direct contribution
-  const oiDirect = (oiMult - 1.0) * 50; // EXTREME: +10, ELEVATED: +5, DEPRESSED: -15
-
-  return clamp(directional(scaled + oiDirect * DERIV_W_OI, direction), -100, 100);
+  return clamp(directional(scaled, direction), -100, 100);
 }
 
 // ─── ETFs (-100 to +100) ────────────────────────────────────────────────────
@@ -299,18 +307,35 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
   const rsiDeviationDaily = (50 - ctx.rsi.daily) / 50;
   const rsiRaw = (rsiDeviation4h * 0.7 + rsiDeviationDaily * 0.3) * 100;
 
-  // 2. CVD divergence — price falling but CVD rising = bullish divergence (LONG)
+  // 2. CVD divergence — magnitude-based using slope, R², mechanism, and spot/futures alignment
   let cvdScore = 0;
-  const futDiv = ctx.cvd.futures.divergence;
-  const spotDiv = ctx.cvd.spot.divergence;
-  if (futDiv === "BULLISH") cvdScore += 60;
-  else if (futDiv === "BEARISH") cvdScore -= 60;
-  if (spotDiv === "BULLISH") cvdScore += 40;
-  else if (spotDiv === "BEARISH") cvdScore -= 40;
+  const { futures, spot, spotFuturesDivergence } = ctx.cvd;
 
-  // R² quality: high R² = more reliable divergence signal
-  const r2Avg = (ctx.cvd.futures.short.r2 + ctx.cvd.futures.long.r2) / 2;
-  cvdScore *= 0.5 + r2Avg * 0.5; // scale 50%-100% based on fit quality
+  // Futures CVD: slope magnitude scales the base, R² scales confidence
+  if (futures.divergence !== "NONE") {
+    const sign = futures.divergence === "BULLISH" ? 1 : -1;
+    const slopeMag = clamp(Math.abs(futures.short.slope) / 0.5, 0.3, 1.0);
+    const mechMult = futures.divergenceMechanism === "ABSORPTION" ? 1.25
+      : futures.divergenceMechanism === "EXHAUSTION" ? 0.75 : 1.0;
+    const r2Conf = 0.4 + futures.short.r2 * 0.6;
+    cvdScore += sign * 60 * slopeMag * mechMult * r2Conf;
+  }
+
+  // Spot CVD: same pattern, lower base
+  if (spot.divergence !== "NONE") {
+    const sign = spot.divergence === "BULLISH" ? 1 : -1;
+    const slopeMag = clamp(Math.abs(spot.short.slope) / 0.5, 0.3, 1.0);
+    const r2Conf = 0.4 + spot.short.r2 * 0.6;
+    cvdScore += sign * 40 * slopeMag * r2Conf;
+  }
+
+  // Spot-futures alignment modifier — suspect bounces get heavily discounted
+  const alignmentMult =
+    spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING" ? 1.0
+    : spotFuturesDivergence === "SPOT_LEADS" ? 0.85
+    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? 0.6
+    : 0.75;
+  cvdScore *= alignmentMult;
 
   // 3. Volatility compression — "coiled spring" after big move.
   //    Doesn't pick direction, but amplifies directional conviction.
@@ -336,68 +361,45 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
   const otherSignalDir = rsiRaw + cvdScore;
   if (otherSignalDir < 0) volScore = -Math.abs(volScore);
 
-  // 4. Regime — complementary
-  let regimeScore = 0;
-  switch (ctx.regime) {
-    case "MACRO_BULLISH":
-      regimeScore = 40;
-      break;
-    case "RECLAIMING":
-      regimeScore = 50;
-      break;
-    case "ACCUMULATION":
-      regimeScore = 60;
-      break;
-    case "MACRO_BEARISH":
-      regimeScore = -40;
-      break;
-    case "DISTRIBUTION":
-      regimeScore = -60;
-      break;
-    // Extended = contrarian (mean-reversion in opposite direction)
-    case "BEAR_EXTENDED":
-      regimeScore = 70;
-      break;
-    case "BULL_EXTENDED":
-      regimeScore = -70;
-      break;
-    case "RANGING":
-      regimeScore = 0;
-      break;
+  // 4. Regime — continuous from MA position + RSI extremity
+  //    Price vs 200 SMA drives macro direction; RSI extremes add contrarian signal.
+  let regimeScore = clamp(ctx.ma.priceVsSma200Pct / 10, -1, 1) * 50; // -50 to +50
+
+  // Reclaiming bonus: price between SMA50 and SMA200, scaling with progress toward 200
+  if (ctx.ma.priceVsSma200Pct < 0 && ctx.ma.priceVsSma50Pct > 0) {
+    const reclaimProgress = clamp(ctx.ma.priceVsSma50Pct / (-ctx.ma.priceVsSma200Pct + ctx.ma.priceVsSma50Pct), 0, 1);
+    regimeScore += reclaimProgress * 20;
   }
 
-  // 5. Market structure — complementary
-  let structureScore = 0;
-  switch (ctx.structure) {
-    case "HH_HL":
-      structureScore = 50;
-      break; // higher highs/lows → LONG
-    case "LH_LL":
-      structureScore = -50;
-      break; // lower highs/lows → SHORT
-    case "HH_LL":
-      structureScore = 10;
-      break; // mixed, slight LONG bias
-    case "LH_HL":
-      structureScore = -10;
-      break; // mixed, slight SHORT bias
-    default:
-      structureScore = 0;
+  // Extended contrarian: deep overbought/oversold adds mean-reversion signal
+  if (ctx.rsi.daily > 70) {
+    regimeScore -= ((ctx.rsi.daily - 70) / 30) * 40; // up to -40 contrarian
+  } else if (ctx.rsi.daily < 30) {
+    regimeScore += ((30 - ctx.rsi.daily) / 30) * 40; // up to +40 contrarian
   }
+  regimeScore = clamp(regimeScore, -100, 100);
 
-  // 6. Volume Profile — price position relative to Value Area (LONG-biased)
-  //    Below VA = magnet pulling price up (bullish mean-reversion)
-  //    Above VA = extended beyond fair value (bearish mean-reversion)
+  // 5. Market structure — scaled by pivot recency (fresh pivots = stronger signal)
+  const structureBase =
+    ctx.structure === "HH_HL" ? 50
+    : ctx.structure === "LH_LL" ? -50
+    : ctx.structure === "HH_LL" ? 10
+    : ctx.structure === "LH_HL" ? -10
+    : 0;
+  const pivotFreshness = ctx.staleness.lastPivot != null
+    ? clamp(1 - ctx.staleness.lastPivot / 50, 0.3, 1.0) // fades over ~8 days, floor 0.3
+    : 0.5;
+  const structureScore = structureBase * pivotFreshness;
+
+  // 6. Volume Profile — continuous distance from POC (mean-reversion magnet)
+  //    Below POC = bullish pull, above POC = bearish pull. Scales with distance.
   //    Confidence scaled by POC thickness (pocVolumePct / 5, clamped 0.5–1.5)
   let vpScore = 0;
   if (ctx.volumeProfile) {
     const vp = ctx.volumeProfile.profile;
-    if (vp.pricePosition === "BELOW_VA") vpScore = 70;
-    else if (vp.pricePosition === "INSIDE_VA" && vp.priceVsPocPct < 0) vpScore = 40;
-    else if (vp.pricePosition === "INSIDE_VA" && vp.priceVsPocPct > 0) vpScore = -40;
-    else if (vp.pricePosition === "ABOVE_VA") vpScore = -70;
-    // Thick POC = stronger magnet, thin POC = weaker signal
-    vpScore *= clamp(vp.pocVolumePct / 5, 0.5, 1.5);
+    // priceVsPocPct: negative = below POC (bullish), positive = above (bearish)
+    const vpRaw = clamp(-vp.priceVsPocPct / 10, -1, 1) * 70; // -70 to +70
+    vpScore = vpRaw * clamp(vp.pocVolumePct / 5, 0.5, 1.5);
   }
 
   // 7. Sweep proximity — price near a high-attraction sweep level = directional nudge
@@ -495,62 +497,57 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
 }
 
 // ─── Exchange Flows (-100 to +100) ───────────────────────────────────────────
-// On-chain supply pressure:
-//   - Coins leaving exchanges = accumulation (bullish / agrees with LONG)
-//   - Coins entering exchanges = distribution (bearish / agrees with SHORT)
-//   - Flow sigma and reserve trend drive the score
-//   - 30d extremes (low/high) amplify the signal
+// On-chain supply pressure — all magnitude-based:
+//   - Reserve change (7d/30d) is the primary signal — continuous, not regime-gated
+//   - Flow sigma captures today's intensity
+//   - 30d extremes amplify when reserves are at monthly boundaries
 
-const EF_W_REGIME = 0.3;
-const EF_W_TREND = 0.25;
-const EF_W_SIGMA = 0.25;
-const EF_W_EXTREME = 0.2;
+const EF_W_RESERVE = 0.35;
+const EF_W_SIGMA = 0.30;
+const EF_W_TREND = 0.20;
+const EF_W_EXTREME = 0.15;
 
 function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): number {
   if (direction === "FLAT") {
-    // Neutral flows support flat
     return ctx.regime === "EF_NEUTRAL" ? 30 : 0;
   }
 
   const m = ctx.metrics;
 
-  // 1. Regime — direct signal. Outflows = accumulation = LONG-biased.
-  let regimeScore = 0;
-  switch (ctx.regime) {
-    case "ACCUMULATION":
-      regimeScore = 70;
-      break; // coins leaving → bullish
-    case "HEAVY_OUTFLOW":
-      regimeScore = 90;
-      break; // aggressive accumulation
-    case "DISTRIBUTION":
-      regimeScore = -70;
-      break; // coins entering → bearish
-    case "HEAVY_INFLOW":
-      regimeScore = -90;
-      break; // aggressive distribution
-    default:
-      regimeScore = 0;
+  // 1. Reserve change — continuous signal from 7d and 30d reserve movement.
+  //    Negative change = reserves shrinking = outflows = bullish.
+  //    Scale: -3%+ over 7d is very significant, -0.5% is the FLAT/trend threshold.
+  const reserve7d = clamp(-m.reserveChange7dPct / 3, -1, 1) * 100; // -3%→+100, +3%→-100
+  const reserve30d = clamp(-m.reserveChange30dPct / 5, -1, 1) * 100; // -5%→+100, +5%→-100
+  const reserveScore = reserve7d * 0.6 + reserve30d * 0.4;
+
+  // 2. Flow sigma — today's flow intensity relative to 30d distribution.
+  //    Negative sigma = outflow day (bullish), positive = inflow day (bearish).
+  const sigmaScore = clamp(-m.todaySigma * 30, -100, 100);
+
+  // 3. Balance trend — scaled by 7d reserve change magnitude instead of flat ±60.
+  //    FALLING with -2% is stronger than FALLING with -0.6%.
+  let trendScore = 0;
+  if (m.balanceTrend === "FALLING") {
+    trendScore = 30 + 40 * clamp(-m.reserveChange7dPct / 2, 0, 1); // 30–70, scaled by magnitude
+  } else if (m.balanceTrend === "RISING") {
+    trendScore = -(30 + 40 * clamp(m.reserveChange7dPct / 2, 0, 1)); // -30 to -70
   }
 
-  // 2. Balance trend — sustained direction
-  let trendScore = 0;
-  if (m.balanceTrend === "FALLING")
-    trendScore = 60; // reserves shrinking → bullish
-  else if (m.balanceTrend === "RISING") trendScore = -60; // reserves growing → bearish
-
-  // 3. Flow sigma — today's flow intensity relative to 30d distribution
-  //    Negative sigma = outflow day (bullish), positive = inflow day (bearish)
-  const sigmaScore = clamp(-m.todaySigma * 30, -100, 100); // flip: outflow (negative sigma) → positive score
-
-  // 4. 30d extremes — reserves at monthly low/high = strong signal
+  // 4. 30d extremes — amplified by how far past the prior low/high.
+  //    isAt30dLow is binary, but reserveChange30dPct tells us the magnitude.
   let extremeScore = 0;
-  if (m.isAt30dLow)
-    extremeScore = 80; // reserves at lowest in 30d → strong accumulation
-  else if (m.isAt30dHigh) extremeScore = -80; // reserves at highest → strong distribution
+  if (m.isAt30dLow) {
+    extremeScore = 50 + 50 * clamp(-m.reserveChange30dPct / 3, 0, 1); // 50–100
+  } else if (m.isAt30dHigh) {
+    extremeScore = -(50 + 50 * clamp(m.reserveChange30dPct / 3, 0, 1)); // -50 to -100
+  }
 
   const rawScore =
-    regimeScore * EF_W_REGIME + trendScore * EF_W_TREND + sigmaScore * EF_W_SIGMA + extremeScore * EF_W_EXTREME;
+    reserveScore * EF_W_RESERVE +
+    sigmaScore * EF_W_SIGMA +
+    trendScore * EF_W_TREND +
+    extremeScore * EF_W_EXTREME;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }

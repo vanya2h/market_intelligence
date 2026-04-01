@@ -135,15 +135,12 @@ function printSentimentDetail(out: SentimentOutput) {
   console.log(`    │ Regime        : ${chalk.bold(ctx.regime)}`);
   console.log(`    │ Composite F&G : ${chalk.bold(String(m.compositeIndex.toFixed(0)))} (${m.compositeLabel})`);
   console.log(
-    `    │ Components    : pos=${c.positioning.toFixed(0)} trend=${c.trend.toFixed(0)} mom=${c.momentumDivergence.toFixed(0)} etf=${c.institutionalFlows.toFixed(0)} exch=${c.exchangeFlows.toFixed(0)}`,
+    `    │ Components    : pos=${c.positioning.toFixed(0)} trend=${c.trend.toFixed(0)} etf=${c.institutionalFlows.toFixed(0)}`,
   );
-  const fearCount = [c.positioning, c.trend, c.momentumDivergence, c.institutionalFlows, c.exchangeFlows].filter(
-    (v) => v < 40,
-  ).length;
-  const greedCount = [c.positioning, c.trend, c.momentumDivergence, c.institutionalFlows, c.exchangeFlows].filter(
-    (v) => v > 60,
-  ).length;
-  console.log(`    │ Convergence   : ${fearCount} fear / ${greedCount} greed (of 5)`);
+  const active = [c.positioning, c.trend, c.institutionalFlows];
+  const fearCount = active.filter((v) => v < 40).length;
+  const greedCount = active.filter((v) => v > 60).length;
+  console.log(`    │ Convergence   : ${fearCount} fear / ${greedCount} greed (of 3)`);
   console.log(chalk.dim("    └──────────────────────────────────────────────"));
 }
 
