@@ -1,21 +1,19 @@
 /**
  * Market Sentiment — Deterministic Analyzer (Dimension 06)
  *
- * Computes a composite Fear & Greed index (0–100) from five active components
- * (expert consensus temporarily disabled while collecting delta-based data):
+ * Computes a composite Fear & Greed index (0–100) from three core components:
  *
  *   Component             | Weight | Source
  *   ─────────────────────────────────────────────────
- *   Positioning            37.5%    Dim 01 (derivatives: funding, OI,
+ *   Positioning            50%      Dim 01 (derivatives: funding, OI,
  *                                     coinbase premium, bias-adjusted liqs)
- *   Institutional flows    20%      Dim 03 (ETF flows)
- *   Exchange flows         17.5%    Dim 08 (on-chain reserve changes)
- *   Trend                  15%      Dim 07 (HTF technicals)
- *   Momentum divergence    10%      Dim 07 (price-RSI + CVD divergence)
- *   Expert consensus        0%      unbias API 7d delta (collecting data, re-enable ~2026-04-02)
+ *   Institutional flows    30%      Dim 03 (ETF flows)
+ *   Trend                  20%      Dim 07 (HTF technicals)
  *
- * Volatility (ATR compression) removed from composite — it measures trade setup
- * potential, not sentiment. ATR data still flows through for the LLM synthesizer.
+ * Removed from composite (still computed for LLM context):
+ *   - Momentum divergence: not a reliable sentiment signal
+ *   - Exchange flows: not a reliable sentiment signal
+ *   - Expert consensus: disabled while collecting delta-based data
  *
  * Regime is determined from the composite score, with divergence overrides.
  */
@@ -239,15 +237,14 @@ function scoreExchangeFlows(ef: CrossDimensionInputs["exchangeFlows"]): number {
 
 // ─── Composite F&G ───────────────────────────────────────────────────────────
 
-// Weights rebalanced after removing volatility (ATR compression) from composite:
-// - Volatility's 5% redistributed: +2.5% to positioning, +2.5% to exchange flows
-// Expert consensus temporarily excluded while we collect delta-based data (re-enable ~2026-04-02)
+// Three core components — momentum divergence and exchange flows removed (unreliable sentiment signals).
+// Expert consensus still disabled while collecting delta-based data.
 const WEIGHTS = {
-  positioning: 0.375,
-  trend: 0.15,
-  momentumDivergence: 0.10,
-  institutionalFlows: 0.20,
-  exchangeFlows: 0.175,
+  positioning: 0.50,
+  trend: 0.20,
+  momentumDivergence: 0,
+  institutionalFlows: 0.30,
+  exchangeFlows: 0,
   expertConsensus: 0,
 };
 

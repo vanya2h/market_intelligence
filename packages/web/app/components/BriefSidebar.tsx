@@ -111,9 +111,6 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
     positioning,
     trend,
     institutionalFlows,
-    exchangeFlows,
-    expertConsensus,
-    momentumDivergence,
   } = brief;
   return (
     <aside
@@ -128,7 +125,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
         <SectionBlock
           title="Composite Fear & Greed Index"
           className="mb-6"
-          tooltip="Proprietary Fear & Greed index (0–100) built from five crypto-native inputs: derivatives positioning (37.5%), institutional flows (20%), exchange flows (17.5%), HTF trend (15%), momentum divergence (10%). Avoids Alternative.me's opaque methodology."
+          tooltip="Proprietary Fear & Greed index (0–100) built from three crypto-native inputs: derivatives positioning (50%), institutional flows (30%), HTF trend (20%). Avoids Alternative.me's opaque methodology."
         >
           <SentimentGauge value={compositeIndex} label={compositeLabel} />
           <Link
@@ -224,24 +221,7 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
               tooltip:
                 "Institutional flows score (0–100). Derived from spot ETF daily net flows and streak length. Multi-day inflow streaks signal conviction. Outflows signal cooling appetite.",
             },
-            {
-              label: "Exch. Flows",
-              value: exchangeFlows,
-              tooltip:
-                "Exchange flows score (0–100). Derived from on-chain exchange balance changes. Outflows (coins leaving exchanges) = accumulation/bullish. Inflows = distribution/bearish.",
-            },
-            // {
-            //   label: "Expert Cons.",
-            //   value: expertConsensus,
-            //   tooltip:
-            //     "Expert consensus score (0–100). Derived from accuracy-weighted analyst consensus via unbias API. Z-score ≥ +0.8 = bullish conviction. Z-score ≤ −1.5 = bearish conviction.",
-            // },
-            {
-              label: "Momentum Div.",
-              value: momentumDivergence,
-              tooltip:
-                "Momentum divergence score (0–100). Derived from price-RSI divergence and CVD divergence signals. High = bullish divergence building.",
-            },
+            // exchangeFlows, momentumDivergence, expertConsensus excluded — not reliable sentiment signals
           ].map(({ label, value, tooltip }) => {
             if (value == null) return null;
             const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";

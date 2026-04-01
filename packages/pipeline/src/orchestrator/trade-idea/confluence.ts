@@ -69,9 +69,18 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
     case "CROWDED_LONG":
       posScore = -100;
       break; // long squeeze → SHORT
-    case "HEATING_UP":
-      posScore = -50;
-      break; // leverage building → caution for LONG
+    case "HEATING_UP": {
+      // Magnitude-based: scale by how deep into the heating zone we are.
+      // fundingPct1m 40–70 range: 55 is center (mildest), edges are more significant.
+      // oiChange7d: 2% is threshold, higher = more heated.
+      // fundingPressureSide tells us WHO is paying — LONG paying = bearish, SHORT paying = bullish.
+      const fpDist = Math.abs(signals.fundingPct1m - 55) / 15; // 0 at center (55), 1 at edges (40/70)
+      const oiHeat = clamp((signals.oiChange7d - 0.02) / 0.08, 0, 1); // 2%→0, 10%+→1
+      const heatMagnitude = (fpDist * 0.4 + oiHeat * 0.6) * 70; // max -70 at full heat
+      // Direction: longs paying → caution for LONG (negative), shorts paying → caution for SHORT (positive)
+      posScore = signals.fundingPressureSide === "SHORT" ? heatMagnitude : -heatMagnitude;
+      break;
+    }
     default:
       posScore = 0;
   }
@@ -143,14 +152,23 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
 // Institutional flows:
 //   - Flow sigma is the strongest signal — a high σ inflow during an outflow
 //     regime = institutional reversal, very high probability
-//   - Streak exhaustion: long outflow streaks increase reversal probability
+//   - Streak reversal: first inflow days after a long outflow streak = confirmation
+//   - Streak exhaustion: long streaks increase reversal probability (contrarian)
 //   - Regime gives base direction
 //   - Reversal ratio measures conviction of the reversal
 
-const ETF_W_SIGMA = 0.4;
-const ETF_W_STREAK = 0.25;
-const ETF_W_REGIME = 0.2;
-const ETF_W_REVERSAL = 0.15;
+const ETF_W_SIGMA = 0.35;
+const ETF_W_REVERSAL_CONFIRM = 0.25;
+const ETF_W_STREAK = 0.15;
+const ETF_W_REGIME = 0.15;
+const ETF_W_REVERSAL = 0.1;
+
+/**
+ * Minimum prior-streak magnitude (in multiples of sigma30d) to consider
+ * the streak significant enough for a reversal confirmation signal.
+ * A prior streak of 3σ+ cumulative flow is meaningful.
+ */
+const MIN_PRIOR_STREAK_SIGMAS = 3;
 
 function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   if (direction === "FLAT") return 0;
@@ -171,7 +189,25 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
     sigmaScore = clamp(sigmaScore * 1.5, -100, 100);
   }
 
-  // 2. Streak exhaustion — longer streaks in one direction increase reversal probability.
+  // 2. Streak reversal confirmation — first 2+ inflow days after a significant
+  //    outflow streak (or vice versa). The streak exhaustion signal (below) fires
+  //    DURING the streak; this fires at the INFLECTION when direction flips.
+  //    Quality scales with the magnitude of the prior streak.
+  let reversalConfirmScore = 0;
+  const priorMag = Math.abs(flow.priorStreakFlow);
+  const priorSignificant = flow.sigma30d > 0 && priorMag / flow.sigma30d >= MIN_PRIOR_STREAK_SIGMAS;
+
+  if (flow.consecutiveInflowDays >= 2 && flow.priorStreakFlow < 0 && priorSignificant) {
+    // Inflows after significant outflow streak → LONG confirmation
+    const strength = clamp(priorMag / flow.sigma30d / 10, 0.5, 1); // 3σ→0.5, 10σ+→1.0
+    reversalConfirmScore = 80 * strength;
+  } else if (flow.consecutiveOutflowDays >= 2 && flow.priorStreakFlow > 0 && priorSignificant) {
+    // Outflows after significant inflow streak → SHORT confirmation
+    const strength = clamp(priorMag / flow.sigma30d / 10, 0.5, 1);
+    reversalConfirmScore = -80 * strength;
+  }
+
+  // 3. Streak exhaustion — longer streaks in one direction increase reversal probability.
   //    This is a contrarian signal: long outflow streak = more likely to reverse to inflow = LONG.
   let streakScore = 0;
   if (flow.consecutiveOutflowDays >= 3) {
@@ -182,7 +218,7 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
     streakScore = -clamp(Math.pow(flow.consecutiveInflowDays, 1.3) * 8, 0, 100);
   }
 
-  // 3. Regime base score
+  // 4. Regime base score
   let regimeScore = 0;
   switch (regime) {
     case "STRONG_INFLOW":
@@ -201,7 +237,7 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
       regimeScore = 0; // NEUTRAL, MIXED
   }
 
-  // 4. Reversal ratio — how much of the prior streak has been reversed.
+  // 5. Reversal ratio — how much of the prior streak has been reversed.
   //    High ratio during a reversal regime = strong conviction.
   let reversalScore = 0;
   if (regime === "REVERSAL_TO_INFLOW" || regime === "REVERSAL_TO_OUTFLOW") {
@@ -211,7 +247,11 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   }
 
   const rawScore =
-    sigmaScore * ETF_W_SIGMA + streakScore * ETF_W_STREAK + regimeScore * ETF_W_REGIME + reversalScore * ETF_W_REVERSAL;
+    sigmaScore * ETF_W_SIGMA +
+    reversalConfirmScore * ETF_W_REVERSAL_CONFIRM +
+    streakScore * ETF_W_STREAK +
+    regimeScore * ETF_W_REGIME +
+    reversalScore * ETF_W_REVERSAL;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }
@@ -404,43 +444,28 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
     return clamp(neutrality * 60, -100, 100);
   }
 
-  // 1. Composite F&G — contrarian. Distance from 50 in the "right" direction.
-  //    Fear (< 50) agrees with LONG (buy when others are fearful).
-  //    Greed (> 50) agrees with SHORT (sell when others are greedy).
-  const fgDeviation = (50 - ctx.metrics.compositeIndex) / 50; // positive when fearful
-  const compositeScore = fgDeviation * 100;
+  // 1. Composite F&G — contrarian, but only at extremes.
+  //    Mild fear/greed (20–80) is noise for swing trading — only act on extremes.
+  //    Fear (< 20) agrees with LONG (buy when others are fearful).
+  //    Greed (> 80) agrees with SHORT (sell when others are greedy).
+  const fg = ctx.metrics.compositeIndex;
+  let boostedComposite = 0;
+  if (fg <= 20) {
+    // Extreme fear: 20→0 maps to 0→+100
+    boostedComposite = ((20 - fg) / 20) * 100;
+  } else if (fg >= 80) {
+    // Extreme greed: 80→100 maps to 0→-100
+    boostedComposite = -((fg - 80) / 20) * 100;
+  }
 
-  // Non-linear boost at extremes (< 20 or > 80)
-  const extremity = Math.abs(ctx.metrics.compositeIndex - 50);
-  const extremeBoost = extremity > 30 ? ((extremity - 30) / 20) * 30 : 0;
-  const boostedComposite = compositeScore + (compositeScore > 0 ? extremeBoost : -extremeBoost);
-
-  // 2. Regime base — gives discrete signal
+  // 2. Regime base — only extremes generate signal, scaled by depth.
+  //    F&G 20→0 maps to regimeScore 0→+100 (fear = LONG).
+  //    F&G 80→100 maps to regimeScore 0→-100 (greed = SHORT).
   let regimeScore = 0;
-  switch (ctx.regime) {
-    case "EXTREME_FEAR":
-      regimeScore = 100;
-      break; // strong contrarian LONG
-    case "FEAR":
-      regimeScore = 50;
-      break;
-    case "EXTREME_GREED":
-      regimeScore = -100;
-      break; // strong contrarian SHORT
-    case "GREED":
-      regimeScore = -50;
-      break;
-    case "CONSENSUS_BULLISH":
-      regimeScore = 30;
-      break; // experts agree bullish
-    case "CONSENSUS_BEARISH":
-      regimeScore = -30;
-      break;
-    case "SENTIMENT_DIVERGENCE":
-      regimeScore = 0;
-      break; // mixed signals
-    default:
-      regimeScore = 0;
+  if (fg <= 20) {
+    regimeScore = ((20 - fg) / 20) * 100;
+  } else if (fg >= 80) {
+    regimeScore = -((fg - 80) / 20) * 100;
   }
 
   // 3. Component convergence — how many F&G components agree on direction.
@@ -449,17 +474,15 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
   const componentValues = [
     components.positioning,
     components.trend,
-    components.momentumDivergence,
     components.institutionalFlows,
-    components.exchangeFlows,
-    // expertConsensus excluded
+    // momentumDivergence, exchangeFlows, expertConsensus excluded — not reliable for trade ideas
   ];
 
   const fearCount = componentValues.filter((v) => v < 40).length;
   const greedCount = componentValues.filter((v) => v > 60).length;
   const maxConvergence = Math.max(fearCount, greedCount);
-  // 0-5 components converging → 0-100 score
-  const convergenceRaw = (maxConvergence / 5) * 100;
+  // 0-3 components converging → 0-100 score
+  const convergenceRaw = (maxConvergence / 3) * 100;
   // Sign: positive if fear-converging (LONG), negative if greed-converging (SHORT)
   const convergenceScore = fearCount > greedCount ? convergenceRaw : -convergenceRaw;
 
