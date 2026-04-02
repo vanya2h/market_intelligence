@@ -49,11 +49,11 @@ export interface DirectionalBias {
 
 /**
  * Practical normalizer for the LONG-minus-SHORT margin.
- * When all 5 dims agree on one direction (each scoring +100 for LONG / -100 for SHORT),
- * totals are +500 and -500 → margin = 1000. We use 500 so strength=100 is reachable
+ * When all 4 dims agree on one direction (each scoring +100 for LONG / -100 for SHORT),
+ * totals are +400 and -400 → margin = 800. We use 400 so strength=100 is reachable
  * at realistic extremes (all dims aligned, opponent neutral). Anything above is clamped.
  */
-const MAX_MARGIN = 500;
+const MAX_MARGIN = 400;
 
 /** Dead-zone: margins within ±5 are treated as NEUTRAL to filter noise. */
 const LEAN_DEAD_ZONE = 5;
@@ -84,7 +84,7 @@ export function computeBias(longConf: Confluence, shortConf: Confluence): Direct
   const convictionGap = leadingTotal - CONVICTION_THRESHOLD;
 
   const dims: ReadonlyArray<keyof Omit<Confluence, "total">> = [
-    "derivatives", "etfs", "htf", "sentiment", "exchangeFlows",
+    "derivatives", "etfs", "htf", "exchangeFlows",
   ];
 
   const topFactors: BiasFactor[] = lean === "NEUTRAL"

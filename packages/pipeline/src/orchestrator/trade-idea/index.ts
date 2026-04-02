@@ -16,7 +16,7 @@ import type { $Enums } from "../../generated/prisma/client.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
-import { computeConfluence, CONVICTION_THRESHOLD, type Confluence } from "./confluence.js";
+import { computeConfluence, computeConvictionThreshold, type Confluence } from "./confluence.js";
 import { computeBias, type DirectionalBias } from "./bias.js";
 import { saveTradeIdea } from "./persist.js";
 
@@ -27,6 +27,8 @@ export interface TradeDecision {
   entryPrice: number;
   compositeTarget: number;
   skipped: boolean;
+  /** Effective conviction threshold used for this decision (may be lower than default for compression setups) */
+  threshold: number;
   /** Why this direction was chosen over the alternatives */
   alternatives: { direction: Direction; total: number }[];
   /** Directional lean within the range — present even when conviction is below threshold */
@@ -64,9 +66,10 @@ export async function processTradeIdea(
   const flatScore = scored.find((s) => s.direction === "FLAT")!;
 
   // Choose direction: take the best directional if it passes threshold, else FLAT
-  const chosen = bestDirectional.confluence.total >= CONVICTION_THRESHOLD ? bestDirectional : flatScore;
+  const threshold = computeConvictionThreshold(htfContext);
+  const chosen = bestDirectional.confluence.total >= threshold ? bestDirectional : flatScore;
 
-  const skipped = chosen.direction !== "FLAT" ? false : bestDirectional.confluence.total < CONVICTION_THRESHOLD;
+  const skipped = chosen.direction !== "FLAT" ? false : bestDirectional.confluence.total < threshold;
 
   // For skipped (FLAT chosen due to low conviction): still compute levels for the best directional
   // so we can track what would have happened
@@ -91,6 +94,7 @@ export async function processTradeIdea(
     entryPrice,
     compositeTarget,
     skipped,
+    threshold,
     alternatives: scored
       .filter((s) => s.direction !== trackDirection.direction)
       .map((s) => ({ direction: s.direction, total: s.confluence.total })),
@@ -114,7 +118,7 @@ export async function processTradeIdea(
     const factorsStr = bias.topFactors.map((f) => `${f.dimension}:+${f.score}`).join(" ");
     console.log(
       `      ${chalk.dim("▹")} trade idea: ${chalk.bold(trackDirection.direction)} ` +
-        `conviction=${trackDirection.confluence.total}/${CONVICTION_THRESHOLD} — ${chalk.yellow("SKIPPED")} (tracking)`,
+        `conviction=${trackDirection.confluence.total}/${threshold} — ${chalk.yellow("SKIPPED")} (tracking)`,
     );
     console.log(`        ${confStr}`);
     console.log(`        ${chalk.dim(`alternatives: ${altStr}`)}`);

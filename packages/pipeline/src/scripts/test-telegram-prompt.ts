@@ -7,7 +7,7 @@ import "../env.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { callLlm } from "../llm.js";
-import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence, computeConvictionThreshold } from "../orchestrator/trade-idea/confluence.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
@@ -31,6 +31,7 @@ async function main() {
   const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
   let decision: TradeDecision | null = null;
   if (htfOut) {
+    const threshold = computeConvictionThreshold(htfOut.context);
     const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
     const scored = directions.map((dir) => ({
       direction: dir,
@@ -41,8 +42,8 @@ async function main() {
       .sort((a, b) => b.confluence.total - a.confluence.total);
     const best = directional[0]!;
     const flat = scored.find((s) => s.direction === "FLAT")!;
-    const chosen = best.confluence.total >= CONVICTION_THRESHOLD ? best : flat;
-    const skipped = chosen.direction !== "FLAT" ? false : best.confluence.total < CONVICTION_THRESHOLD;
+    const chosen = best.confluence.total >= threshold ? best : flat;
+    const skipped = chosen.direction !== "FLAT" ? false : best.confluence.total < threshold;
     const track = skipped ? best : chosen;
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, track.direction);
     const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
@@ -55,6 +56,7 @@ async function main() {
       entryPrice,
       compositeTarget,
       skipped,
+      threshold,
       alternatives: scored
         .filter((s) => s.direction !== track.direction)
         .map((s) => ({ direction: s.direction, total: s.confluence.total })),

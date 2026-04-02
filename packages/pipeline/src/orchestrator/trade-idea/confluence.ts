@@ -12,12 +12,16 @@
  *
  * For FLAT ideas: scores reflect how strongly the market favors staying
  * rangebound. Positive = supports flat, negative = breakout likely.
+ *
+ * Sentiment is excluded from scoring — it is a composite of derivatives (50%),
+ * ETFs (30%), and HTF (20%), so including it would triple-count those dimensions.
+ * It remains valuable as a narrative/context layer for the LLM synthesizer.
  */
 
 import type { DerivativesContext } from "../../types.js";
 import type { EtfContext } from "../../etfs/types.js";
 import type { HtfContext } from "../../htf/types.js";
-import type { SentimentContext } from "../../sentiment/types.js";
+
 import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { DimensionOutput } from "../types.js";
 import type { Direction } from "./composite-target.js";
@@ -28,7 +32,6 @@ export interface Confluence {
   derivatives: number;
   etfs: number;
   htf: number;
-  sentiment: number;
   exchangeFlows: number;
   total: number;
 }
@@ -78,17 +81,8 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
       posScore = -(60 + 40 * (fundingDepth * 0.6 + oiPressure * 0.4)); // -60 to -100
       break;
     }
-    case "HEATING_UP": {
-      // Scale by how deep into the heating zone.
-      // fundingPct1m 40–70: 55 is center (mildest), edges are more significant.
-      // oiChange7d: 2% is threshold, higher = more heated.
-      // fundingPressureSide tells us WHO is paying.
-      const fpDist = Math.abs(signals.fundingPct1m - 55) / 15; // 0 at center, 1 at edges
-      const oiHeat = clamp((signals.oiChange7d - 0.02) / 0.08, 0, 1); // 2%→0, 10%+→1
-      const heatMagnitude = (fpDist * 0.4 + oiHeat * 0.6) * 70; // max 70
-      posScore = signals.fundingPressureSide === "SHORT" ? heatMagnitude : -heatMagnitude;
-      break;
-    }
+    // HEATING_UP removed: crowd is building but not committed yet — fires during
+    // compression and adds directional ambiguity, not reversal signal.
     default:
       posScore = 0;
   }
@@ -114,13 +108,8 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
       stressScore = 40 + 40 * (liqIntensity * 0.5 + oiDrop * 0.5); // 40–80
       break;
     }
-    case "DELEVERAGING": {
-      // Mild — scale with funding pressure cycle count.
-      // Threshold is 3 cycles; more cycles = more sustained.
-      const cycleDepth = clamp((signals.fundingPressureCycles - 3) / 5, 0, 1); // 3→0, 8+→1
-      stressScore = 10 + 20 * cycleDepth; // 10–30
-      break;
-    }
+    // DELEVERAGING removed: mild 10–30 pt signal, 3+ funding cycles without a
+    // real event is noise, not reversal fuel.
     default:
       stressScore = 0;
   }
@@ -166,10 +155,9 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
 //   - Reversal ratio measures conviction of the reversal
 
 const ETF_W_SIGMA = 0.35;
-const ETF_W_REVERSAL_CONFIRM = 0.25;
-const ETF_W_STREAK = 0.15;
+const ETF_W_REVERSAL_CONFIRM = 0.30;
+const ETF_W_REVERSAL = 0.20;
 const ETF_W_REGIME = 0.15;
-const ETF_W_REVERSAL = 0.1;
 
 /**
  * Minimum prior-streak magnitude (in multiples of sigma30d) to consider
@@ -215,37 +203,24 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
     reversalConfirmScore = -80 * strength;
   }
 
-  // 3. Streak exhaustion — longer streaks in one direction increase reversal probability.
-  //    This is a contrarian signal: long outflow streak = more likely to reverse to inflow = LONG.
-  let streakScore = 0;
-  if (flow.consecutiveOutflowDays >= 3) {
-    // Outflow exhaustion → favors LONG reversal. Exponential scaling.
-    streakScore = clamp(Math.pow(flow.consecutiveOutflowDays, 1.3) * 8, 0, 100);
-  } else if (flow.consecutiveInflowDays >= 3) {
-    // Inflow exhaustion → favors SHORT reversal
-    streakScore = -clamp(Math.pow(flow.consecutiveInflowDays, 1.3) * 8, 0, 100);
-  }
+  // Streak exhaustion removed: fires mid-streak (day 3 of outflows), weak and
+  // pre-confirmation — streaks last much longer than expected.
 
-  // 4. Regime base score
+  // 3. Regime — only REVERSAL_TO_* states are reversal signals.
+  //    STRONG_INFLOW/STRONG_OUTFLOW are trend-following, not reversal.
   let regimeScore = 0;
   switch (regime) {
-    case "STRONG_INFLOW":
-      regimeScore = 80;
-      break;
     case "REVERSAL_TO_INFLOW":
       regimeScore = 60;
       break;
     case "REVERSAL_TO_OUTFLOW":
       regimeScore = -60;
       break;
-    case "STRONG_OUTFLOW":
-      regimeScore = -80;
-      break;
     default:
-      regimeScore = 0; // NEUTRAL, MIXED
+      regimeScore = 0; // NEUTRAL, MIXED, STRONG_INFLOW, STRONG_OUTFLOW
   }
 
-  // 5. Reversal ratio — how much of the prior streak has been reversed.
+  // 4. Reversal ratio — how much of the prior streak has been reversed.
   //    High ratio during a reversal regime = strong conviction.
   let reversalScore = 0;
   if (regime === "REVERSAL_TO_INFLOW" || regime === "REVERSAL_TO_OUTFLOW") {
@@ -257,9 +232,8 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   const rawScore =
     sigmaScore * ETF_W_SIGMA +
     reversalConfirmScore * ETF_W_REVERSAL_CONFIRM +
-    streakScore * ETF_W_STREAK +
-    regimeScore * ETF_W_REGIME +
-    reversalScore * ETF_W_REVERSAL;
+    reversalScore * ETF_W_REVERSAL +
+    regimeScore * ETF_W_REGIME;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }
@@ -272,12 +246,12 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
 //     after a big move, ATR decays, then the next big move fires
 //   - Regime and market structure are complementary, not primary
 
-const HTF_W_RSI = 0.25;
+// Priority: compression > CVD > RSI > VP > MA displacement
+const HTF_W_VOLATILITY = 0.30;
 const HTF_W_CVD = 0.25;
-const HTF_W_VOLATILITY = 0.15;
-const HTF_W_VP = 0.2;
-const HTF_W_REGIME = 0.1;
-const HTF_W_STRUCTURE = 0.05;
+const HTF_W_RSI = 0.20;
+const HTF_W_VP = 0.15;
+const HTF_W_MA_DISPLACEMENT = 0.10;
 
 function scoreHtf(ctx: HtfContext, direction: Direction): number {
   if (direction === "FLAT") {
@@ -293,7 +267,7 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
     if (ctx.volatility.atrPercentile > 70) flatScore -= 20;
     else if (ctx.volatility.atrPercentile < 30 && !ctx.volatility.compressionAfterMove) flatScore += 20;
     // Price inside Value Area + thick POC = range-bound thesis
-    if (ctx.volumeProfile.profile.pricePosition === "INSIDE_VA" && ctx.volumeProfile.profile.pocVolumePct > 3) {
+    if (ctx.volumeProfile?.profile?.pricePosition === "INSIDE_VA" && ctx.volumeProfile.profile.pocVolumePct > 3) {
       flatScore += 25;
     }
     return clamp(flatScore, -100, 100);
@@ -329,11 +303,26 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
     cvdScore += sign * 40 * slopeMag * r2Conf;
   }
 
-  // Spot-futures alignment modifier — suspect bounces get heavily discounted
+  // Double-divergence multiplier: when both futures and spot independently show
+  // the same divergence direction, the signal is confirmed across both markets.
+  // Extra boost when futures R² > 0.7 — high-confidence trend fit.
+  const bothDivergeAgree =
+    futures.divergence !== "NONE" &&
+    spot.divergence !== "NONE" &&
+    futures.divergence === spot.divergence;
+  if (bothDivergeAgree) {
+    const r2Boost = futures.short.r2 > 0.7 ? 1.2 : 1.0;
+    cvdScore *= 1.4 * r2Boost;
+  }
+
+  // Spot-futures alignment modifier — direction-aware.
+  // SUSPECT_BOUNCE (futures CVD rising, spot flat/falling) is a SHORT confirmation:
+  // the bounce is short-covering with no real demand beneath it. Don't discount
+  // SHORT conviction when this pattern is present; heavily discount LONG entries.
   const alignmentMult =
     spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING" ? 1.0
     : spotFuturesDivergence === "SPOT_LEADS" ? 0.85
-    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? 0.6
+    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? (direction === "SHORT" ? 1.0 : 0.4)
     : 0.75;
   cvdScore *= alignmentMult;
 
@@ -361,37 +350,22 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
   const otherSignalDir = rsiRaw + cvdScore;
   if (otherSignalDir < 0) volScore = -Math.abs(volScore);
 
-  // 4. Regime — continuous from MA position + RSI extremity
-  //    Price vs 200 SMA drives macro direction; RSI extremes add contrarian signal.
-  let regimeScore = clamp(ctx.ma.priceVsSma200Pct / 10, -1, 1) * 50; // -50 to +50
+  // 4. MA displacement — mean-reversion pull toward moving averages.
+  //    INVERTED from the old regime score: being BELOW the MA after a sell-off
+  //    IS the setup — further below = stronger LONG pull.
+  //    Uses both SMA50 (short-term magnet) and SMA200 (structural magnet).
+  const sma50Pull = clamp(-ctx.ma.priceVsSma50Pct / 10, -1, 1) * 40; // below=bullish, above=bearish
+  const sma200Pull = clamp(-ctx.ma.priceVsSma200Pct / 15, -1, 1) * 60; // SMA200 is stronger magnet
+  const maDisplacementScore = clamp(sma50Pull + sma200Pull, -100, 100);
 
-  // Reclaiming bonus: price between SMA50 and SMA200, scaling with progress toward 200
-  if (ctx.ma.priceVsSma200Pct < 0 && ctx.ma.priceVsSma50Pct > 0) {
-    const reclaimProgress = clamp(ctx.ma.priceVsSma50Pct / (-ctx.ma.priceVsSma200Pct + ctx.ma.priceVsSma50Pct), 0, 1);
-    regimeScore += reclaimProgress * 20;
-  }
+  // Regime score (price vs SMA200) removed: returns -17 when price is below SMA200,
+  // penalizing LONG exactly when price has been sold down. The setup IS being below.
+  // Market structure removed: LH_HL scores -10 for LONG but it's a tightening
+  // compression pattern — the textbook pre-breakout formation.
+  // Sweep proximity removed: ±15 noise, not a reversal concept.
+  // Thin ice removed: only fires for SHORT, not a reversal concept.
 
-  // Extended contrarian: deep overbought/oversold adds mean-reversion signal
-  if (ctx.rsi.daily > 70) {
-    regimeScore -= ((ctx.rsi.daily - 70) / 30) * 40; // up to -40 contrarian
-  } else if (ctx.rsi.daily < 30) {
-    regimeScore += ((30 - ctx.rsi.daily) / 30) * 40; // up to +40 contrarian
-  }
-  regimeScore = clamp(regimeScore, -100, 100);
-
-  // 5. Market structure — scaled by pivot recency (fresh pivots = stronger signal)
-  const structureBase =
-    ctx.structure === "HH_HL" ? 50
-    : ctx.structure === "LH_LL" ? -50
-    : ctx.structure === "HH_LL" ? 10
-    : ctx.structure === "LH_HL" ? -10
-    : 0;
-  const pivotFreshness = ctx.staleness.lastPivot != null
-    ? clamp(1 - ctx.staleness.lastPivot / 50, 0.3, 1.0) // fades over ~8 days, floor 0.3
-    : 0.5;
-  const structureScore = structureBase * pivotFreshness;
-
-  // 6. Volume Profile — continuous distance from POC (mean-reversion magnet)
+  // 5. Volume Profile — continuous distance from POC (mean-reversion magnet)
   //    Below POC = bullish pull, above POC = bearish pull. Scales with distance.
   //    Confidence scaled by POC thickness (pocVolumePct / 5, clamped 0.5–1.5)
   let vpScore = 0;
@@ -402,99 +376,16 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
     vpScore = vpRaw * clamp(vp.pocVolumePct / 5, 0.5, 1.5);
   }
 
-  // 7. Sweep proximity — price near a high-attraction sweep level = directional nudge
-  //    Price being pulled toward the level to sweep accumulated liquidity.
-  //    Fixed ±15 bonus (not weighted) — small but meaningful tiebreaker.
-  let sweepBonus = 0;
-  if (ctx.sweep) {
-    const { nearestHigh, nearestLow } = ctx.sweep;
-    const atrDist = 1.5 * ctx.atr;
-    if (nearestHigh && (nearestHigh.price - ctx.price) < atrDist && nearestHigh.attraction > 2) {
-      sweepBonus += 15; // LONG bias — price pulled up to sweep the high
-    }
-    if (nearestLow && (ctx.price - nearestLow.price) < atrDist && nearestLow.attraction > 2) {
-      sweepBonus -= 15; // SHORT bias — price pulled down to sweep the low
-    }
-  }
-
   const rawScore =
-    rsiRaw * HTF_W_RSI +
-    clamp(cvdScore, -100, 100) * HTF_W_CVD +
     clamp(volScore, -100, 100) * HTF_W_VOLATILITY +
+    clamp(cvdScore, -100, 100) * HTF_W_CVD +
+    rsiRaw * HTF_W_RSI +
     clamp(vpScore, -100, 100) * HTF_W_VP +
-    regimeScore * HTF_W_REGIME +
-    structureScore * HTF_W_STRUCTURE +
-    sweepBonus;
+    maDisplacementScore * HTF_W_MA_DISPLACEMENT;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }
 
-// ─── Sentiment (-100 to +100) ───────────────────────────────────────────────
-// Contrarian crowd signal:
-//   - Composite F&G extremes: extreme fear → LONG, extreme greed → SHORT
-//   - Component convergence: all components agreeing = stronger signal
-// Expert consensus excluded (disabled for now)
-
-const SENT_W_COMPOSITE = 0.55;
-const SENT_W_REGIME = 0.2;
-const SENT_W_CONVERGENCE = 0.25;
-
-function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
-  if (direction === "FLAT") {
-    // Neutral sentiment = supports flat
-    const neutrality = 1 - Math.abs(ctx.metrics.compositeIndex - 50) / 50;
-    return clamp(neutrality * 60, -100, 100);
-  }
-
-  // 1. Composite F&G — contrarian, but only at extremes.
-  //    Mild fear/greed (20–80) is noise for swing trading — only act on extremes.
-  //    Fear (< 20) agrees with LONG (buy when others are fearful).
-  //    Greed (> 80) agrees with SHORT (sell when others are greedy).
-  const fg = ctx.metrics.compositeIndex;
-  let boostedComposite = 0;
-  if (fg <= 20) {
-    // Extreme fear: 20→0 maps to 0→+100
-    boostedComposite = ((20 - fg) / 20) * 100;
-  } else if (fg >= 80) {
-    // Extreme greed: 80→100 maps to 0→-100
-    boostedComposite = -((fg - 80) / 20) * 100;
-  }
-
-  // 2. Regime base — only extremes generate signal, scaled by depth.
-  //    F&G 20→0 maps to regimeScore 0→+100 (fear = LONG).
-  //    F&G 80→100 maps to regimeScore 0→-100 (greed = SHORT).
-  let regimeScore = 0;
-  if (fg <= 20) {
-    regimeScore = ((20 - fg) / 20) * 100;
-  } else if (fg >= 80) {
-    regimeScore = -((fg - 80) / 20) * 100;
-  }
-
-  // 3. Component convergence — how many F&G components agree on direction.
-  //    When 4+ components cluster in fear or greed territory, signal is stronger.
-  const components = ctx.metrics.components;
-  const componentValues = [
-    components.positioning,
-    components.trend,
-    components.institutionalFlows,
-    // momentumDivergence, exchangeFlows, expertConsensus excluded — not reliable for trade ideas
-  ];
-
-  const fearCount = componentValues.filter((v) => v < 40).length;
-  const greedCount = componentValues.filter((v) => v > 60).length;
-  const maxConvergence = Math.max(fearCount, greedCount);
-  // 0-3 components converging → 0-100 score
-  const convergenceRaw = (maxConvergence / 3) * 100;
-  // Sign: positive if fear-converging (LONG), negative if greed-converging (SHORT)
-  const convergenceScore = fearCount > greedCount ? convergenceRaw : -convergenceRaw;
-
-  const rawScore =
-    clamp(boostedComposite, -100, 100) * SENT_W_COMPOSITE +
-    regimeScore * SENT_W_REGIME +
-    convergenceScore * SENT_W_CONVERGENCE;
-
-  return clamp(directional(rawScore, direction), -100, 100);
-}
 
 // ─── Exchange Flows (-100 to +100) ───────────────────────────────────────────
 // On-chain supply pressure — all magnitude-based:
@@ -502,10 +393,8 @@ function scoreSentiment(ctx: SentimentContext, direction: Direction): number {
 //   - Flow sigma captures today's intensity
 //   - 30d extremes amplify when reserves are at monthly boundaries
 
-const EF_W_RESERVE = 0.35;
-const EF_W_SIGMA = 0.30;
-const EF_W_TREND = 0.20;
-const EF_W_EXTREME = 0.15;
+const EF_W_RESERVE = 0.65;
+const EF_W_EXTREME = 0.35;
 
 function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): number {
   if (direction === "FLAT") {
@@ -521,20 +410,12 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
   const reserve30d = clamp(-m.reserveChange30dPct / 5, -1, 1) * 100; // -5%→+100, +5%→-100
   const reserveScore = reserve7d * 0.6 + reserve30d * 0.4;
 
-  // 2. Flow sigma — today's flow intensity relative to 30d distribution.
-  //    Negative sigma = outflow day (bullish), positive = inflow day (bearish).
-  const sigmaScore = clamp(-m.todaySigma * 30, -100, 100);
+  // Flow sigma removed: noisy single-day event, already captured by 7d reserve trend.
+  // Balance trend removed: redundant with reserveChange7dPct — same signal counted twice.
+  // Exchange-level divergence removed: designed to detect distribution during an up-move,
+  // not useful for reversal from a sell-off, and fires -20 to -40 penalty on LONG.
 
-  // 3. Balance trend — scaled by 7d reserve change magnitude instead of flat ±60.
-  //    FALLING with -2% is stronger than FALLING with -0.6%.
-  let trendScore = 0;
-  if (m.balanceTrend === "FALLING") {
-    trendScore = 30 + 40 * clamp(-m.reserveChange7dPct / 2, 0, 1); // 30–70, scaled by magnitude
-  } else if (m.balanceTrend === "RISING") {
-    trendScore = -(30 + 40 * clamp(m.reserveChange7dPct / 2, 0, 1)); // -30 to -70
-  }
-
-  // 4. 30d extremes — amplified by how far past the prior low/high.
+  // 2. 30d extremes — amplified by how far past the prior low/high.
   //    isAt30dLow is binary, but reserveChange30dPct tells us the magnitude.
   let extremeScore = 0;
   if (m.isAt30dLow) {
@@ -545,8 +426,6 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
 
   const rawScore =
     reserveScore * EF_W_RESERVE +
-    sigmaScore * EF_W_SIGMA +
-    trendScore * EF_W_TREND +
     extremeScore * EF_W_EXTREME;
 
   return clamp(directional(rawScore, direction), -100, 100);
@@ -554,25 +433,45 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+/**
+ * Effective conviction threshold for this setup.
+ *
+ * ATR compression after a displacement is a high-quality setup:
+ * the spring is coiled and an expansion is imminent — directional consensus
+ * at 200 is not required because the setup quality compensates for ambiguity
+ * in weaker dimensions (e.g. neutral ETF flows, flat derivatives).
+ *
+ * Threshold scales linearly with compression depth:
+ *   ATR at 10th pct → 175   (mild compression)
+ *   ATR at 5th pct  → 155   (strong compression)
+ *   ATR at 2nd pct  → 130   (extreme — case on 2026-03-28)
+ */
+export function computeConvictionThreshold(htfCtx: HtfContext): number {
+  const { compressionAfterMove, atrPercentile } = htfCtx.volatility;
+  if (compressionAfterMove && atrPercentile <= 10) {
+    // Linear interpolation: pct=10 → 175, pct=0 → 120
+    const depth = (10 - atrPercentile) / 10; // 0 at 10th pct, 1 at 0th pct
+    return Math.round(175 - depth * 55); // 175 → 120
+  }
+  return CONVICTION_THRESHOLD;
+}
+
 export function computeConfluence(outputs: DimensionOutput[], direction: Direction): Confluence {
   const deriv = outputs.find((o) => o.dimension === "DERIVATIVES");
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");
-  const sent = outputs.find((o) => o.dimension === "SENTIMENT");
   const ef = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
   const derivatives = deriv ? scoreDerivatives(deriv.context, direction) : 0;
   const etfScore = etfs ? scoreEtfs(etfs.context, direction) : 0;
   const htfScore = htf ? scoreHtf(htf.context, direction) : 0;
-  const sentiment = sent ? scoreSentiment(sent.context, direction) : 0;
   const exchangeFlows = ef ? scoreExchangeFlows(ef.context, direction) : 0;
 
   return {
     derivatives: Math.round(derivatives),
     etfs: Math.round(etfScore),
     htf: Math.round(htfScore),
-    sentiment: Math.round(sentiment),
     exchangeFlows: Math.round(exchangeFlows),
-    total: Math.round(derivatives + etfScore + htfScore + sentiment + exchangeFlows),
+    total: Math.round(derivatives + etfScore + htfScore + exchangeFlows),
   };
 }

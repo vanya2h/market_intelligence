@@ -1,17 +1,17 @@
 import { useState } from "react";
 import type { BriefDimension } from "@market-intel/api";
-import { DIMENSION_TABS, TAB_LABELS } from "./BriefSidebar";
 import { DimensionCard } from "./DimensionCard";
 import { TabBar } from "./TabBar";
+import { DIMENSIONS, DIMENSION_LABELS } from "../lib/dimensions";
 
 interface DimensionTabsProps {
   dimensions: BriefDimension[];
 }
 
 export function DimensionTabs({ dimensions }: DimensionTabsProps) {
-  const availableDims = DIMENSION_TABS.filter((dim) => dimensions.some((d) => d.dimension === dim));
+  const availableDims = DIMENSIONS.filter((dim) => dimensions.some((d) => d.dimension === dim));
 
-  const [activeTab, setActiveTab] = useState<string>(availableDims[0] ?? "DERIVATIVES");
+  const [activeTab, setActiveTab] = useState(availableDims[0] ?? "DERIVATIVES");
 
   return (
     <>
@@ -21,9 +21,12 @@ export function DimensionTabs({ dimensions }: DimensionTabsProps) {
         className="h-10 px-2 rounded-t-md"
       >
         <TabBar
-          items={availableDims.map((dim) => ({ key: dim, label: TAB_LABELS[dim] }))}
+          items={availableDims.map((dim) => ({
+            key: dim,
+            label: DIMENSION_LABELS[dim],
+          }))}
           activeKey={activeTab}
-          onSelect={setActiveTab}
+          onSelect={(x) => setActiveTab(x as (typeof availableDims)[0])}
           className="overflow-x-auto h-full"
         />
       </div>

@@ -20,7 +20,6 @@ import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 import type { TradeDecision } from "./trade-idea/index.js";
-import { CONVICTION_THRESHOLD } from "./trade-idea/confluence.js";
 import { $Enums } from "../generated/prisma/client.js";
 import type { DeltaSummary } from "./delta.js";
 
@@ -45,8 +44,8 @@ No HTF data available — trade idea could not be computed.`;
       : "none — signals balanced";
     return `### Trade Decision: SKIPPED — directional bias ${bias.lean} (${bias.strength}/100 strength)
 **Best direction:** ${decision.direction}
-**Conviction:** ${decision.confluence.total} / ${CONVICTION_THRESHOLD} (${gapAbs} pts ${gapDir} threshold)
-**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, ExchangeFlows=${decision.confluence.exchangeFlows}, Sentiment=${decision.confluence.sentiment}
+**Conviction:** ${decision.confluence.total} / ${decision.threshold} (${gapAbs} pts ${gapDir} threshold)
+**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, ExchangeFlows=${decision.confluence.exchangeFlows}
 **Directional bias:** ${bias.lean} (strength ${bias.strength}/100)
 **Key bias drivers:** ${factorsStr}
 **Entry price:** $${decision.entryPrice.toFixed(2)}
@@ -56,10 +55,10 @@ The system identified a ${bias.lean} bias at ${bias.strength}/100 strength but c
   }
   const targetDist = Math.abs(decision.compositeTarget - decision.entryPrice);
   const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
-  return `### Trade Decision: ${decision.direction} (conviction ${decision.confluence.total}/${CONVICTION_THRESHOLD})
+  return `### Trade Decision: ${decision.direction} (conviction ${decision.confluence.total}/${decision.threshold})
 **Direction:** ${decision.direction}
-**Conviction:** ${decision.confluence.total} (PASSES threshold of ${CONVICTION_THRESHOLD})
-**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Sentiment=${decision.confluence.sentiment}
+**Conviction:** ${decision.confluence.total} (PASSES threshold of ${decision.threshold})
+**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, ExchangeFlows=${decision.confluence.exchangeFlows}
 **Entry price:** $${decision.entryPrice.toFixed(2)}
 **Composite target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%, $${targetDist.toFixed(0)} distance)
 **Alternatives:** ${decision.alternatives.map((a) => `${a.direction}=${a.total}`).join(", ")}

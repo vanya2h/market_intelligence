@@ -1,26 +1,26 @@
-import type { Brief } from "@market-intel/api";
-import { SentimentGauge } from "./SentimentGauge";
+import type { Brief, TradeIdea } from "@market-intel/api";
+import { OpportunityGauge } from "./OpportunityGauge";
 import { SectionBlock } from "./SectionBlock";
-import { DIMENSION_TABS, TAB_LABELS } from "./BriefSidebar";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";
 import { RelativeTime } from "./RelativeTime";
+import { DIMENSION_LABELS, DIMENSIONS } from "../lib/dimensions";
 
-export function MobileBriefSummary({ brief }: { brief: Brief }) {
+export function MobileBriefSummary({ brief, tradeIdea }: { brief: Brief; tradeIdea: TradeIdea | null }) {
   return (
     <div
       className="flex flex-col gap-4 p-3 md:hidden"
       style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
     >
-      {brief.compositeIndex != null && brief.compositeLabel && (
+      {tradeIdea && tradeIdea.confluence && (
         <div className="flex items-center gap-4">
-          <SentimentGauge value={brief.compositeIndex} label={brief.compositeLabel} />
+          <OpportunityGauge tradeIdea={tradeIdea} />
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
         <SectionBlock title="Regime Overview">
           <div className="space-y-0.5">
-            {DIMENSION_TABS.map((dim) => {
+            {DIMENSIONS.map((dim) => {
               const bd = brief.dimensions.find((d) => d.dimension === dim);
               if (!bd) return null;
               const { color, arrow } = regimeColor(bd.regime);
@@ -33,7 +33,7 @@ export function MobileBriefSummary({ brief }: { brief: Brief }) {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[0.6875rem]" style={{ color: "var(--text-secondary)" }}>
-                      {TAB_LABELS[dim]}
+                      {DIMENSION_LABELS[dim]}
                     </span>
                     <span className="text-[0.6875rem] font-medium" style={{ color }}>
                       {regimeLabel(bd.regime)} {arrow}

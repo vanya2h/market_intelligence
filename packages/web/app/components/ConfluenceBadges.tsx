@@ -1,6 +1,11 @@
 import type { Confluence } from "@market-intel/api";
 import { CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_LABELS, CONFLUENCE_KEY_MAP } from "../lib/dimensions";
 
+/** Recompute total from active dimensions — legacy data may include stale sentiment in `total` */
+function computeTotal(conf: Confluence): number {
+  return CONFLUENCE_KEYS.reduce((sum, key) => sum + (conf[key] ?? 0), 0);
+}
+
 const LABELS: Record<string, string> = Object.fromEntries(
   CONFLUENCE_KEYS.map((k) => {
     const dim = Object.entries(CONFLUENCE_KEY_MAP).find(([, v]) => v === k)?.[0] as string;
@@ -32,7 +37,7 @@ const CONVICTION_THRESHOLD = 200;
 
 /** Inline badges — compact row of dimension scores + total / threshold */
 export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
-  const total = confluence.total ?? 0;
+  const total = computeTotal(confluence);
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {CONFLUENCE_KEYS.map((dim) => {
@@ -65,8 +70,8 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
 /** Full breakdown — visual bars with dimension scores and conviction meter */
 export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) {
   const maxScore = 100;
-  const total = confluence.total ?? 0;
-  const maxTotal = 500;
+  const total = computeTotal(confluence);
+  const maxTotal = 400;
   const convictionPct = Math.max(0, Math.min(100, (total / maxTotal) * 100));
   const thresholdPct = (CONVICTION_THRESHOLD / maxTotal) * 100;
   const passesThreshold = total >= CONVICTION_THRESHOLD;

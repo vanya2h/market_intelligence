@@ -185,7 +185,7 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
   return (
     <SectionBlock
       title="Trade Idea"
-      tooltip="Directional trade idea taken when confluence conviction exceeds 200/400. Levels are tracked independently with time-decay quality scoring."
+      tooltip="Directional trade idea taken when confluence conviction exceeds threshold. 4 dimensions (HTF, Derivatives, ETFs, Exchange Flows) each score -100 to +100. Levels are tracked independently with time-decay quality scoring."
     >
       {/* Header: direction + prices + status */}
       <div

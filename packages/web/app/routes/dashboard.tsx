@@ -53,12 +53,12 @@ export default function Dashboard() {
       <AppHeader />
 
       {/* Mobile: sidebar content stacked above main */}
-      <MobileBriefSummary brief={brief} />
+      <MobileBriefSummary brief={brief} tradeIdea={tradeIdea} />
 
       {/* Desktop: side-by-side layout */}
       <div className="flex">
         {/* Left sidebar — desktop only */}
-        <BriefSidebar brief={brief} />
+        <BriefSidebar brief={brief} tradeIdea={tradeIdea} />
 
         {/* Main content */}
         <main className="flex flex-col w-full">

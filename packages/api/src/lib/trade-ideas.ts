@@ -43,7 +43,6 @@ export interface Confluence {
   derivatives: number;
   etfs: number;
   htf: number;
-  sentiment: number;
   exchangeFlows: number;
   total: number;
   bias?: DirectionalBias;

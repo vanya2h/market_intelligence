@@ -13,46 +13,46 @@ function ZoneBadge({ color, label }: { color: string; label: string }) {
   );
 }
 
-const zones = [
+const opportunityZones = [
   {
-    range: "0 – 25",
-    label: "Extreme Fear",
-    color: "var(--red)",
-    bias: "Look for longs",
-    description:
-      "The crowd is capitulating — this is where swing lows form. Don't catch a falling knife: wait for a technical trigger (structure break, CVD divergence) before entering.",
-  },
-  {
-    range: "25 – 40",
-    label: "Fear",
-    color: "#f07a32",
-    bias: "Bullish bias",
-    description:
-      "Good zone to scale into longs on pullbacks. Risk/reward favors buyers because sentiment is already depressed.",
-  },
-  {
-    range: "40 – 60",
-    label: "Neutral",
-    color: "var(--amber)",
-    bias: "No sentiment edge",
-    description:
-      "No actionable signal from sentiment alone. Trade purely on technicals — price action, structure, and volume are your only guides here.",
-  },
-  {
-    range: "60 – 75",
-    label: "Greed",
-    color: "#82d455",
-    bias: "Bearish bias",
-    description:
-      "Tighten stops on existing longs, start scanning for short setups. Don't initiate new longs at resistance.",
-  },
-  {
-    range: "75 – 100",
-    label: "Extreme Greed",
+    range: "+70 to +100",
+    label: "Strong Buy",
     color: "var(--green)",
-    bias: "Look for shorts",
+    bias: "High conviction long",
     description:
-      "The crowd is euphoric — this is where swing highs form. Look for short entries or exit longs. Strongest signal when combined with bearish divergence.",
+      "Multiple dimensions strongly agree on a buy setup. Derivatives crowding, institutional flows, HTF structure, and exchange flows all pointing the same way. This is where the system takes directional trades.",
+  },
+  {
+    range: "+40 to +70",
+    label: "Moderate Buy",
+    color: "var(--amber)",
+    bias: "Bullish lean",
+    description:
+      "Directional lean toward buying, but not all dimensions agree. Some components support, others are neutral. Conviction may be insufficient for a trade — check the confluence breakdown for what's missing.",
+  },
+  {
+    range: "-15 to +40",
+    label: "No Edge",
+    color: "var(--text-muted)",
+    bias: "Wait",
+    description:
+      "Dimensions are balanced or all weak. No actionable directional signal. The system will skip trade ideas in this zone. Wait for dimensions to converge.",
+  },
+  {
+    range: "-70 to -15",
+    label: "Moderate Sell",
+    color: "var(--amber)",
+    bias: "Bearish lean",
+    description:
+      "Directional lean toward selling. Some dimensions agree on a short setup but conviction may be below threshold. Tighten stops on longs, start scanning for short entries.",
+  },
+  {
+    range: "-100 to -70",
+    label: "Strong Sell",
+    color: "var(--red)",
+    bias: "High conviction short",
+    description:
+      "Multiple dimensions strongly agree on a sell setup. The mirror of Strong Buy — the system sees a high-probability reversal to the downside.",
   },
 ];
 
@@ -70,32 +70,28 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     title: "Understanding the metrics",
     items: [
       {
-        q: "What is the Fear & Greed Index?",
-        a: "A composite contrarian positioning filter scored 0–100. It measures crowd sentiment across multiple dimensions to identify when the market is over-extended in either direction — these are the conditions where swing reversals are most likely. It is not a directional signal: high fear means look to buy, high greed means look to sell.",
+        q: "What is the Opportunity Score?",
+        a: "A bipolar directional edge score from -100 to +100. It answers the single question: \"should I buy or sell right now?\" Positive = buy setup, negative = sell setup, near zero = no edge. The score is derived from the directional bias between LONG and SHORT confluence — the gap between how strongly the market supports buying vs selling, normalized to a clean scale. The sign IS the direction, the magnitude IS the conviction.",
       },
       {
         q: "What do the different score zones mean?",
-        a: "zones",
+        a: "opportunityZones",
       },
       {
-        q: "What components make up the composite score?",
-        a: "Three active components, each scored 0–100 independently, combined with fixed weights: Positioning (50%) from derivatives data — funding rates, open interest, Coinbase premium, and bias-adjusted liquidations. Institutional Flows (30%) from ETF data — consecutive inflow/outflow streaks, flow magnitude relative to 30-day mean, and flow regime. Trend (20%) from HTF technicals — price vs SMA-50/200, daily RSI, and market structure. Momentum Divergence and Exchange Flows were removed as unreliable sentiment signals. Expert Consensus (0%) from the Unbias API — currently disabled while collecting baseline delta data. ATR volatility compression is not part of the composite score but is available to the LLM synthesizer as a contextual trade-setup signal.",
+        q: "What is the Composite Fear & Greed Index?",
+        a: "A secondary context metric scored 0–100 that measures crowd sentiment. It is not the primary metric — the Opportunity Score is. The F&G index uses three components: Positioning (50%) from derivatives data, Institutional Flows (30%) from ETF data, and Trend (20%) from HTF technicals. It is useful as crowd temperature context for the LLM synthesizer but does not contribute to the mechanical confluence scoring — doing so would triple-count signals already measured by the source dimensions.",
       },
       {
-        q: "When is a reading of 45 vs 55 meaningful?",
-        a: "It isn't. The index is most useful below 25 or above 75. Mid-range readings carry no actionable edge — trade purely on technicals when the index is neutral. Think of it as a traffic light: red/green at extremes, yellow in between.",
+        q: "What are the four confluence dimensions?",
+        a: "Four independent dimensions each score -100 to +100 for a given direction. HTF Structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull. Derivatives: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel. ETF Flows: flow sigma with regime-contradiction bonus, reversal confirmation after streaks, reversal ratio, and reversal regime. Exchange Flows: 7d/30d reserve changes and 30-day reserve extremes. Sentiment was removed from confluence scoring — it is a composite of derivatives (50%) + ETFs (30%) + HTF (20%), so including it would triple-count those dimensions.",
       },
       {
-        q: "What does it mean when components disagree?",
-        a: "When components are scattered (one fearful, one greedy, rest neutral), there's no sentiment edge. The signal has real predictive power only when multiple components converge toward fear or greed simultaneously. Confluence count matters: 4/4 dimensions agreeing is a much stronger signal than 1/4.",
+        q: "What does it mean when dimensions disagree?",
+        a: "When dimensions are split (some positive, some negative), the Opportunity Score will be near zero — no edge. The signal has real predictive power only when multiple dimensions converge in the same direction. Check the confluence breakdown rows to see which dimensions agree and which oppose.",
       },
       {
-        q: "What is the divergence signal?",
-        a: "When expert consensus shifts bullish while the composite shows fear (or vice versa), it often marks the best swing entry. Smart money is front-running the crowd. This is the highest-value signal the system can produce.",
-      },
-      {
-        q: "Should I trade directly from the index reading?",
-        a: 'Never. Sentiment sets the bias, price action provides the entry. An extreme fear reading says "look for longs" — not "buy now." Always wait for a technical trigger: a structure break, CVD divergence, or key level reclaim.',
+        q: "Should I trade directly from the Opportunity Score?",
+        a: 'The Opportunity Score tells you the mechanical system\'s assessment. A strong reading (+70 or -70) means multiple independent data sources agree on direction. However, the system is designed for swing trading reversals — always consider the broader context and your own risk management. The trade idea section shows the full confluence breakdown, entry/target levels, and whether a trade was actually taken.',
       },
     ],
   },
@@ -161,7 +157,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How does Volume Profile affect trade ideas?",
-        a: "Two ways. First, the POC is the highest-weighted level (25%) in the composite target calculation — it pulls the target toward the strongest volume magnet. Second, price position relative to the Value Area contributes 20% of the HTF confluence score: price below the VA is a bullish signal (POC magnet pulls up), price above is bearish. The signal strength scales with POC thickness — a concentrated POC with 5%+ of total volume gets full weight.",
+        a: "Two ways. First, the POC is the highest-weighted level (25%) in the composite target calculation — it pulls the target toward the strongest volume magnet. Second, price position relative to the Value Area contributes 15% of the HTF confluence score: price below the VA is a bullish signal (POC magnet pulls up), price above is bearish. The signal strength scales with POC thickness — a concentrated POC with 5%+ of total volume gets full weight.",
       },
     ],
   },
@@ -178,7 +174,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How do sweep levels affect trade ideas?",
-        a: "Two ways. First, the highest-attraction sweep level in the trade direction gets 10% weight in the composite target — for a LONG idea, the nearest unswept high above price pulls the target up; for SHORT, the nearest unswept low below pulls it down. Second, when price is within 1.5×ATR of a high-attraction sweep level, a ±15 point proximity bonus is added to the HTF confluence score, nudging the system toward that direction.",
+        a: "The highest-attraction sweep level in the trade direction gets 10% weight in the composite target — for a LONG idea, the nearest unswept high above price pulls the target up; for SHORT, the nearest unswept low below pulls it down. Sweep proximity was removed from the HTF confluence score (±15 noise that didn't improve reversal detection) but the levels remain valuable as directional price targets.",
       },
       {
         q: "What timeframes are tracked?",
@@ -191,15 +187,15 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "How are trade ideas generated?",
-        a: "Fully mechanical — no LLM involved in the decision. The system scores all three directions (LONG, SHORT, FLAT) using granular confluence scoring across five dimensions. Each dimension produces a conviction score from -100 to +100. The direction with the highest total is selected. If no direction passes the conviction threshold (200 out of a possible 500), the idea is marked as 'skipped' but still tracked for accuracy measurement.",
+        a: "Fully mechanical — no LLM involved in the decision. The system scores all three directions (LONG, SHORT, FLAT) using granular confluence scoring across four dimensions. Each dimension produces a conviction score from -100 to +100. The direction with the highest total is selected. If no direction passes the conviction threshold (200 out of a possible 400), the idea is marked as 'skipped' but still tracked for accuracy measurement.",
       },
       {
-        q: "What are the five confluence dimensions?",
-        a: "Derivatives (positioning crowding, stress events, funding pressure, OI context), ETF Flows (flow sigma with regime-contradiction bonus, streak exhaustion, reversal ratio), HTF Structure (RSI confidence, CVD divergence, volatility compression, regime, market structure), Sentiment (contrarian composite F&G, component convergence, regime), and Exchange Flows (on-chain reserve changes, balance trend, flow sigma, 30-day extremes). Each scores -100 to +100 independently.",
+        q: "What are the four confluence dimensions?",
+        a: "Derivatives (crowded longs/shorts, stress events like capitulation/unwinding, funding extremes, OI fuel), ETF Flows (flow sigma with regime-contradiction bonus, reversal confirmation, reversal ratio, reversal regime), HTF Structure (volatility compression, CVD divergence, RSI stretch, volume profile displacement, MA mean-reversion pull), and Exchange Flows (7d/30d reserve changes, 30-day reserve extremes). Each scores -100 to +100 independently. Sentiment was removed — it is a composite of the other dimensions, so including it would triple-count signals.",
       },
       {
         q: "What is the conviction threshold and why 200?",
-        a: "The total conviction ranges from -500 to +500 (five dimensions). A directional trade is only 'taken' when total >= 200 — meaning at least two dimensions need to strongly agree, or several need to moderately agree. This filters out low-conviction noise. Ideas below 200 are still saved and tracked as 'skipped' so we can measure whether the threshold is too strict (missing good trades) or too loose (taking bad ones).",
+        a: "The total conviction ranges from -400 to +400 (four dimensions). A directional trade is only 'taken' when total >= 200 — meaning at least two dimensions need to strongly agree, or several need to moderately agree. This filters out low-conviction noise. Ideas below 200 are still saved and tracked as 'skipped' so we can measure whether the threshold is too strict (missing good trades) or too loose (taking bad ones). For volatility compression setups, the threshold is dynamically lowered (down to 120) since the coiled spring setup compensates for ambiguity in weaker dimensions.",
       },
       {
         q: "What happens when a trade idea is skipped?",
@@ -228,11 +224,11 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "Why is this system optimized for swing trading specifically?",
-        a: "Every design decision — from weight allocation to quality scoring — is tuned for multi-day to multi-week reversal setups. Positioning gets 50% weight because leveraged crowding is the most reliable contrarian signal for swing reversals. Institutional Flows gets 30% because ETF capital flow direction is a strong leading indicator. Trend only gets 20% because trend-following signals lag at reversal points. Momentum Divergence and Exchange Flows were removed as they proved to be unreliable sentiment signals. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
+        a: "Every design decision — from signal selection to quality scoring — is tuned for multi-day to multi-week reversal setups. The confluence scoring was audited specifically for reversal detection: signals that fire mid-trend or during compression (HEATING_UP, streak exhaustion, market structure) were removed because they add noise at reversal points. What remains are signals that confirm the crowd is positioned wrong and a spring is loaded. The time-decay quality scoring penalizes signals that take weeks to play out. This isn't useful for day trading (too slow) or long-term investing (too tactical).",
       },
       {
-        q: "Why does Positioning get 37.5% while Trend only gets 15%?",
-        a: "When everyone is on one side of the trade, the reversal is violent — that's the swing entry. Trend-following signals are accurate in the middle of a move but lag at exactly the reversal points where swing entries happen. This weighting is deliberately anti-consensus: most systems overweight trend. Institutional Flows (30%) captures ETF capital flow direction as a strong leading indicator. Exchange Flows and Momentum Divergence were removed from the sentiment composite after proving unreliable as sentiment signals — Exchange Flows still contributes to trade idea confluence scoring separately.",
+        q: "How are the confluence weights prioritized?",
+        a: "HTF Structure leads (compression 30%, CVD 25%, RSI 20%, VP 15%, MA displacement 10%) because the coiled spring + divergence combination is the core reversal setup. Derivatives are weighted toward crowded positioning and capitulation/unwinding stress — not heating or deleveraging which are noise. ETFs prioritize flow sigma with regime contradiction and reversal confirmation over streak exhaustion which fires too early. Exchange Flows focus on reserve changes (65%) and 30-day extremes (35%), removing redundant balance trend and noisy single-day sigma.",
       },
       {
         q: "What is the two-dimensional derivatives model?",
@@ -244,7 +240,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How does confluence scoring and the conviction gate work?",
-        a: "Each of five dimensions (Derivatives, ETFs, HTF, Sentiment, Exchange Flows) produces a conviction score from -100 to +100 relative to the trade direction — not a simple agree/disagree, but a granular measure of how strongly each dimension supports the trade. The total conviction ranges from -500 to +500. A directional trade is only taken when total >= 200 — this keeps you out of low-conviction noise and ensures multiple independent data sources agree before risking capital. See the Trade Ideas section above for full details on each dimension's scoring.",
+        a: "Each of four dimensions (Derivatives, ETFs, HTF, Exchange Flows) produces a conviction score from -100 to +100 relative to the trade direction — not a simple agree/disagree, but a granular measure of how strongly each dimension supports the trade. The total conviction ranges from -400 to +400. A directional trade is only taken when total >= 200 (or a lower dynamic threshold for compression setups). This keeps you out of low-conviction noise and ensures multiple independent data sources agree before risking capital. Sentiment was removed from scoring — it is a composite of the other three dimensions and would triple-count their signals.",
       },
     ],
   },
@@ -273,7 +269,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "Will the system change over time?",
-        a: "Yes, by design. The current weights and thresholds are a starting hypothesis. As outcome data accumulates, the system recalibrates based on what's actually predictive — not what seemed like it should be. Momentum Divergence and Exchange Flows were recently removed from the sentiment composite after proving unreliable as sentiment signals — both still contribute to trade idea confluence scoring separately. The composite now uses three focused components: Positioning (50%), Institutional Flows (30%), and Trend (20%). Additional data dimensions (options/IV, macro indicators, prediction markets, stablecoin flows) are planned and will be integrated as they prove additive to signal quality. Expert Consensus is included in the architecture but disabled at 0% weight until enough delta data exists to calibrate it properly.",
+        a: "Yes, by design. The current weights and thresholds are a starting hypothesis. As outcome data accumulates, the system recalibrates based on what's actually predictive — not what seemed like it should be. A recent signal audit removed 11 noisy components from confluence scoring (HEATING_UP, DELEVERAGING, streak exhaustion, STRONG_INFLOW/OUTFLOW regime, regime score, market structure, sweep proximity, thin ice, flow sigma, balance trend, exchange-level divergence), replaced the HTF regime score with MA displacement (inverted sign — below MA = bullish pull), and removed sentiment entirely from scoring (triple-counting). Additional data dimensions (options/IV, macro indicators, prediction markets, stablecoin flows) are planned and will be integrated as they prove additive to signal quality.",
       },
     ],
   },
@@ -282,9 +278,9 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
 function FaqEntry({ q, a }: FaqItem) {
   return (
     <Collapsible title={q} variant="subtle">
-      {a === "zones" ? (
+      {a === "opportunityZones" ? (
         <div className="flex flex-col gap-2">
-          {zones.map((z) => (
+          {opportunityZones.map((z) => (
             <div
               key={z.range}
               className="flex flex-col gap-1 rounded p-2"

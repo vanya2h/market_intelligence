@@ -195,7 +195,6 @@ async function main() {
       { name: "ETFs       ", score: confluence.etfs },
       { name: "HTF        ", score: confluence.htf },
       { name: "Exch Flows ", score: confluence.exchangeFlows },
-      { name: "Sentiment  ", score: confluence.sentiment },
     ];
 
     for (const dim of dims) {

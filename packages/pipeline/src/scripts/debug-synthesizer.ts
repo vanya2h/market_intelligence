@@ -18,7 +18,7 @@ import { synthesize, buildPrompt, buildSystemPrompt } from "../orchestrator/synt
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import { DIMENSION_LABELS, type DimensionOutput, type DerivativesOutput, type EtfsOutput, type HtfOutput, type SentimentOutput, type ExchangeFlowsOutput } from "../orchestrator/types.js";
-import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence, computeConvictionThreshold } from "../orchestrator/trade-idea/confluence.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
@@ -138,15 +138,15 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   // Trade decision gaps
   if (decision?.skipped) {
     const conf = decision.confluence;
-    const weakest = (["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const)
+    const weakest = (["derivatives", "etfs", "htf", "exchangeFlows"] as const)
       .map((d) => ({ dim: d, score: conf[d] }))
       .sort((a, b) => a.score - b.score);
     const worst = weakest[0]!;
     if (worst.score < 0) {
       gaps.push(`${chalk.yellow("OPPOSING")} Trade: ${worst.dim} scores ${worst.score} — actively opposing the direction`);
     }
-    const deficit = CONVICTION_THRESHOLD - conf.total;
-    gaps.push(`${chalk.yellow("DEFICIT")} Trade: needs +${deficit} more conviction to pass threshold`);
+    const deficit = decision.threshold - conf.total;
+    gaps.push(`${chalk.yellow("DEFICIT")} Trade: needs +${deficit} more conviction to pass threshold (${decision.threshold})`);
   }
 
   return gaps;
@@ -185,6 +185,7 @@ async function main() {
   let decision: TradeDecision | null = null;
 
   if (htfOut) {
+    const threshold = computeConvictionThreshold(htfOut.context);
     const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
     const scored = directions.map((dir) => ({
       direction: dir,
@@ -192,18 +193,18 @@ async function main() {
     }));
 
     for (const s of scored) {
-      const dims = ["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const;
+      const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
       const parts = dims.map((d) => `${d}=${scoreStr(s.confluence[d])}`).join("  ");
-      const totalColor = s.confluence.total >= CONVICTION_THRESHOLD ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
-      const passIcon = s.confluence.total >= CONVICTION_THRESHOLD ? chalk.green(" ✓ TAKE") : "";
+      const totalColor = s.confluence.total >= threshold ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
+      const passIcon = s.confluence.total >= threshold ? chalk.green(" ✓ TAKE") : "";
       console.log(`  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${totalColor(String(s.confluence.total))}${passIcon}`);
     }
 
     const directional = scored.filter((s) => s.direction !== "FLAT").sort((a, b) => b.confluence.total - a.confluence.total);
     const bestDirectional = directional[0]!;
     const flatScore = scored.find((s) => s.direction === "FLAT")!;
-    const chosen = bestDirectional.confluence.total >= CONVICTION_THRESHOLD ? bestDirectional : flatScore;
-    const skipped = chosen.direction !== "FLAT" ? false : bestDirectional.confluence.total < CONVICTION_THRESHOLD;
+    const chosen = bestDirectional.confluence.total >= threshold ? bestDirectional : flatScore;
+    const skipped = chosen.direction !== "FLAT" ? false : bestDirectional.confluence.total < threshold;
     const trackDirection = skipped ? bestDirectional : chosen;
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, trackDirection.direction);
 
@@ -217,6 +218,7 @@ async function main() {
       entryPrice,
       compositeTarget,
       skipped,
+      threshold,
       alternatives: scored
         .filter((s) => s.direction !== trackDirection.direction)
         .map((s) => ({ direction: s.direction, total: s.confluence.total })),
@@ -227,7 +229,7 @@ async function main() {
     const decisionIcon = skipped ? chalk.yellow("SKIPPED") : chalk.green("TAKEN");
     console.log(`  Decision: ${chalk.bold(trackDirection.direction)} — ${decisionIcon}`);
     console.log(`  Entry: $${entryPrice.toFixed(2)}  Target: $${compositeTarget.toFixed(2)}`);
-    console.log(`  Conviction: ${trackDirection.confluence.total} / ${CONVICTION_THRESHOLD}`);
+    console.log(`  Conviction: ${trackDirection.confluence.total} / ${threshold}${threshold < 200 ? chalk.dim(` (compression-adjusted, default 200)`) : ""}`);
   } else {
     console.log(chalk.dim("  No HTF output — cannot compute trade decision"));
   }

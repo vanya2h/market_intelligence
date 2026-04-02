@@ -311,7 +311,7 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
 
 // ─── Confluence stats ────────────────────────────────────────────────────────
 
-const DIMENSIONS = ["derivatives", "etfs", "htf", "sentiment", "exchangeFlows"] as const;
+const DIMENSIONS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
 
 interface ConfluenceDimensionStats {
   dimension: string;
@@ -331,7 +331,6 @@ interface ConfluenceJson {
   derivatives?: number;
   etfs?: number;
   htf?: number;
-  sentiment?: number;
   exchangeFlows?: number;
 }
 

@@ -1,15 +1,13 @@
-import { Link } from "react-router";
-import { SentimentGauge } from "./SentimentGauge";
 import { SectionBlock } from "./SectionBlock";
+import { OpportunityGauge } from "./OpportunityGauge";
+import { ConfluenceRows } from "./OpportunityGauge";
 import { Tooltip } from "./Tooltip";
-import { InfoCircledIcon, QuestionMarkCircledIcon } from "@radix-ui/react-icons";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";
 import { RelativeTime } from "./RelativeTime";
-import type { Brief } from "@market-intel/api";
+import type { Brief, TradeIdea } from "@market-intel/api";
 
-export { DIMENSIONS as DIMENSION_TABS, DIMENSION_LABELS as TAB_LABELS } from "../lib/dimensions";
-export type { Dimension as DimensionTab } from "../lib/dimensions";
-import { DIMENSIONS as DIMENSION_TABS, DIMENSION_LABELS as TAB_LABELS } from "../lib/dimensions";
+import { DIMENSIONS, DIMENSION_LABELS } from "../lib/dimensions";
 
 const REGIME_DESCRIPTIONS: Record<string, Record<string, string>> = {
   DERIVATIVES: {
@@ -103,61 +101,83 @@ const STRESS_DESCRIPTIONS: Record<string, string> = {
   STRESS_NONE: "No active stress signal detected.",
 };
 
-export function BriefSidebar({ brief }: { brief: Brief }) {
-  const {
-    compositeIndex,
-    compositeLabel,
-    dimensions,
-    positioning,
-    trend,
-    institutionalFlows,
-  } = brief;
+export function BriefSidebar({ brief, tradeIdea }: { brief: Brief; tradeIdea: TradeIdea | null }) {
+  const { dimensions, positioning, trend, institutionalFlows } = brief;
   return (
     <aside
       className="sticky top-10 hidden w-72 shrink-0 flex-col overflow-y-auto p-5 md:flex"
       style={{
         borderRight: "1px solid var(--border)",
         background: "var(--bg-card)",
-        height: "calc(100vh - 2.5rem)",
+        height: "calc(100vh - 98px)",
       }}
     >
-      {compositeIndex != null && compositeLabel && (
+      {tradeIdea && tradeIdea.confluence && (
         <SectionBlock
-          title="Composite Fear & Greed Index"
+          title="Opportunity Score"
           className="mb-6"
-          tooltip="Proprietary Fear & Greed index (0–100) built from three crypto-native inputs: derivatives positioning (50%), institutional flows (30%), HTF trend (20%). Avoids Alternative.me's opaque methodology."
+          tooltip="Directional edge score (-100 to +100) derived from 4 dimensions: HTF structure, derivatives positioning, ETF flows, and exchange flows. Positive = buy setup, negative = sell setup, near zero = no edge."
         >
-          <SentimentGauge value={compositeIndex} label={compositeLabel} />
-          <Link
-            to="/faq"
-            className="mt-2 inline-flex items-center gap-1 text-[0.75rem] transition-colors"
-            style={{ color: "var(--text-muted)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-          >
-            <QuestionMarkCircledIcon width={12} height={12} />
-            How to read this index
-          </Link>
+          <OpportunityGauge tradeIdea={tradeIdea} />
+          <div className="mt-4">
+            <ConfluenceRows confluence={tradeIdea.confluence} />
+          </div>
         </SectionBlock>
       )}
 
       <SectionBlock title="Regime Overview" className="mb-6">
         <div className="space-y-1">
-          {DIMENSION_TABS.map((dim) => {
+          {brief.compositeIndex != null &&
+            brief.compositeLabel &&
+            (() => {
+              const idx = brief.compositeIndex!;
+              const fgColor =
+                idx <= 25
+                  ? "var(--red)"
+                  : idx <= 40
+                    ? "var(--red)"
+                    : idx <= 60
+                      ? "var(--amber)"
+                      : idx <= 75
+                        ? "var(--green)"
+                        : "var(--green)";
+              return (
+                <div
+                  className="flex items-center justify-between py-1.5"
+                  style={{ borderBottom: "1px solid var(--border-subtle)" }}
+                >
+                  <Tooltip
+                    content="Composite Fear & Greed (0–100): derivatives positioning (50%), institutional flows (30%), HTF trend (20%). Context metric — not used in confluence scoring."
+                    side="right"
+                  >
+                    <span
+                      className="inline-flex cursor-default items-center gap-1 text-xs"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Fear & Greed
+                      <InfoCircledIcon style={{ color: "var(--text-muted)" }} />
+                    </span>
+                  </Tooltip>
+                  <span className="text-xs font-medium font-mono-jb tabular-nums" style={{ color: fgColor }}>
+                    {Math.round(idx)} — {brief.compositeLabel}
+                  </span>
+                </div>
+              );
+            })()}
+          {DIMENSIONS.map((dim) => {
             const bd = dimensions.find((d) => d.dimension === dim);
             if (!bd) return null;
 
             const { color, arrow } = regimeColor(bd.regime);
-            const sinceDate = bd.since ? new Date(bd.since) : null;
             return (
               <div
                 key={dim}
-                className="flex flex-col gap-0.5 py-1.5"
+                className="flex flex-col gap-0.5 py-2"
                 style={{ borderBottom: "1px solid var(--border-subtle)" }}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {TAB_LABELS[dim]}
+                    {DIMENSION_LABELS[dim]}
                   </span>
                   <Tooltip content={REGIME_DESCRIPTIONS[dim]?.[bd.regime] ?? bd.regime} side="right">
                     <span
@@ -169,80 +189,6 @@ export function BriefSidebar({ brief }: { brief: Brief }) {
                     </span>
                   </Tooltip>
                 </div>
-                <div className="flex items-center justify-between">
-                  {sinceDate && (
-                    <span className="font-mono-jb text-[0.625rem] tabular-nums" style={{ color: "var(--text-muted)" }}>
-                      changed <RelativeTime date={sinceDate} />
-                    </span>
-                  )}
-                  {bd.previousRegime && bd.previousRegime !== bd.regime ? (
-                    <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
-                      previous: {regimeLabel(bd.previousRegime!)}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
-                </div>
-                {dim === "DERIVATIVES" && bd.stress && bd.stress !== "STRESS_NONE" && (
-                  <Tooltip content={STRESS_DESCRIPTIONS[bd.stress] ?? bd.stress} side="right">
-                    <span
-                      className="mt-0.5 inline-flex cursor-default items-center gap-1 self-start rounded px-1.5 py-0.5 text-[0.625rem] font-medium"
-                      style={{ color: stressColor(bd.stress), background: "var(--bg-hover)" }}
-                    >
-                      STRESS: {bd.stress}
-                      <InfoCircledIcon style={{ color: "var(--text-muted)" }} />
-                    </span>
-                  </Tooltip>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </SectionBlock>
-
-      <SectionBlock title="Overview">
-        <div className="space-y-1">
-          {[
-            {
-              label: "Positioning",
-              value: positioning,
-              tooltip:
-                "Derivatives positioning score (0–100). Derived from funding rates, long/short ratio, and open interest percentiles. High = crowded longs / greed. Low = crowded shorts / fear.",
-            },
-            {
-              label: "Trend",
-              value: trend,
-              tooltip:
-                "HTF trend score (0–100). Derived from price vs 50/200 SMA, daily RSI, and market structure (HH/HL vs LH/LL). High = bullish macro structure.",
-            },
-            {
-              label: "Inst. Flows",
-              value: institutionalFlows,
-              tooltip:
-                "Institutional flows score (0–100). Derived from spot ETF daily net flows and streak length. Multi-day inflow streaks signal conviction. Outflows signal cooling appetite.",
-            },
-            // exchangeFlows, momentumDivergence, expertConsensus excluded — not reliable sentiment signals
-          ].map(({ label, value, tooltip }) => {
-            if (value == null) return null;
-            const color = value < 30 ? "var(--red)" : value > 70 ? "var(--green)" : "var(--amber)";
-            return (
-              <div
-                key={label}
-                className="flex items-center justify-between py-1.5"
-                style={{ borderBottom: "1px solid var(--border-subtle)" }}
-              >
-                <Tooltip content={tooltip} side="right">
-                  <span
-                    className="inline-flex cursor-default items-center gap-1 text-xs"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {label}
-                    <InfoCircledIcon />
-                  </span>
-                </Tooltip>
-                <span className="font-mono-jb text-xs font-medium tabular-nums" style={{ color }}>
-                  {Math.round(value)}
-                </span>
               </div>
             );
           })}
