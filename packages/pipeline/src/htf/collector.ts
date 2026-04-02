@@ -16,8 +16,8 @@ const BINANCE_SPOT    = "https://api.binance.com";
 const BINANCE_FUTURES = "https://fapi.binance.com";
 
 const TTL = {
-  H4:    1  * 60 * 60 * 1000,  // 1h — new 4h candle every 4h, refresh hourly
-  DAILY: 4  * 60 * 60 * 1000,  // 4h — new daily candle once/day
+  H4:    5 * 60 * 1000,  // 5 min
+  DAILY: 5 * 60 * 1000,  // 5 min
 } as const;
 
 // Binance kline tuple indices

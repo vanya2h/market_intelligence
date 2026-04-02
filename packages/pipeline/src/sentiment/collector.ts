@@ -28,8 +28,7 @@ import type { ExchangeFlowsState } from "../exchange_flows/types.js";
 import fs from "node:fs";
 import path from "node:path";
 
-// Sentiment data updates throughout the day — 2h TTL balances freshness vs rate limits
-const TTL_CONSENSUS = 2 * 60 * 60 * 1000;
+const TTL_CONSENSUS = 5 * 60 * 1000;
 
 // ─── unbias API ──────────────────────────────────────────────────────────────
 

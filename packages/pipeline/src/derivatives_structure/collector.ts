@@ -17,9 +17,9 @@ const BASE = "https://open-api-v4.coinglass.com";
 // ─── TTLs ─────────────────────────────────────────────────────────────────────
 
 const TTL = {
-  CURRENT:     5 * 60 * 1000,        //  5 min — live rates
-  HISTORY_4H:  4 * 60 * 60 * 1000,   //  4h    — aligns with 4h candle close
-  HISTORY_8H:  8 * 60 * 60 * 1000,   //  8h    — aligns with 8h candle / funding settlement
+  CURRENT:    5 * 60 * 1000,  //  5 min
+  HISTORY_4H: 5 * 60 * 1000,  //  5 min
+  HISTORY_8H: 5 * 60 * 1000,  //  5 min
 } as const;
 
 // ─── HTTP helper ─────────────────────────────────────────────────────────────

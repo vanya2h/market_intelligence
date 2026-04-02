@@ -13,8 +13,7 @@ import { getCached } from "../storage/cache.js";
 
 const BASE = "https://open-api-v4.coinglass.com";
 
-// Exchange balances update ~hourly on-chain; 1h TTL matches ETF cadence
-const TTL_HOURLY = 1 * 60 * 60 * 1000;
+const TTL_HOURLY = 5 * 60 * 1000;
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 

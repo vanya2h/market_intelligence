@@ -14,10 +14,7 @@ import { getCached } from "../storage/cache.js";
 
 const BASE = "https://open-api-v4.coinglass.com";
 
-// ETF flow data trickles in throughout the US trading day (individual fund
-// reports arrive at different times).  A shorter TTL ensures we pick up
-// partial-day updates instead of showing stale/zero values for the latest day.
-const TTL_DAILY = 1 * 60 * 60 * 1000;
+const TTL_DAILY = 5 * 60 * 1000;
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
