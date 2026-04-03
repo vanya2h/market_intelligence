@@ -114,7 +114,7 @@ Captures what's happening to positioning. Evaluated in strict priority order:
 - OI percentile(1m) 30–70 → `OI_NORMAL`
 - OI percentile(1m) < 30 → `DEPRESSED`
 
-**Source:** CoinGlass API v4 — funding rates (current + 30d history at 8h resolution), OI history (30d at 4h resolution), aggregated liquidation history (90d at 8h resolution), Coinbase premium index (30d at 4h resolution)
+**Source:** CoinGlass API v4 — funding rates (OI-weighted across Binance, OKX, Bybit, dYdX, Hyperliquid; falls back to median if OI data unavailable), funding history (30d at 8h resolution via Binance), per-exchange OI (current snapshot for weighting), OI history (30d at 4h resolution via Binance), aggregated liquidation history (90d at 8h resolution), Coinbase premium index (30d at 4h resolution)
 
 **Source (planned, not yet implemented):** Hydromancer Reservoir — wallet-level Hyperliquid position snapshots, tick-level fills and liquidations, leverage distribution. Would enrich CoinGlass aggregates with granular on-chain data.
 

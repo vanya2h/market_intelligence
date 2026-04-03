@@ -100,7 +100,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "Where does the data come from?",
-        a: "Four sources. CoinGlass API provides derivatives data (funding rates at 8-hour resolution over 30 days, open interest at 4-hour resolution over 30 days, liquidation volumes at 8-hour resolution over 90 days, Coinbase premium), ETF flow data (daily net flows, GBTC premium), and exchange balance data (historical balances per exchange with 1d/7d/30d changes). Binance Spot provides 4H and daily OHLCV candles (300 4H, 104 daily) for technical indicators. Binance Futures provides 4H candles for CVD analysis. The Unbias API provides accuracy-weighted analyst consensus (currently collecting baseline data).",
+        a: "Four sources. CoinGlass API provides derivatives data (funding rate OI-weighted across Binance, OKX, Bybit, dYdX, and Hyperliquid; 30-day funding history at 8-hour resolution via Binance; open interest at 4-hour resolution over 30 days; liquidation volumes at 8-hour resolution over 90 days; Coinbase premium), ETF flow data (daily net flows, GBTC premium), and exchange balance data (historical balances per exchange with 1d/7d/30d changes). Binance Spot provides 4H and daily OHLCV candles (300 4H, 104 daily) for technical indicators. Binance Futures provides 4H candles for CVD analysis. The Unbias API provides accuracy-weighted analyst consensus (currently collecting baseline data).",
       },
       {
         q: "How is the Positioning score calculated?",
