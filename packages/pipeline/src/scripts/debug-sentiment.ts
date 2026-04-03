@@ -146,41 +146,6 @@ async function main() {
     console.log(`  ⚠ HTF data unavailable — using neutral (50)`);
   }
 
-  // ─── Momentum Divergence (10%) ───
-  console.log("\n─── Momentum Divergence (10%) ────────────────────");
-  console.log(`  Score: ${bar(m.components.momentumDivergence)}`);
-  if (cd.htf) {
-    const h = cd.htf;
-    let score = 50;
-    const parts: string[] = [];
-    if (h.priceVsSma50Pct > 2 && h.dailyRsi < 50) {
-      const adj = Math.min(20, (h.priceVsSma50Pct - 2) * 3);
-      score -= adj;
-      parts.push(`price-RSI bearish div: -${adj.toFixed(1)}`);
-    } else if (h.priceVsSma50Pct < -2 && h.dailyRsi > 50) {
-      const adj = Math.min(20, (-h.priceVsSma50Pct - 2) * 3);
-      score += adj;
-      parts.push(`price-RSI bullish div: +${adj.toFixed(1)}`);
-    } else {
-      parts.push("no price-RSI divergence");
-    }
-    if (h.dailyRsi > 70) { score -= 10; parts.push("RSI overbought: -10"); }
-    else if (h.dailyRsi < 30) { score += 10; parts.push("RSI oversold: +10"); }
-    if (h.cvdDivergence === "BULLISH") { score += 20; parts.push("CVD bullish: +20"); }
-    else if (h.cvdDivergence === "BEARISH") { score -= 20; parts.push("CVD bearish: -20"); }
-    else { parts.push(`CVD: ${h.cvdDivergence}`); }
-
-    console.log(`  Inputs:`);
-    console.log(`    Price vs SMA-50       : ${h.priceVsSma50Pct.toFixed(2)}%`);
-    console.log(`    Daily RSI             : ${h.dailyRsi.toFixed(1)}`);
-    console.log(`    4h RSI                : ${h.h4Rsi.toFixed(1)}`);
-    console.log(`    CVD divergence        : ${h.cvdDivergence}`);
-    console.log(`  Adjustments:`);
-    for (const p of parts) console.log(`    ${p}`);
-  } else {
-    console.log(`  ⚠ HTF data unavailable — using neutral (50)`);
-  }
-
   // ─── ATR Volatility (informational — not in composite) ───
   console.log("\n─── ATR Volatility (not in composite) ────────────");
   if (cd.htf) {
@@ -212,11 +177,10 @@ async function main() {
   // ─── Weighted contribution table ───
   console.log("\n─── Weighted contributions ───────────────────────");
   const weights = {
-    positioning: 0.375,
-    institutionalFlows: 0.20,
-    exchangeFlows: 0.175,
-    trend: 0.15,
-    momentumDivergence: 0.10,
+    positioning: 0.50,
+    institutionalFlows: 0.30,
+    exchangeFlows: 0,
+    trend: 0.20,
     expertConsensus: 0,
   };
   const components = [
@@ -224,7 +188,6 @@ async function main() {
     ["Inst. Flows", m.components.institutionalFlows, weights.institutionalFlows],
     ["Exch. Flows", m.components.exchangeFlows, weights.exchangeFlows],
     ["Trend", m.components.trend, weights.trend],
-    ["Mom. Divergence", m.components.momentumDivergence, weights.momentumDivergence],
     ["Expert Consensus", m.components.expertConsensus, weights.expertConsensus],
   ] as const;
 

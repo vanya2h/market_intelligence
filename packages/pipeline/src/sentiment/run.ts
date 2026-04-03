@@ -119,7 +119,6 @@ function printBrief(ctx: SentimentContext, interpretation: string): void {
   const pad = (s: string) => s.padEnd(16);
   console.log(`  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(37.5%)")}`);
   console.log(`  ${chalk.dim(pad("Trend"))} ${componentBar(c.trend)} ${chalk.white(c.trend.toFixed(0).padStart(3))}  ${chalk.dim("(15%)")}`);
-  console.log(`  ${chalk.dim(pad("Mom. Diverg."))} ${componentBar(c.momentumDivergence)} ${chalk.white(c.momentumDivergence.toFixed(0).padStart(3))}  ${chalk.dim("(10%)")}`);
   console.log(`  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(20%)")}`);
   // Expert consensus excluded while collecting more data
   // console.log(`  ${chalk.dim(pad("Expert Consns"))} ${componentBar(c.expertConsensus)} ${chalk.white(c.expertConsensus.toFixed(0).padStart(3))}  ${chalk.dim("(25%)")}`);

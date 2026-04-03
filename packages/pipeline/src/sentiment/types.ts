@@ -73,7 +73,6 @@ export interface CrossDimensionInputs {
 export interface FearGreedComponents {
   positioning: number;        // from derivatives: funding, L/S, OI
   trend: number;              // from HTF: price vs SMAs, RSI, structure
-  momentumDivergence: number; // from HTF: price-RSI divergence + CVD divergence
   institutionalFlows: number; // from ETFs: flow streaks, magnitude
   exchangeFlows: number;      // from exchange flows: on-chain supply pressure
   expertConsensus: number;    // from unbias: consensus index, z-score

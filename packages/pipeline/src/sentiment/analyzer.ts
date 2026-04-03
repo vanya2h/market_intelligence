@@ -10,8 +10,7 @@
  *   Institutional flows    30%      Dim 03 (ETF flows)
  *   Trend                  20%      Dim 07 (HTF technicals)
  *
- * Removed from composite (still computed for LLM context):
- *   - Momentum divergence: not a reliable sentiment signal
+ * Removed from composite:
  *   - Exchange flows: not a reliable sentiment signal
  *   - Expert consensus: disabled while collecting delta-based data
  *
@@ -101,44 +100,6 @@ function scoreTrend(h: CrossDimensionInputs["htf"]): number {
   else if (h.structure === "LH_HL") structureScore = 45; // contracting
 
   return clamp(sma200Score * 0.3 + sma50Score * 0.2 + rsiScore * 0.3 + structureScore * 0.2);
-}
-
-/**
- * Momentum divergence score — explicitly reversal-predictive.
- *
- * Detects when price is trending but internal momentum disagrees:
- *   - Price rising + RSI falling → bearish divergence (distribution)
- *   - Price falling + RSI rising → bullish divergence (accumulation)
- *   - CVD divergence amplifies the signal
- *
- * Score > 50 = bullish reversal pressure, < 50 = bearish reversal pressure.
- * Near 50 = no divergence detected.
- */
-function scoreMomentumDivergence(h: CrossDimensionInputs["htf"]): number {
-  if (!h) return 50;
-
-  let score = 50;
-
-  // Price-RSI divergence: compare daily RSI direction vs price direction
-  // Price rising (above SMA50) but RSI cooling → bearish divergence
-  // Price falling (below SMA50) but RSI warming → bullish divergence
-  if (h.priceVsSma50Pct > 2 && h.dailyRsi < 50) {
-    // Price elevated but RSI weak — bearish divergence
-    score -= Math.min(20, (h.priceVsSma50Pct - 2) * 3);
-  } else if (h.priceVsSma50Pct < -2 && h.dailyRsi > 50) {
-    // Price depressed but RSI warming — bullish divergence
-    score += Math.min(20, (-h.priceVsSma50Pct - 2) * 3);
-  }
-
-  // RSI extremes amplify: overbought RSI in uptrend = bearish pressure
-  if (h.dailyRsi > 70) score -= 10;
-  else if (h.dailyRsi < 30) score += 10;
-
-  // CVD divergence is the strongest reversal signal
-  if (h.cvdDivergence === "BULLISH") score += 20;   // accumulation into weakness
-  else if (h.cvdDivergence === "BEARISH") score -= 20; // distribution into strength
-
-  return clamp(score);
 }
 
 /**
@@ -237,12 +198,11 @@ function scoreExchangeFlows(ef: CrossDimensionInputs["exchangeFlows"]): number {
 
 // ─── Composite F&G ───────────────────────────────────────────────────────────
 
-// Three core components — momentum divergence and exchange flows removed (unreliable sentiment signals).
+// Three core components — exchange flows removed (unreliable sentiment signal).
 // Expert consensus still disabled while collecting delta-based data.
 const WEIGHTS = {
   positioning: 0.50,
   trend: 0.20,
-  momentumDivergence: 0,
   institutionalFlows: 0.30,
   exchangeFlows: 0,
   expertConsensus: 0,
@@ -252,7 +212,6 @@ function computeComposite(components: FearGreedComponents): number {
   const raw =
     components.positioning * WEIGHTS.positioning +
     components.trend * WEIGHTS.trend +
-    components.momentumDivergence * WEIGHTS.momentumDivergence +
     components.institutionalFlows * WEIGHTS.institutionalFlows +
     components.exchangeFlows * WEIGHTS.exchangeFlows +
     components.expertConsensus * WEIGHTS.expertConsensus;
@@ -286,7 +245,6 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
   const components: FearGreedComponents = {
     positioning: scorePositioning(cd.derivatives),
     trend: scoreTrend(cd.htf),
-    momentumDivergence: scoreMomentumDivergence(cd.htf),
     institutionalFlows: scoreInstitutionalFlows(cd.etfs),
     exchangeFlows: scoreExchangeFlows(cd.exchangeFlows),
     expertConsensus: expert.score,
