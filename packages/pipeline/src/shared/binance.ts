@@ -7,6 +7,7 @@
 
 import type { $Enums } from "../generated/prisma/client.js";
 import type { Candle } from "../htf/types.js";
+import { getCached } from "../storage/cache.js";
 
 const BINANCE_SPOT = "https://api.binance.com";
 
@@ -36,9 +37,15 @@ function parseKlines(raw: BinanceKline[]): Candle[] {
   }));
 }
 
+// Cache 1000 most recent candles per asset+interval for 5 minutes.
+// All callers (including concurrent outcome checker runs) share one entry.
+const CANDLES_TTL_MS = 5 * 60 * 1000;
+const CANDLES_FETCH_LIMIT = 1000;
+
 /**
  * Fetch spot candles from Binance starting at a given timestamp.
- * Returns up to `limit` candles (max 1000 per Binance API).
+ * Candles are cached per asset+interval; startTime filters from the cached set.
+ * Returns up to `limit` candles after startTime (default 500).
  */
 export async function fetchCandlesSince(
   asset: $Enums.Asset,
@@ -46,17 +53,21 @@ export async function fetchCandlesSince(
   startTime: number,
   limit = 500,
 ): Promise<Candle[]> {
-  const url = new URL(`${BINANCE_SPOT}/api/v3/klines`);
-  url.searchParams.set("symbol", binanceSymbol(asset));
-  url.searchParams.set("interval", interval);
-  url.searchParams.set("startTime", String(startTime));
-  url.searchParams.set("limit", String(Math.min(limit, 1000)));
+  const cacheKey = `binance:klines:${asset.toLowerCase()}:${interval}`;
 
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    throw new Error(`Binance klines ${interval} → HTTP ${res.status}: ${await res.text()}`);
-  }
+  const all = await getCached(cacheKey, CANDLES_TTL_MS, async () => {
+    const url = new URL(`${BINANCE_SPOT}/api/v3/klines`);
+    url.searchParams.set("symbol", binanceSymbol(asset));
+    url.searchParams.set("interval", interval);
+    url.searchParams.set("limit", String(CANDLES_FETCH_LIMIT));
 
-  const raw = (await res.json()) as BinanceKline[];
-  return parseKlines(raw);
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      throw new Error(`Binance klines ${interval} → HTTP ${res.status}: ${await res.text()}`);
+    }
+
+    return parseKlines((await res.json()) as BinanceKline[]);
+  });
+
+  return all.filter((c) => c.time >= startTime).slice(0, limit);
 }
