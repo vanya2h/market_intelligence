@@ -16,11 +16,7 @@ import path from "node:path";
 import chalk from "chalk";
 import { collect } from "../htf/collector.js";
 import { analyze } from "../htf/analyzer.js";
-import type {
-  HtfContext,
-  HtfState,
-  VolumeProfileResult,
-} from "../htf/types.js";
+import type { HtfContext, HtfState, VolumeProfileResult } from "../htf/types.js";
 
 // ─── State loader ─────────────────────────────────────────────────────────────
 
@@ -71,15 +67,16 @@ function printRegimeTrace(ctx: HtfContext): void {
   const aboveSma200 = ma.priceVsSma200Pct > 0;
   const aboveSma50 = ma.priceVsSma50Pct > 0;
 
-  const check = (cond: boolean, label: string) =>
-    `${cond ? chalk.green("✓") : chalk.dim("✗")}  ${label}`;
+  const check = (cond: boolean, label: string) => `${cond ? chalk.green("✓") : chalk.dim("✗")}  ${label}`;
 
   console.log(`  ${check(aboveSma200, `price > 200 DMA  (${fmtPct(ma.priceVsSma200Pct)})`)} `);
   console.log(`  ${check(aboveSma50, `price > 50 DMA   (${fmtPct(ma.priceVsSma50Pct)})`)} `);
   console.log(`  ${check(rsi.daily > 70, `daily RSI > 70   (${rsi.daily.toFixed(1)})`)} `);
   console.log(`  ${check(rsi.daily < 30, `daily RSI < 30   (${rsi.daily.toFixed(1)})`)} `);
   console.log(`  ${check(structure === "LH_LL", `structure = LH_LL  (${structure})`)} `);
-  console.log(`  ${check(cvd.futures.long.regime === "RISING", `futures CVD long = RISING  (${cvd.futures.long.regime})`)} `);
+  console.log(
+    `  ${check(cvd.futures.long.regime === "RISING", `futures CVD long = RISING  (${cvd.futures.long.regime})`)} `,
+  );
   console.log(`  ${check(cvd.futures.long.regime === "DECLINING", `futures CVD long = DECLINING`)} `);
 
   console.log();
@@ -195,19 +192,52 @@ async function main() {
   row("Since", chalk.dim(ctx.since));
   row("Duration", chalk.white(`${ctx.durationDays}d`));
 
+  // ── Bias scores ─────────────────────────────────────────────────────────────
+  hdr("Bias scores (continuous)");
+  const b = ctx.bias;
+  const fmtBias = (v: number) => {
+    const s = (v >= 0 ? "+" : "") + v.toFixed(3);
+    return v > 0.1 ? chalk.green(s) : v < -0.1 ? chalk.red(s) : chalk.dim(s);
+  };
+  const bar = (v: number, width = 20) => {
+    const mid = Math.floor(width / 2);
+    const filled = Math.round(Math.abs(v) * mid);
+    const chars = Array(width).fill("·");
+    if (v > 0) for (let i = mid; i < mid + filled && i < width; i++) chars[i] = "█";
+    else for (let i = mid - filled; i < mid; i++) chars[i] = "█";
+    chars[mid] = "│";
+    const s = chars.join("");
+    return v > 0.1 ? chalk.green(s) : v < -0.1 ? chalk.red(s) : chalk.dim(s);
+  };
+  row("Trend (MA pull)", `${fmtBias(b.trend)}  ${bar(b.trend)}`);
+  row("Momentum (RSI)", `${fmtBias(b.momentum)}  ${bar(b.momentum)}`);
+  row("Flow (CVD)", `${fmtBias(b.flow)}  ${bar(b.flow)}`);
+  row(
+    "Compression",
+    `${chalk.white(b.compression.toFixed(3))}  ${chalk.yellow("█".repeat(Math.round(b.compression * 20)).padEnd(20, "·"))}`,
+  );
+  row("VP gravity", `${fmtBias(b.vpGravity)}  ${bar(b.vpGravity)}`);
+  console.log();
+  const compColor = b.composite > 0.1 ? chalk.green.bold : b.composite < -0.1 ? chalk.red.bold : chalk.yellow.bold;
+  row("COMPOSITE", `${compColor((b.composite >= 0 ? "+" : "") + b.composite.toFixed(3))}  ${bar(b.composite, 30)}`);
+
   // ── Price & MAs ───────────────────────────────────────────────────────────────
   hdr("Price & Moving Averages");
   row("Price", chalk.white.bold(fmt$(ctx.price)));
   row("SMA 50 (4h)", `${chalk.white(fmt$(ctx.ma.sma50))}  ${fmtPct(ctx.ma.priceVsSma50Pct)}`);
   row("SMA 200 (4h)", `${chalk.white(fmt$(ctx.ma.sma200))}  ${fmtPct(ctx.ma.priceVsSma200Pct)}`);
-  row("MA cross (current)", ctx.ma.crossType === "GOLDEN"
-    ? chalk.green.bold(ctx.ma.crossType)
-    : ctx.ma.crossType === "DEATH"
-      ? chalk.red.bold(ctx.ma.crossType)
-      : chalk.dim(ctx.ma.crossType));
-  row("MA cross (recent)", ctx.ma.recentCross !== "NONE"
-    ? chalk.yellow.bold(`${ctx.ma.recentCross} (last 10 candles)`)
-    : chalk.dim("none"));
+  row(
+    "MA cross (current)",
+    ctx.ma.crossType === "GOLDEN"
+      ? chalk.green.bold(ctx.ma.crossType)
+      : ctx.ma.crossType === "DEATH"
+        ? chalk.red.bold(ctx.ma.crossType)
+        : chalk.dim(ctx.ma.crossType),
+  );
+  row(
+    "MA cross (recent)",
+    ctx.ma.recentCross !== "NONE" ? chalk.yellow.bold(`${ctx.ma.recentCross} (last 10 candles)`) : chalk.dim("none"),
+  );
 
   // ── RSI ───────────────────────────────────────────────────────────────────────
   hdr("RSI");
@@ -216,43 +246,55 @@ async function main() {
 
   // ── Market Structure ──────────────────────────────────────────────────────────
   hdr("Market Structure (daily pivots)");
-  const structColor = ctx.structure === "HH_HL"
-    ? chalk.green.bold
-    : ctx.structure === "LH_LL"
-      ? chalk.red.bold
-      : chalk.yellow;
+  const structColor =
+    ctx.structure === "HH_HL" ? chalk.green.bold : ctx.structure === "LH_LL" ? chalk.red.bold : chalk.yellow;
   row("Structure", structColor(ctx.structure.replace("_", "/")));
 
   // ── CVD ───────────────────────────────────────────────────────────────────────
   hdr("CVD — Futures (4h)");
   const fc = ctx.cvd.futures;
   row("Cumulative delta (long)", chalk.white(fc.value.toFixed(2)));
-  row("Short window (20c)", `regime=${chalk.bold(fc.short.regime)}  slope=${fc.short.slope.toFixed(4)}  R²=${fc.short.r2.toFixed(3)}`);
-  row("Long window (75c)", `regime=${chalk.bold(fc.long.regime)}  slope=${fc.long.slope.toFixed(4)}  R²=${fc.long.r2.toFixed(3)}`);
-  row("Divergence", fc.divergence !== "NONE"
-    ? chalk.yellow.bold(`${fc.divergence} (${fc.divergenceMechanism})`)
-    : chalk.dim("none"));
+  row(
+    "Short window (20c)",
+    `regime=${chalk.bold(fc.short.regime)}  slope=${fc.short.slope.toFixed(4)}  R²=${fc.short.r2.toFixed(3)}`,
+  );
+  row(
+    "Long window (75c)",
+    `regime=${chalk.bold(fc.long.regime)}  slope=${fc.long.slope.toFixed(4)}  R²=${fc.long.r2.toFixed(3)}`,
+  );
+  row(
+    "Divergence",
+    fc.divergence !== "NONE" ? chalk.yellow.bold(`${fc.divergence} (${fc.divergenceMechanism})`) : chalk.dim("none"),
+  );
 
   hdr("CVD — Spot (4h)");
   const sc = ctx.cvd.spot;
   row("Cumulative delta (long)", chalk.white(sc.value.toFixed(2)));
-  row("Short window (20c)", `regime=${chalk.bold(sc.short.regime)}  slope=${sc.short.slope.toFixed(4)}  R²=${sc.short.r2.toFixed(3)}`);
-  row("Long window (75c)", `regime=${chalk.bold(sc.long.regime)}  slope=${sc.long.slope.toFixed(4)}  R²=${sc.long.r2.toFixed(3)}`);
-  row("Divergence", sc.divergence !== "NONE"
-    ? chalk.yellow.bold(`${sc.divergence} (${sc.divergenceMechanism})`)
-    : chalk.dim("none"));
+  row(
+    "Short window (20c)",
+    `regime=${chalk.bold(sc.short.regime)}  slope=${sc.short.slope.toFixed(4)}  R²=${sc.short.r2.toFixed(3)}`,
+  );
+  row(
+    "Long window (75c)",
+    `regime=${chalk.bold(sc.long.regime)}  slope=${sc.long.slope.toFixed(4)}  R²=${sc.long.r2.toFixed(3)}`,
+  );
+  row(
+    "Divergence",
+    sc.divergence !== "NONE" ? chalk.yellow.bold(`${sc.divergence} (${sc.divergenceMechanism})`) : chalk.dim("none"),
+  );
 
   hdr("CVD — Spot vs Futures");
   const sfDiv = ctx.cvd.spotFuturesDivergence;
-  const sfColor = sfDiv === "CONFIRMED_BUYING"
-    ? chalk.green.bold
-    : sfDiv === "CONFIRMED_SELLING"
-      ? chalk.red.bold
-      : sfDiv === "SUSPECT_BOUNCE"
-        ? chalk.yellow.bold
-        : sfDiv === "SPOT_LEADS"
-          ? chalk.cyan
-          : chalk.dim;
+  const sfColor =
+    sfDiv === "CONFIRMED_BUYING"
+      ? chalk.green.bold
+      : sfDiv === "CONFIRMED_SELLING"
+        ? chalk.red.bold
+        : sfDiv === "SUSPECT_BOUNCE"
+          ? chalk.yellow.bold
+          : sfDiv === "SPOT_LEADS"
+            ? chalk.cyan
+            : chalk.dim;
   row("Signal", sfColor(sfDiv));
 
   // ── VWAP ──────────────────────────────────────────────────────────────────────
@@ -266,8 +308,14 @@ async function main() {
   hdr("Volatility / ATR");
   const vol = ctx.volatility;
   row("ATR-14 (4h)", chalk.white(fmt$(vol.atr)));
-  row("ATR percentile (50c)", `${chalk.white(vol.atrPercentile.toFixed(0))}th  ${vol.atrPercentile <= 30 ? chalk.yellow("(compressed)") : chalk.dim("(normal)")}`);
-  row("ATR ratio (cur/mean)", `${chalk.white(vol.atrRatio.toFixed(3))}  ${vol.atrRatio < 0.7 ? chalk.yellow("< 0.7 → compressed") : chalk.dim("")}`);
+  row(
+    "ATR percentile (50c)",
+    `${chalk.white(vol.atrPercentile.toFixed(0))}th  ${vol.atrPercentile <= 30 ? chalk.yellow("(compressed)") : chalk.dim("(normal)")}`,
+  );
+  row(
+    "ATR ratio (cur/mean)",
+    `${chalk.white(vol.atrRatio.toFixed(3))}  ${vol.atrRatio < 0.7 ? chalk.yellow("< 0.7 → compressed") : chalk.dim("")}`,
+  );
   row("Recent displacement", `${chalk.white(vol.recentDisplacement.toFixed(2))}× ATR`);
   row("Coiled spring", bool(vol.compressionAfterMove));
 
@@ -279,37 +327,53 @@ async function main() {
   row("POC", `${chalk.yellow.bold(fmt$(vp.profile.poc))}  (${vp.profile.pocVolumePct.toFixed(1)}% of volume)`);
   row("VA High", chalk.white(fmt$(vp.profile.vaHigh)));
   row("VA Low", chalk.white(fmt$(vp.profile.vaLow)));
-  row("VA width", `${chalk.white(fmt$(vp.profile.vaHigh - vp.profile.vaLow))}  (${(((vp.profile.vaHigh - vp.profile.vaLow) / vp.profile.poc) * 100).toFixed(2)}%)`);
+  row(
+    "VA width",
+    `${chalk.white(fmt$(vp.profile.vaHigh - vp.profile.vaLow))}  (${(((vp.profile.vaHigh - vp.profile.vaLow) / vp.profile.poc) * 100).toFixed(2)}%)`,
+  );
   row("Price vs POC", fmtPct(vp.profile.priceVsPocPct));
-  row("Price position", vp.profile.pricePosition === "ABOVE_VA"
-    ? chalk.green(vp.profile.pricePosition)
-    : vp.profile.pricePosition === "BELOW_VA"
-      ? chalk.red(vp.profile.pricePosition)
-      : chalk.white(vp.profile.pricePosition));
-  row("HVNs (magnets)", vp.profile.hvns.length > 0
-    ? vp.profile.hvns.map((h) => chalk.green(fmt$(h))).join("  ")
-    : chalk.dim("(none)"));
-  row("LVNs (accel zones)", vp.profile.lvns.length > 0
-    ? vp.profile.lvns.map((l) => chalk.cyan(fmt$(l))).join("  ")
-    : chalk.dim("(none)"));
+  row(
+    "Price position",
+    vp.profile.pricePosition === "ABOVE_VA"
+      ? chalk.green(vp.profile.pricePosition)
+      : vp.profile.pricePosition === "BELOW_VA"
+        ? chalk.red(vp.profile.pricePosition)
+        : chalk.white(vp.profile.pricePosition),
+  );
+  row(
+    "HVNs (magnets)",
+    vp.profile.hvns.length > 0 ? vp.profile.hvns.map((h) => chalk.green(fmt$(h))).join("  ") : chalk.dim("(none)"),
+  );
+  row(
+    "LVNs (accel zones)",
+    vp.profile.lvns.length > 0 ? vp.profile.lvns.map((l) => chalk.cyan(fmt$(l))).join("  ") : chalk.dim("(none)"),
+  );
 
   // ── Sweep Levels ──────────────────────────────────────────────────────────────
   hdr("Liquidity Sweep Levels");
   if (ctx.sweep.nearestHigh) {
     const h = ctx.sweep.nearestHigh;
-    row("Nearest high target", `${chalk.red.bold(fmt$(h.price))}  ${chalk.dim(`${h.period.toLowerCase()}  ${h.ageDays.toFixed(0)}d old  dist: ${h.distancePct.toFixed(1)}%  attr: ${h.attraction.toFixed(1)}`)}`);
+    row(
+      "Nearest high target",
+      `${chalk.red.bold(fmt$(h.price))}  ${chalk.dim(`${h.period.toLowerCase()}  ${h.ageDays.toFixed(0)}d old  dist: ${h.distancePct.toFixed(1)}%  attr: ${h.attraction.toFixed(1)}`)}`,
+    );
   } else {
     row("Nearest high target", chalk.dim("(none)"));
   }
   if (ctx.sweep.nearestLow) {
     const l = ctx.sweep.nearestLow;
-    row("Nearest low target", `${chalk.green.bold(fmt$(l.price))}  ${chalk.dim(`${l.period.toLowerCase()}  ${l.ageDays.toFixed(0)}d old  dist: ${l.distancePct.toFixed(1)}%  attr: ${l.attraction.toFixed(1)}`)}`);
+    row(
+      "Nearest low target",
+      `${chalk.green.bold(fmt$(l.price))}  ${chalk.dim(`${l.period.toLowerCase()}  ${l.ageDays.toFixed(0)}d old  dist: ${l.distancePct.toFixed(1)}%  attr: ${l.attraction.toFixed(1)}`)}`,
+    );
   } else {
     row("Nearest low target", chalk.dim("(none)"));
   }
   row("Total levels", chalk.white(String(ctx.sweep.levels.length)));
   if (ctx.sweep.levels.length > 0) {
-    console.log(`\n  ${"Dir".padEnd(4)}${"Price".padEnd(12)}${"Period".padEnd(10)}${"Age".padEnd(8)}${"Dist".padEnd(8)}Attr`);
+    console.log(
+      `\n  ${"Dir".padEnd(4)}${"Price".padEnd(12)}${"Period".padEnd(10)}${"Age".padEnd(8)}${"Dist".padEnd(8)}Attr`,
+    );
     console.log(`  ${"─".repeat(50)}`);
     for (const lvl of ctx.sweep.levels.slice(0, 8)) {
       const dir = lvl.type === "HIGH" ? chalk.red("▲") : chalk.green("▼");
@@ -322,15 +386,20 @@ async function main() {
   // ── Signal Staleness ─────────────────────────────────────────────────────────
   hdr("Signal Staleness (candles since peak)");
   const st = ctx.staleness;
-  row("RSI extreme", st.rsiExtreme !== null
-    ? `${chalk.white(String(st.rsiExtreme))} candles ago`
-    : chalk.dim("(not present)"));
-  row("CVD divergence peak", st.cvdDivergencePeak !== null
-    ? `${chalk.white(String(st.cvdDivergencePeak))} candles ago`
-    : chalk.dim("(not present)"));
-  row("Last pivot", st.lastPivot !== null
-    ? `${chalk.white(String(st.lastPivot))} candles ago`
-    : chalk.dim("(not present)"));
+  row(
+    "RSI extreme",
+    st.rsiExtreme !== null ? `${chalk.white(String(st.rsiExtreme))} candles ago` : chalk.dim("(not present)"),
+  );
+  row(
+    "CVD divergence peak",
+    st.cvdDivergencePeak !== null
+      ? `${chalk.white(String(st.cvdDivergencePeak))} candles ago`
+      : chalk.dim("(not present)"),
+  );
+  row(
+    "Last pivot",
+    st.lastPivot !== null ? `${chalk.white(String(st.lastPivot))} candles ago` : chalk.dim("(not present)"),
+  );
 
   // ── Events ───────────────────────────────────────────────────────────────────
   hdr("Events");
@@ -358,8 +427,12 @@ async function main() {
     { label: "VP VA Low", price: ctx.volumeProfile.profile.vaLow },
     ...ctx.volumeProfile.profile.hvns.map((p, i) => ({ label: `HVN ${i + 1}`, price: p })),
     ...ctx.volumeProfile.profile.lvns.map((p, i) => ({ label: `LVN ${i + 1}`, price: p })),
-    ...(ctx.sweep.nearestHigh ? [{ label: `Sweep ▲ ${ctx.sweep.nearestHigh.period.toLowerCase()}`, price: ctx.sweep.nearestHigh.price }] : []),
-    ...(ctx.sweep.nearestLow ? [{ label: `Sweep ▼ ${ctx.sweep.nearestLow.period.toLowerCase()}`, price: ctx.sweep.nearestLow.price }] : []),
+    ...(ctx.sweep.nearestHigh
+      ? [{ label: `Sweep ▲ ${ctx.sweep.nearestHigh.period.toLowerCase()}`, price: ctx.sweep.nearestHigh.price }]
+      : []),
+    ...(ctx.sweep.nearestLow
+      ? [{ label: `Sweep ▼ ${ctx.sweep.nearestLow.period.toLowerCase()}`, price: ctx.sweep.nearestLow.price }]
+      : []),
   ].sort((a, b) => b.price - a.price);
 
   for (const lvl of levels) {

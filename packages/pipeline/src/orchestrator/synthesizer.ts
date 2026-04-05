@@ -18,7 +18,7 @@
 import crypto from "node:crypto";
 import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
-import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
+import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
 import type { TradeDecision } from "./trade-idea/index.js";
 import { $Enums } from "../generated/prisma/client.js";
 import type { DeltaSummary } from "./delta.js";
@@ -74,7 +74,14 @@ export function buildPrompt(
 ): string {
   const richSection = `### Dimension Analysis
 
-${outputs.map((o) => `**${DIMENSION_LABELS[o.dimension]}** (${o.regime}): ${o.interpretation}`).join("\n\n")}`;
+${outputs.map((o) => {
+    let line = `**${DIMENSION_LABELS[o.dimension]}** (${o.regime}): ${o.interpretation}`;
+    if (o.dimension === "HTF") {
+      const b = (o as HtfOutput).context.bias;
+      line += `\n  Bias scores: trend=${b.trend.toFixed(2)}, momentum=${b.momentum.toFixed(2)}, flow=${b.flow.toFixed(2)}, compression=${b.compression.toFixed(2)}, vpGravity=${b.vpGravity.toFixed(2)}, composite=${b.composite.toFixed(2)}`;
+    }
+    return line;
+  }).join("\n\n")}`;
 
   const deltaSection =
     delta && delta.tier !== "low"

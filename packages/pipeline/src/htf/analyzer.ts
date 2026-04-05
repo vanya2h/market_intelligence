@@ -24,6 +24,7 @@ import {
   CvdRegime,
   CvdSeries,
   CvdWindow,
+  HtfBias,
   HtfContext,
   HtfEvent,
   HtfRegime,
@@ -1037,6 +1038,123 @@ function determineRegime(
   return "RANGING";
 }
 
+// ─── Continuous bias scores ──────────────────────────────────────────────────
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+const BIAS_W_TREND = 0.10;
+const BIAS_W_MOMENTUM = 0.20;
+const BIAS_W_FLOW = 0.25;
+const BIAS_W_COMPRESSION = 0.30;
+const BIAS_W_VP = 0.15;
+
+/**
+ * Compute continuous bias scores from already-computed HTF indicators.
+ *
+ * Each component is -1..+1 (positive = bullish), except compression which is
+ * 0..1 (unsigned energy). The composite is a weighted blend where compression
+ * amplifies the direction of the other signals rather than adding its own.
+ */
+function computeBias(
+  ma: MaContext,
+  rsi: RsiContext,
+  cvd: CvdContext,
+  vol: VolatilityContext,
+  vp: VolumeProfileContext | null,
+): HtfBias {
+  // 1. Trend — MA mean-reversion pull.
+  //    Below MAs = bullish pull (positive), above = bearish pull (negative).
+  //    SMA200 is the stronger structural magnet.
+  const sma50Pull = clamp(-ma.priceVsSma50Pct / 10, -1, 1) * 0.4;
+  const sma200Pull = clamp(-ma.priceVsSma200Pct / 15, -1, 1) * 0.6;
+  const trend = clamp(sma50Pull + sma200Pull, -1, 1);
+
+  // 2. Momentum — RSI distance from 50.
+  //    Oversold (RSI < 50) = bullish setup (positive). Blend 4h (70%) and daily (30%).
+  const rsiDev4h = (50 - rsi.h4) / 50;       // +1 at RSI=0, -1 at RSI=100
+  const rsiDevDaily = (50 - rsi.daily) / 50;
+  const momentum = clamp(rsiDev4h * 0.7 + rsiDevDaily * 0.3, -1, 1);
+
+  // 3. Flow — CVD order flow direction and divergence.
+  //    Futures divergence is the primary signal, spot confirms/discounts.
+  let flow = 0;
+  const { futures, spot, spotFuturesDivergence } = cvd;
+
+  if (futures.divergence !== "NONE") {
+    const sign = futures.divergence === "BULLISH" ? 1 : -1;
+    const slopeMag = clamp(Math.abs(futures.short.slope) / 0.5, 0.3, 1.0);
+    const mechMult = futures.divergenceMechanism === "ABSORPTION" ? 1.25
+      : futures.divergenceMechanism === "EXHAUSTION" ? 0.75 : 1.0;
+    const r2Conf = 0.4 + futures.short.r2 * 0.6;
+    flow += sign * 0.6 * slopeMag * mechMult * r2Conf;
+  }
+
+  if (spot.divergence !== "NONE") {
+    const sign = spot.divergence === "BULLISH" ? 1 : -1;
+    const slopeMag = clamp(Math.abs(spot.short.slope) / 0.5, 0.3, 1.0);
+    const r2Conf = 0.4 + spot.short.r2 * 0.6;
+    flow += sign * 0.4 * slopeMag * r2Conf;
+  }
+
+  // Double-divergence boost
+  if (futures.divergence !== "NONE" && spot.divergence !== "NONE" &&
+      futures.divergence === spot.divergence) {
+    const r2Boost = futures.short.r2 > 0.7 ? 1.2 : 1.0;
+    flow *= 1.4 * r2Boost;
+  }
+
+  // Spot-futures alignment modifier
+  const alignmentMult =
+    spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING" ? 1.0
+    : spotFuturesDivergence === "SPOT_LEADS" ? 0.85
+    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? 0.4
+    : 0.75;
+  flow = clamp(flow * alignmentMult, -1, 1);
+
+  // 4. Compression — volatility energy (unsigned 0..1).
+  let compression = 0;
+  if (vol.compressionAfterMove) {
+    const compressionStrength = (30 - vol.atrPercentile) / 30;
+    const displacementStrength = clamp((vol.recentDisplacement - 2) / 3, 0, 1);
+    compression = 0.5 + compressionStrength * 0.25 + displacementStrength * 0.25;
+  } else if (vol.atrRatio < 0.7) {
+    compression = 0.4 * ((0.7 - vol.atrRatio) / 0.3);
+  }
+  compression = clamp(compression, 0, 1);
+
+  // 5. VP gravity — mean-reversion pull toward POC.
+  let vpGravity = 0;
+  if (vp) {
+    const vpRaw = clamp(-vp.profile.priceVsPocPct / 10, -1, 1);
+    vpGravity = vpRaw * clamp(vp.profile.pocVolumePct / 5, 0.5, 1.5);
+    vpGravity = clamp(vpGravity, -1, 1);
+  }
+
+  // Composite: compression is unsigned — it amplifies the directional signals.
+  // First compute the directional blend without compression:
+  const directional =
+    trend * BIAS_W_TREND +
+    momentum * BIAS_W_MOMENTUM +
+    flow * BIAS_W_FLOW +
+    vpGravity * BIAS_W_VP;
+
+  // Compression scales the directional signal: 0 compression = 1× (no effect),
+  // max compression = up to 1.6× amplification.
+  const compressionMult = 1 + compression * 0.6;
+  const composite = clamp(directional * compressionMult / (1 - BIAS_W_COMPRESSION), -1, 1);
+
+  return {
+    trend: parseFloat(trend.toFixed(3)),
+    momentum: parseFloat(momentum.toFixed(3)),
+    flow: parseFloat(flow.toFixed(3)),
+    compression: parseFloat(compression.toFixed(3)),
+    vpGravity: parseFloat(vpGravity.toFixed(3)),
+    composite: parseFloat(composite.toFixed(3)),
+  };
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function analyze(
@@ -1121,6 +1239,9 @@ export function analyze(
     lastPivot: lastPivotAge,
   };
 
+  const volatility = analyzeVolatility(h4, h4Atr);
+  const volumeProfile = computeVolumeProfileContext(snapshot.futuresH4Candles, h4Atr, price);
+
   const context: HtfContext = {
     asset: snapshot.asset,
     regime,
@@ -1135,10 +1256,11 @@ export function analyze(
     structure,
     events,
     atr: h4Atr,
-    volatility: analyzeVolatility(h4, h4Atr),
-    volumeProfile: computeVolumeProfileContext(snapshot.futuresH4Candles, h4Atr, price),
+    volatility,
+    volumeProfile,
     sweep: computeSweepLevels(daily, price),
     staleness,
+    bias: computeBias(ma, rsi, cvdData, volatility, volumeProfile),
   };
 
   const nextState: HtfState = {

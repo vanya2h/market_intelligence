@@ -246,26 +246,22 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
 //     after a big move, ATR decays, then the next big move fires
 //   - Regime and market structure are complementary, not primary
 
-// Priority: compression > CVD > RSI > VP > MA displacement
-const HTF_W_VOLATILITY = 0.30;
-const HTF_W_CVD = 0.25;
-const HTF_W_RSI = 0.20;
-const HTF_W_VP = 0.15;
-const HTF_W_MA_DISPLACEMENT = 0.10;
+// Reads pre-computed bias scores from the analyzer (see HtfBias in htf/types.ts).
+// The analyzer computes direction-independent component scores once; here we just
+// scale to -100..+100 and flip for SHORT.
 
 function scoreHtf(ctx: HtfContext, direction: Direction): number {
   if (direction === "FLAT") {
-    // For FLAT: RANGING regime + RSI near 50 + no CVD divergence = supports flat
+    // FLAT scoring: low directional bias + low compression = supports flat
     let flatScore = 0;
     if (ctx.regime === "RANGING") flatScore += 30;
-    // RSI near 50 = no directional stretch = supports flat
-    const rsiNeutral = 1 - Math.abs(ctx.rsi.h4 - 50) / 50; // 0-1, 1 when RSI=50
-    flatScore += rsiNeutral * 30;
+    // Low absolute composite = no directional stretch
+    flatScore += (1 - Math.abs(ctx.bias.composite)) * 30;
     // No CVD divergence supports flat
     if (ctx.cvd.futures.divergence === "NONE") flatScore += 20;
-    // High ATR = not flat, penalize. Low ATR without displacement = genuinely quiet.
-    if (ctx.volatility.atrPercentile > 70) flatScore -= 20;
-    else if (ctx.volatility.atrPercentile < 30 && !ctx.volatility.compressionAfterMove) flatScore += 20;
+    // High compression = breakout imminent, penalize flat
+    if (ctx.bias.compression > 0.5) flatScore -= 20;
+    else if (ctx.bias.compression < 0.2) flatScore += 20;
     // Price inside Value Area + thick POC = range-bound thesis
     if (ctx.volumeProfile?.profile?.pricePosition === "INSIDE_VA" && ctx.volumeProfile.profile.pocVolumePct > 3) {
       flatScore += 25;
@@ -273,115 +269,9 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
     return clamp(flatScore, -100, 100);
   }
 
-  // 1. RSI confidence — distance from 50.
-  //    For LONG: oversold (RSI < 50) = positive. RSI=20 → strong LONG signal.
-  //    For SHORT: overbought (RSI > 50) = positive. RSI=80 → strong SHORT signal.
-  //    Use 4h RSI for entry-level signal, daily RSI for trend confirmation.
-  const rsiDeviation4h = (50 - ctx.rsi.h4) / 50; // positive when oversold (LONG-biased)
-  const rsiDeviationDaily = (50 - ctx.rsi.daily) / 50;
-  const rsiRaw = (rsiDeviation4h * 0.7 + rsiDeviationDaily * 0.3) * 100;
-
-  // 2. CVD divergence — magnitude-based using slope, R², mechanism, and spot/futures alignment
-  let cvdScore = 0;
-  const { futures, spot, spotFuturesDivergence } = ctx.cvd;
-
-  // Futures CVD: slope magnitude scales the base, R² scales confidence
-  if (futures.divergence !== "NONE") {
-    const sign = futures.divergence === "BULLISH" ? 1 : -1;
-    const slopeMag = clamp(Math.abs(futures.short.slope) / 0.5, 0.3, 1.0);
-    const mechMult = futures.divergenceMechanism === "ABSORPTION" ? 1.25
-      : futures.divergenceMechanism === "EXHAUSTION" ? 0.75 : 1.0;
-    const r2Conf = 0.4 + futures.short.r2 * 0.6;
-    cvdScore += sign * 60 * slopeMag * mechMult * r2Conf;
-  }
-
-  // Spot CVD: same pattern, lower base
-  if (spot.divergence !== "NONE") {
-    const sign = spot.divergence === "BULLISH" ? 1 : -1;
-    const slopeMag = clamp(Math.abs(spot.short.slope) / 0.5, 0.3, 1.0);
-    const r2Conf = 0.4 + spot.short.r2 * 0.6;
-    cvdScore += sign * 40 * slopeMag * r2Conf;
-  }
-
-  // Double-divergence multiplier: when both futures and spot independently show
-  // the same divergence direction, the signal is confirmed across both markets.
-  // Extra boost when futures R² > 0.7 — high-confidence trend fit.
-  const bothDivergeAgree =
-    futures.divergence !== "NONE" &&
-    spot.divergence !== "NONE" &&
-    futures.divergence === spot.divergence;
-  if (bothDivergeAgree) {
-    const r2Boost = futures.short.r2 > 0.7 ? 1.2 : 1.0;
-    cvdScore *= 1.4 * r2Boost;
-  }
-
-  // Spot-futures alignment modifier — direction-aware.
-  // SUSPECT_BOUNCE (futures CVD rising, spot flat/falling) is a SHORT confirmation:
-  // the bounce is short-covering with no real demand beneath it. Don't discount
-  // SHORT conviction when this pattern is present; heavily discount LONG entries.
-  const alignmentMult =
-    spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING" ? 1.0
-    : spotFuturesDivergence === "SPOT_LEADS" ? 0.85
-    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? (direction === "SHORT" ? 1.0 : 0.4)
-    : 0.75;
-  cvdScore *= alignmentMult;
-
-  // 3. Volatility compression — "coiled spring" after big move.
-  //    Doesn't pick direction, but amplifies directional conviction.
-  //    compressionAfterMove = ATR compressed (bottom 30th pctl) + recent big displacement.
-  //    When the spring is coiled, the next directional move is high-probability.
-  let volScore = 0;
-  const vol = ctx.volatility;
-  if (vol.compressionAfterMove) {
-    // Strong coiled spring — big boost in the direction other signals point
-    // Scale by how compressed (lower percentile = tighter spring)
-    const compressionStrength = (30 - vol.atrPercentile) / 30; // 0-1
-    // Scale by displacement magnitude (bigger prior move = more energy stored)
-    const displacementStrength = clamp((vol.recentDisplacement - 2) / 3, 0, 1); // 2-5 ATR → 0-1
-    volScore = 100 * (0.5 + compressionStrength * 0.25 + displacementStrength * 0.25);
-  } else if (vol.atrRatio < 0.7) {
-    // Moderate compression without confirmed displacement — still worth something
-    volScore = 40 * ((0.7 - vol.atrRatio) / 0.3); // 0-40 as ratio drops from 0.7 to 0.4
-  } else if (vol.atrPercentile > 80) {
-    // High volatility — move is already happening, less edge for new entry
-    volScore = -30;
-  }
-  // volScore is unsigned (conviction amplifier) — signs it in the direction of other signals
-  const otherSignalDir = rsiRaw + cvdScore;
-  if (otherSignalDir < 0) volScore = -Math.abs(volScore);
-
-  // 4. MA displacement — mean-reversion pull toward moving averages.
-  //    INVERTED from the old regime score: being BELOW the MA after a sell-off
-  //    IS the setup — further below = stronger LONG pull.
-  //    Uses both SMA50 (short-term magnet) and SMA200 (structural magnet).
-  const sma50Pull = clamp(-ctx.ma.priceVsSma50Pct / 10, -1, 1) * 40; // below=bullish, above=bearish
-  const sma200Pull = clamp(-ctx.ma.priceVsSma200Pct / 15, -1, 1) * 60; // SMA200 is stronger magnet
-  const maDisplacementScore = clamp(sma50Pull + sma200Pull, -100, 100);
-
-  // Regime score (price vs SMA200) removed: returns -17 when price is below SMA200,
-  // penalizing LONG exactly when price has been sold down. The setup IS being below.
-  // Market structure removed: LH_HL scores -10 for LONG but it's a tightening
-  // compression pattern — the textbook pre-breakout formation.
-  // Sweep proximity removed: ±15 noise, not a reversal concept.
-  // Thin ice removed: only fires for SHORT, not a reversal concept.
-
-  // 5. Volume Profile — continuous distance from POC (mean-reversion magnet)
-  //    Below POC = bullish pull, above POC = bearish pull. Scales with distance.
-  //    Confidence scaled by POC thickness (pocVolumePct / 5, clamped 0.5–1.5)
-  let vpScore = 0;
-  if (ctx.volumeProfile) {
-    const vp = ctx.volumeProfile.profile;
-    // priceVsPocPct: negative = below POC (bullish), positive = above (bearish)
-    const vpRaw = clamp(-vp.priceVsPocPct / 10, -1, 1) * 70; // -70 to +70
-    vpScore = vpRaw * clamp(vp.pocVolumePct / 5, 0.5, 1.5);
-  }
-
-  const rawScore =
-    clamp(volScore, -100, 100) * HTF_W_VOLATILITY +
-    clamp(cvdScore, -100, 100) * HTF_W_CVD +
-    rsiRaw * HTF_W_RSI +
-    clamp(vpScore, -100, 100) * HTF_W_VP +
-    maDisplacementScore * HTF_W_MA_DISPLACEMENT;
+  // Scale the composite bias (-1..+1) to conviction (-100..+100).
+  // The composite already incorporates compression as an amplifier.
+  const rawScore = ctx.bias.composite * 100;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }

@@ -209,6 +209,28 @@ export interface SweepContext {
   nearestLow: SweepLevel | null;
 }
 
+/**
+ * Continuous bias scores for HTF technical structure.
+ *
+ * Each component is a normalized value from -1 (max bearish) to +1 (max bullish).
+ * `compression` is the exception: 0 (no compression) to 1 (coiled spring) — unsigned
+ * because volatility compression amplifies the next move in either direction.
+ */
+export interface HtfBias {
+  /** MA mean-reversion pull: +1 = far below MAs (bullish pull up), -1 = far above (bearish pull down) */
+  trend: number;
+  /** RSI momentum: +1 = deeply oversold (bullish setup), -1 = overbought */
+  momentum: number;
+  /** CVD order flow: +1 = bullish divergence / rising, -1 = bearish divergence / declining */
+  flow: number;
+  /** Volatility compression energy: 0 = no compression, 1 = coiled spring. Unsigned amplifier. */
+  compression: number;
+  /** VP mean-reversion pull toward POC: +1 = below POC (bullish pull), -1 = above POC */
+  vpGravity: number;
+  /** Weighted composite: -1 (max bearish) to +1 (max bullish) */
+  composite: number;
+}
+
 // Structured context passed to the LLM agent
 export interface HtfContext {
   asset: "BTC" | "ETH";
@@ -233,6 +255,8 @@ export interface HtfContext {
   sweep: SweepContext;
   /** How fresh each key signal is (candles since peak) — null if not present */
   staleness: SignalStaleness;
+  /** Continuous bias scores — analog complement to the discrete regime label */
+  bias: HtfBias;
 }
 
 // Persisted state
