@@ -25,6 +25,7 @@
     "debug:exchange-flows": "tsx src/scripts/debug-exchange-flows.ts",
     "debug:funding": "tsx src/scripts/debug-funding-pressure.ts",
     "debug:sentiment": "tsx src/scripts/debug-sentiment.ts",
+    "debug:htf": "tsx src/scripts/debug-htf.ts",
     "debug:volatility": "tsx src/scripts/debug-volatility.ts",
     "debug:outcomes": "tsx src/scripts/debug-outcome-checker.ts",
     "debug:list-briefs": "tsx src/scripts/debug-list-briefs.bin.ts",
