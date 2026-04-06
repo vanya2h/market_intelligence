@@ -46,103 +46,96 @@ function directional(score: number, direction: Direction): number {
 }
 
 // ─── Derivatives (-100 to +100) ─────────────────────────────────────────────
-// Swing reversal logic:
-//   - Crowded positioning in opposite direction = strong agreement
-//   - Stress events (capitulation/unwinding) = mean-reversion (favors LONG)
-//   - Funding pressure extremes = crowded side paying premium
-//   - OI context amplifies or dampens conviction
+// Continuous scoring — every signal contributes, extreme events amplify.
+//   - Positioning: CROWDED states spike, OI z-score provides baseline
+//   - Stress: CAPITULATION/UNWINDING spike, liq + OI change provide baseline
+//   - Funding: sigmoid across full percentile range (no dead zone)
+//   - Coinbase premium: institutional demand proxy
 
 // Component weights
-const DERIV_W_POSITIONING = 0.4;
-const DERIV_W_STRESS = 0.25;
-const DERIV_W_FUNDING = 0.35;
+const DERIV_W_POSITIONING = 0.30;
+const DERIV_W_STRESS = 0.20;
+const DERIV_W_FUNDING = 0.30;
+const DERIV_W_CBPREMIUM = 0.20;
 
 function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number {
   if (direction === "FLAT") return 0;
 
   const { positioning, stress, signals } = ctx;
 
-  // 1. Positioning — magnitude-based using continuous metrics
+  // 1. Positioning — CROWDED states spike (60-100), continuous OI baseline otherwise.
+  //    OI z-score: depressed OI (negative z) = washed positioning = bullish setup,
+  //    elevated OI (positive z) = speculative excess = bearish pressure.
   let posScore = 0;
   switch (positioning.state) {
     case "CROWDED_SHORT": {
-      // Squeeze potential scales with funding extremity + OI pressure.
-      // fundingPct1m < 20 for CROWDED_SHORT — lower = more extreme.
-      // oiZScore30d > 0.5 = elevated OI = more fuel.
-      const fundingDepth = clamp((20 - signals.fundingPct1m) / 20, 0, 1); // 20→0, 0→1
-      const oiPressure = clamp(signals.oiZScore30d / 2, 0, 1); // 0→0, 2+→1
+      const fundingDepth = clamp((20 - signals.fundingPct1m) / 20, 0, 1);
+      const oiPressure = clamp(signals.oiZScore30d / 2, 0, 1);
       posScore = 60 + 40 * (fundingDepth * 0.6 + oiPressure * 0.4); // 60–100
       break;
     }
     case "CROWDED_LONG": {
-      // Mirror of CROWDED_SHORT. fundingPct1m > 80 — higher = more extreme.
-      const fundingDepth = clamp((signals.fundingPct1m - 80) / 20, 0, 1); // 80→0, 100→1
+      const fundingDepth = clamp((signals.fundingPct1m - 80) / 20, 0, 1);
       const oiPressure = clamp(signals.oiZScore30d / 2, 0, 1);
       posScore = -(60 + 40 * (fundingDepth * 0.6 + oiPressure * 0.4)); // -60 to -100
       break;
     }
-    // HEATING_UP removed: crowd is building but not committed yet — fires during
-    // compression and adds directional ambiguity, not reversal signal.
-    default:
-      posScore = 0;
+    default: {
+      // Continuous OI baseline: z=-2 → +40 (washed), z=+2 → -40 (excess)
+      posScore = clamp(-signals.oiZScore30d / 2, -1, 1) * 40;
+    }
   }
 
-  // 2. Stress — magnitude-based using liq percentiles + OI drop
-  //    All stress states are LONG-biased (forced selling = buy opportunity).
+  // 2. Stress — CAPITULATION/UNWINDING spike, continuous liq + OI change baseline.
+  //    All stress signals are LONG-biased (forced selling = buy opportunity).
   let stressScore = 0;
   switch (stress.state) {
     case "CAPITULATION": {
-      // Scale with liquidation intensity + OI destruction.
-      // liqPct3m threshold is 90; higher = more extreme cascade.
-      // oiChange24h threshold is -10%; larger drop = more violent.
-      const liqIntensity = clamp((signals.liqPct3m - 90) / 10, 0, 1); // 90→0, 100→1
-      const oiDrop = clamp((-signals.oiChange24h - 0.10) / 0.10, 0, 1); // -10%→0, -20%+→1
+      const liqIntensity = clamp((signals.liqPct3m - 90) / 10, 0, 1);
+      const oiDrop = clamp((-signals.oiChange24h - 0.10) / 0.10, 0, 1);
       stressScore = 70 + 30 * (liqIntensity * 0.5 + oiDrop * 0.5); // 70–100
       break;
     }
     case "UNWINDING": {
-      // Scale with liq + OI drop magnitude.
-      // liqPct1m threshold is 70; oiChange24h threshold is -5%.
-      const liqIntensity = clamp((signals.liqPct1m - 70) / 30, 0, 1); // 70→0, 100→1
-      const oiDrop = clamp((-signals.oiChange24h - 0.05) / 0.10, 0, 1); // -5%→0, -15%+→1
+      const liqIntensity = clamp((signals.liqPct1m - 70) / 30, 0, 1);
+      const oiDrop = clamp((-signals.oiChange24h - 0.05) / 0.10, 0, 1);
       stressScore = 40 + 40 * (liqIntensity * 0.5 + oiDrop * 0.5); // 40–80
       break;
     }
-    // DELEVERAGING removed: mild 10–30 pt signal, 3+ funding cycles without a
-    // real event is noise, not reversal fuel.
-    default:
-      stressScore = 0;
+    default: {
+      // Continuous baseline from liquidation intensity + OI change.
+      // liqPct1m > 50 = above-average liquidations = bullish (forced sellers).
+      // oiChange24h < 0 = deleveraging = bullish.
+      const liqBase = clamp((signals.liqPct1m - 50) / 50, -1, 1) * 25; // -25..+25
+      const oiChangeBase = clamp(-signals.oiChange24h / 0.08, -1, 1) * 20; // -20..+20
+      stressScore = liqBase + oiChangeBase;
+    }
   }
 
-  // 3. Funding pressure — continuous from percentile extremes
-  //    fundingPct1m: >80 = longs paying (bearish), <20 = shorts paying (bullish)
-  let fundingScore = 0;
+  // 3. Funding — sigmoid across full percentile range (no dead zone).
+  //    High pct = longs paying = bearish, low pct = shorts paying = bullish.
+  //    tanh scaling: 50→0, 30→-46, 70→+46, 20→-76, 80→+76, extremes→±95.
   const fp = signals.fundingPct1m;
-  if (fp > 80) {
-    fundingScore = -((fp - 80) / 20) * 100; // 80→0, 100→-100
-  } else if (fp < 20) {
-    fundingScore = ((20 - fp) / 20) * 100; // 20→0, 0→+100
-  }
+  let fundingScore = -100 * Math.tanh((fp - 50) / 20);
   // Amplify by consecutive extreme funding cycles
   if (signals.fundingPressureCycles >= 3) {
-    fundingScore *= 1 + clamp((signals.fundingPressureCycles - 3) / 5, 0, 0.5); // 3→1.0×, 8+→1.5×
+    fundingScore *= 1 + clamp((signals.fundingPressureCycles - 3) / 5, 0, 0.5);
   }
+  fundingScore = clamp(fundingScore, -100, 100);
 
-  // 4. OI context — continuous from z-score. Amplifies other signals.
-  //    High OI (positive z) = more fuel for squeeze.
-  //    Depressed OI (negative z) = less conviction, dampen signal.
-  const oiZ = signals.oiZScore30d;
-  const oiMult = clamp(1 + oiZ * 0.15, 0.7, 1.3); // z=0→1.0, z=2→1.3, z=-2→0.7
+  // 4. Coinbase premium — institutional demand proxy.
+  //    Positive premium = US buying > offshore = bullish.
+  //    Uses percentile for relative context: above 70th = strong demand, below 30th = weak.
+  const cbPctl = ctx.coinbasePremium.percentile["1m"];
+  const cbScore = 100 * Math.tanh((cbPctl - 50) / 25); // 50→0, 75→+76, 25→-76
 
   const rawScore =
     posScore * DERIV_W_POSITIONING +
     stressScore * DERIV_W_STRESS +
-    clamp(fundingScore, -100, 100) * DERIV_W_FUNDING;
+    fundingScore * DERIV_W_FUNDING +
+    cbScore * DERIV_W_CBPREMIUM;
 
-  // Apply OI multiplier and directional flip
-  const scaled = rawScore * oiMult;
-
-  return clamp(directional(scaled, direction), -100, 100);
+  return clamp(directional(rawScore, direction), -100, 100);
 }
 
 // ─── ETFs (-100 to +100) ────────────────────────────────────────────────────
@@ -175,7 +168,7 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   //    Positive sigma = inflow day, negative sigma = outflow day.
   //    Raw score is LONG-biased (positive sigma = agrees with LONG).
   //    Extra bonus when sigma contradicts the prevailing regime (reversal signal).
-  let sigmaScore = clamp(flow.todaySigma * 35, -100, 100);
+  let sigmaScore = clamp(flow.todaySigma * 50, -100, 100);
 
   // Regime-contradiction bonus: outflow regime + high positive sigma = reversal
   const regimeContradicts =
@@ -346,16 +339,25 @@ export function computeConvictionThreshold(htfCtx: HtfContext): number {
   return CONVICTION_THRESHOLD;
 }
 
+/**
+ * Power-curve conviction mapping — amplifies moderate signals.
+ * Raw 10→22, 20→35, 30→45, 50→63, 70→78, 100→100.
+ * Pushes the typical +15-25 range into +28-38 where it becomes meaningful.
+ */
+function convictionMap(raw: number): number {
+  return Math.sign(raw) * 100 * Math.pow(Math.abs(raw) / 100, 0.65);
+}
+
 export function computeConfluence(outputs: DimensionOutput[], direction: Direction): Confluence {
   const deriv = outputs.find((o) => o.dimension === "DERIVATIVES");
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");
   const ef = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
-  const derivatives = deriv ? scoreDerivatives(deriv.context, direction) : 0;
-  const etfScore = etfs ? scoreEtfs(etfs.context, direction) : 0;
-  const htfScore = htf ? scoreHtf(htf.context, direction) : 0;
-  const exchangeFlows = ef ? scoreExchangeFlows(ef.context, direction) : 0;
+  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction) : 0);
+  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0);
+  const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0);
+  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0);
 
   return {
     derivatives: Math.round(derivatives),

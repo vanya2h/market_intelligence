@@ -386,11 +386,13 @@ function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) 
     .filter(Boolean)
     .join(" · ");
 
+  const cellLabel = hasData ? q.toFixed(1) : dirLabel;
+
   return (
     <Link
       to={`/brief/${idea.briefId}`}
       title={tooltip}
-      className="relative h-7 w-7 rounded-sm flex items-center justify-center text-[0.5rem] font-mono-jb transition-transform hover:scale-125 hover:z-10"
+      className="relative h-7 w-7 rounded-sm flex items-center justify-center text-[0.4375rem] font-mono-jb transition-transform hover:scale-125 hover:z-10"
       style={{
         background: baseColor,
         border: `1px ${idea.skipped ? "dashed" : "solid"} ${borderColor}`,
@@ -401,7 +403,7 @@ function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) 
             : "var(--red)",
       }}
     >
-      {dirLabel}
+      {cellLabel}
     </Link>
   );
 }

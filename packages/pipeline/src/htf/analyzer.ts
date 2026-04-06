@@ -1221,9 +1221,9 @@ function clamp(v: number, lo: number, hi: number): number {
 
 const BIAS_W_TREND = 0.10;
 const BIAS_W_MOMENTUM = 0.20;
-const BIAS_W_FLOW = 0.25;
+const BIAS_W_FLOW = 0.20;
 const BIAS_W_COMPRESSION = 0.30;
-const BIAS_W_VP = 0.15;
+const BIAS_W_VP = 0.20;
 
 /**
  * Compute continuous bias scores from already-computed HTF indicators.
@@ -1242,15 +1242,17 @@ function computeBias(
   // 1. Trend — MA mean-reversion pull.
   //    Below MAs = bullish pull (positive), above = bearish pull (negative).
   //    SMA200 is the stronger structural magnet.
-  const sma50Pull = clamp(-ma.priceVsSma50Pct / 10, -1, 1) * 0.4;
-  const sma200Pull = clamp(-ma.priceVsSma200Pct / 15, -1, 1) * 0.6;
+  const sma50Pull = clamp(-ma.priceVsSma50Pct / 6, -1, 1) * 0.4;
+  const sma200Pull = clamp(-ma.priceVsSma200Pct / 10, -1, 1) * 0.6;
   const trend = clamp(sma50Pull + sma200Pull, -1, 1);
 
-  // 2. Momentum — RSI distance from 50.
+  // 2. Momentum — RSI distance from 50, non-linear to amplify moderate deviations.
   //    Oversold (RSI < 50) = bullish setup (positive). Blend 4h (70%) and daily (30%).
+  //    Power curve (^0.6) makes RSI 35 produce 0.50 instead of linear 0.30.
   const rsiDev4h = (50 - rsi.h4) / 50;       // +1 at RSI=0, -1 at RSI=100
   const rsiDevDaily = (50 - rsi.daily) / 50;
-  const momentum = clamp(rsiDev4h * 0.7 + rsiDevDaily * 0.3, -1, 1);
+  const rsiLinear = clamp(rsiDev4h * 0.7 + rsiDevDaily * 0.3, -1, 1);
+  const momentum = Math.sign(rsiLinear) * Math.pow(Math.abs(rsiLinear), 0.6);
 
   // 3. Flow — CVD order flow direction from swing structure + divergence boost.
   //    Base signal comes from regime direction weighted by magnitude & confidence.
@@ -1306,8 +1308,8 @@ function computeBias(
   const alignmentMult =
     spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING" ? 1.0
     : spotFuturesDivergence === "SPOT_LEADS" ? 0.85
-    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? 0.4
-    : 0.75;
+    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? 0.6
+    : 0.90;
   flow = clamp(flow * alignmentMult, -1, 1);
 
   // 4. Compression — volatility energy (unsigned 0..1).
@@ -1317,15 +1319,17 @@ function computeBias(
     const displacementStrength = clamp((vol.recentDisplacement - 2) / 3, 0, 1);
     compression = 0.5 + compressionStrength * 0.25 + displacementStrength * 0.25;
   } else if (vol.atrRatio < 0.7) {
-    compression = 0.4 * ((0.7 - vol.atrRatio) / 0.3);
+    compression = 0.6 * ((0.7 - vol.atrRatio) / 0.3);
   }
   compression = clamp(compression, 0, 1);
 
-  // 5. VP gravity — mean-reversion pull toward POC.
+  // 5. VP gravity — mean-reversion pull toward POC, non-linear.
+  //    Power curve (^0.6) amplifies moderate deviations: 3% from POC → 0.74 instead of 0.60.
   let vpGravity = 0;
   if (vp) {
-    const vpRaw = clamp(-vp.profile.priceVsPocPct / 10, -1, 1);
-    vpGravity = vpRaw * clamp(vp.profile.pocVolumePct / 5, 0.5, 1.5);
+    const vpLinear = clamp(-vp.profile.priceVsPocPct / 5, -1, 1);
+    const vpNonLinear = Math.sign(vpLinear) * Math.pow(Math.abs(vpLinear), 0.6);
+    vpGravity = vpNonLinear * clamp(vp.profile.pocVolumePct / 5, 0.5, 1.5);
     vpGravity = clamp(vpGravity, -1, 1);
   }
 
@@ -1338,8 +1342,8 @@ function computeBias(
     vpGravity * BIAS_W_VP;
 
   // Compression scales the directional signal: 0 compression = 1× (no effect),
-  // max compression = up to 1.6× amplification.
-  const compressionMult = 1 + compression * 0.6;
+  // max compression = up to 2.0× amplification.
+  const compressionMult = 1 + compression * 1.0;
   const composite = clamp(directional * compressionMult / (1 - BIAS_W_COMPRESSION), -1, 1);
 
   return {
