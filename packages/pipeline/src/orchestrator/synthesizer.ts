@@ -38,32 +38,23 @@ No HTF data available — trade idea could not be computed.`;
   if (decision.skipped) {
     const { bias } = decision;
     const gapAbs = Math.abs(bias.convictionGap);
-    const gapDir = bias.convictionGap < 0 ? "below" : "above";
     const factorsStr = bias.topFactors.length > 0
       ? bias.topFactors.map((f) => `${f.dimension} (+${f.score})`).join(", ")
       : "none — signals balanced";
-    return `### Trade Decision: SKIPPED — directional bias ${bias.lean} (${bias.strength}/100 strength)
-**Best direction:** ${decision.direction}
-**Conviction:** ${decision.confluence.total} / ${decision.threshold} (${gapAbs} pts ${gapDir} threshold)
-**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, ExchangeFlows=${decision.confluence.exchangeFlows}
-**Directional bias:** ${bias.lean} (strength ${bias.strength}/100)
-**Key bias drivers:** ${factorsStr}
-**Entry price:** $${decision.entryPrice.toFixed(2)}
-**Composite target:** $${decision.compositeTarget.toFixed(2)}
+    return `### Trade Decision: SKIPPED
+**Bias:** ${bias.lean} (${bias.strength}/100) | **Conviction:** ${decision.confluence.total}/${decision.threshold} (${gapAbs} pts short)
+**Breakdown:** Deriv=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Flows=${decision.confluence.exchangeFlows}
+**Drivers:** ${factorsStr}
+**Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)}
 
-The system identified a ${bias.lean} bias at ${bias.strength}/100 strength but conviction is insufficient to trade. Lead with what this directional lean means for price action in the near term. Then explain what would push conviction above threshold.`;
+State the directional lean and what specific catalyst would push conviction above threshold.`;
   }
-  const targetDist = Math.abs(decision.compositeTarget - decision.entryPrice);
   const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
-  return `### Trade Decision: ${decision.direction} (conviction ${decision.confluence.total}/${decision.threshold})
-**Direction:** ${decision.direction}
-**Conviction:** ${decision.confluence.total} (PASSES threshold of ${decision.threshold})
-**Confluence breakdown:** Derivatives=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, ExchangeFlows=${decision.confluence.exchangeFlows}
-**Entry price:** $${decision.entryPrice.toFixed(2)}
-**Composite target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%, $${targetDist.toFixed(0)} distance)
-**Alternatives:** ${decision.alternatives.map((a) => `${a.direction}=${a.total}`).join(", ")}
+  return `### Trade Decision: ${decision.direction} (${decision.confluence.total}/${decision.threshold})
+**Breakdown:** Deriv=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Flows=${decision.confluence.exchangeFlows}
+**Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%)
 
-Describe the trade setup: what's driving conviction in each dimension and what the key risk is.`;
+State the setup and the single biggest risk.`;
 }
 
 export function buildPrompt(
@@ -92,7 +83,16 @@ ${outputs.map((o) => {
 ### What changed since last brief
 ${delta.changeSummary}
 
-IMPORTANT: Lead your brief with what changed. The reader saw the previous brief — don't repeat unchanged context. Focus on the delta.`
+### Metric movements (prev → curr)
+${delta.dimensions
+  .flatMap((d) =>
+    d.topMovers.map(
+      (m) => `- ${DIMENSION_LABELS[d.dimension]} / ${m.label}: ${m.prev.toFixed(2)} → ${m.curr.toFixed(2)} (z=${m.zScore.toFixed(1)})`,
+    ),
+  )
+  .join("\n")}
+
+IMPORTANT: Lead with what changed. Check whether these movements confirm or invalidate the catalysts from the prior brief. The reader already has context — focus on the delta.`
       : "";
 
   return `Write a Telegram-friendly market brief for ${asset}.
@@ -110,34 +110,29 @@ ${buildTradeSection(decision)}`
 }
 
 export function buildSystemPrompt(decision: TradeDecision | null, isDelta: boolean = false): string {
-  const tradeSection = decision
+  const biasSection = decision
     ? decision.skipped
-      ? `\n4. End with the directional bias: which way the market is leaning, what's driving it, and what would need to change to confirm a trade.`
-      : `\n4. End with the trade idea: direction, why the setup makes sense right now, and what price proves it wrong.`
+      ? `\n3. Directional lean: which way and what flips it into a trade.`
+      : `\n3. Trade: direction, why it works now, what price kills it.`
     : ``;
 
   const structure = isDelta
-    ? `Structure (delta update — reader already saw the last brief):
-1. Cold start — open directly with the change itself. No setup, no preamble. "Funding just flipped positive while OI is thinning — longs are paying to stay in a shrinking crowd." One sentence, no fluff.
-2. What does this change do to the current setup? Does it strengthen the existing move, contradict it, open a new scenario? One tight paragraph.
-3. Only list levels affected by the change. Skip anything that hasn't moved since the last brief.${tradeSection}`
-    : `Structure (full brief — no recent context):
-1. Open with what the asset is doing right now and the key price level (e.g. "BTC sitting at $87k after getting rejected — sellers still in control").
-2. Explain WHY in plain English. What's driving it? Connect the dots — cause and effect, not a list of signals.
-3. Close with 2-3 key levels and a short "why it matters" for each.${tradeSection}`;
+    ? `Structure (delta — reader saw the last brief):
+1. What changed and whether it confirms or contradicts the prior setup. One paragraph, no preamble.
+2. Catalyst check: for each "watch for" item from the prior brief's context, state whether it fired, partially fired, or remains pending. If the delta data shows a metric moved toward or past a threshold, call it out explicitly.${biasSection}`
+    : `Structure (full brief):
+1. Current state in one sentence — what the asset is doing and the dominant force behind it.
+2. Catalysts: 2-3 specific things the reader should watch that would flip or strengthen the current bias. Be concrete — name the metric and the direction it needs to move (e.g. "funding flipping positive while OI stays flat would confirm longs are trapped").${biasSection}`;
 
-  return `You write a Telegram market update for crypto traders. They want a quick, clear read on what's happening — write like you're explaining it to a smart friend, not filing a report.
+  return `You write a Telegram market update for crypto traders. Short, sharp, actionable.
 
 ${structure}
 
 Rules:
-- Every sentence must be immediately understandable. No jargon without explanation.
-- BAD: "OI delta at 85th percentile with negative funding divergence" — meaningless without context.
-- GOOD: "traders piling into longs while spot buyers disappear — that gap usually gets closed violently."
-- Use exact prices only for key levels. Everything else: describe what it means, not the number.
-- No headers. No bold. Short paragraphs. Key levels at the end as a bullet list only (e.g. "• $65,500 — first support, losing it opens $63k").
-- Don't use emojis
-- 150 words max — count before you finish. If you're over, cut the weakest sentence. Do not truncate mid-thought.
+- Plain English. No jargon without immediate explanation.
+- No headers, no bold, no emojis. Short paragraphs.
+- Only mention price levels if they are directly tied to a catalyst (e.g. "losing $X confirms the flip"). Do not list levels for their own sake.
+- 100 words max. Cut ruthlessly.
 - The trade decision (if present) is mechanical output — describe it, don't override it.`;
 }
 
@@ -151,7 +146,7 @@ async function callClaude(
   const res = await callLlm({
     system: buildSystemPrompt(decision, isDelta),
     user: buildPrompt(asset, outputs, decision, delta),
-    maxTokens: 450,
+    maxTokens: 300,
   });
   return res.text;
 }
