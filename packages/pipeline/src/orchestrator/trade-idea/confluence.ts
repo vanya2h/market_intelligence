@@ -47,11 +47,12 @@ function directional(score: number, direction: Direction): number {
 }
 
 // ─── Derivatives (-100 to +100) ─────────────────────────────────────────────
-// Continuous scoring — every signal contributes, extreme events amplify.
-//   - Positioning: CROWDED states spike, OI z-score provides baseline
-//   - Stress: CAPITULATION/UNWINDING spike, liq + OI change provide baseline
-//   - Funding: sigmoid across full percentile range (no dead zone)
-//   - Coinbase premium: institutional demand proxy
+// Mean-reversion signals — only fire at genuine extremes.
+// Moderate readings produce ~0 to avoid noise in trending markets.
+//   - Positioning: CROWDED states spike, OI z-score baseline (dead zone z < 1.5)
+//   - Stress: CAPITULATION/UNWINDING spike, baseline requires elevated liq/OI
+//   - Funding: sigmoid with dead zone (pctl 35-65 → ~0)
+//   - Coinbase premium: sigmoid with dead zone (pctl 35-65 → ~0)
 
 // Component weights
 const DERIV_W_POSITIONING = 0.3;
@@ -82,8 +83,11 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
       break;
     }
     default: {
-      // Continuous OI baseline: z=-2 → +40 (washed), z=+2 → -40 (excess)
-      posScore = clamp(-signals.oiZScore30d / 2, -1, 1) * 40;
+      // OI baseline with dead zone: |z| < 1.5 → 0 (normal range, no signal).
+      // Only z beyond ±1.5 produces score: z=-3 → +40, z=+3 → -40.
+      const z = signals.oiZScore30d;
+      const extremeZ = Math.sign(-z) * Math.max(Math.abs(z) - 1.5, 0);
+      posScore = clamp(extremeZ / 1.5, -1, 1) * 40;
     }
   }
 
@@ -104,31 +108,39 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
       break;
     }
     default: {
-      // Continuous baseline from liquidation intensity + OI change.
-      // liqPct1m > 50 = above-average liquidations = bullish (forced sellers).
-      // oiChange24h < 0 = deleveraging = bullish.
-      const liqBase = clamp((signals.liqPct1m - 50) / 50, -1, 1) * 25; // -25..+25
-      const oiChangeBase = clamp(-signals.oiChange24h / 0.08, -1, 1) * 20; // -20..+20
+      // Baseline with dead zones — only extreme liquidation/deleveraging scores.
+      // liqPct1m > 70 = elevated liquidations = bullish (forced sellers). Below 70 → 0.
+      const liqBase = clamp((signals.liqPct1m - 70) / 30, 0, 1) * 25; // 0..+25
+      // oiChange24h beyond ±5% = meaningful deleveraging/leveraging. Inside → 0.
+      const oiAbs = Math.abs(signals.oiChange24h);
+      const oiExtreme = Math.sign(-signals.oiChange24h) * Math.max(oiAbs - 0.05, 0);
+      const oiChangeBase = clamp(oiExtreme / 0.08, -1, 1) * 20; // -20..+20
       stressScore = liqBase + oiChangeBase;
     }
   }
 
-  // 3. Funding — sigmoid across full percentile range (no dead zone).
+  // 3. Funding — sigmoid with dead zone in normal range.
   //    High pct = longs paying = bearish, low pct = shorts paying = bullish.
-  //    tanh scaling: 50→0, 30→-46, 70→+46, 20→-76, 80→+76, extremes→±95.
+  //    Dead zone: pctl 35-65 → ~0. Steep transition beyond: 20→-93, 80→+93.
   const fp = signals.fundingPct1m;
-  let fundingScore = -100 * Math.tanh((fp - 50) / 20);
+  const fpDeviation = fp - 50;
+  const fpDeadZone = 15; // ±15 percentile points around median = dead
+  const fpScaled = Math.sign(fpDeviation) * Math.max(Math.abs(fpDeviation) - fpDeadZone, 0);
+  let fundingScore = -100 * Math.tanh(fpScaled / 12);
   // Amplify by consecutive extreme funding cycles
   if (signals.fundingPressureCycles >= 3) {
     fundingScore *= 1 + clamp((signals.fundingPressureCycles - 3) / 5, 0, 0.5);
   }
   fundingScore = clamp(fundingScore, -100, 100);
 
-  // 4. Coinbase premium — institutional demand proxy.
+  // 4. Coinbase premium — institutional demand proxy with dead zone.
   //    Positive premium = US buying > offshore = bullish.
-  //    Uses percentile for relative context: above 70th = strong demand, below 30th = weak.
+  //    Dead zone: pctl 35-65 → ~0. Only extreme premium imbalances score.
   const cbPctl = ctx.coinbasePremium.percentile["1m"];
-  const cbScore = 100 * Math.tanh((cbPctl - 50) / 25); // 50→0, 75→+76, 25→-76
+  const cbDeviation = cbPctl - 50;
+  const cbDeadZone = 15;
+  const cbScaled = Math.sign(cbDeviation) * Math.max(Math.abs(cbDeviation) - cbDeadZone, 0);
+  const cbScore = 100 * Math.tanh(cbScaled / 15);
 
   const rawScore =
     posScore * DERIV_W_POSITIONING +
