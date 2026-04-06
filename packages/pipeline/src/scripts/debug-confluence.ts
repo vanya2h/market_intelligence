@@ -11,6 +11,7 @@ import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
+import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import type {
   DerivativesOutput,
@@ -182,7 +183,7 @@ async function main() {
   const directions = ["LONG", "SHORT"] as const;
 
   for (const dir of directions) {
-    const confluence = computeConfluence(outputs, dir);
+    const confluence = computeConfluence(outputs, dir, EQUAL_WEIGHTS);
     const passes = confluence.total >= CONVICTION_THRESHOLD;
     const passIcon = passes ? chalk.green.bold("TAKE ✓") : chalk.red("SKIP ✗");
 
@@ -214,8 +215,8 @@ async function main() {
   }
 
   // Directional bias
-  const longConf = computeConfluence(outputs, "LONG");
-  const shortConf = computeConfluence(outputs, "SHORT");
+  const longConf = computeConfluence(outputs, "LONG", EQUAL_WEIGHTS);
+  const shortConf = computeConfluence(outputs, "SHORT", EQUAL_WEIGHTS);
   const bias = computeBias(longConf, shortConf);
 
   console.log("═══════════════════════════════════════════════════════════════");

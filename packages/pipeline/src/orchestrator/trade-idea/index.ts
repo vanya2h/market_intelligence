@@ -18,6 +18,7 @@ import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
 import { computeConfluence, computeConvictionThreshold, type Confluence } from "./confluence.js";
 import { computeBias, type DirectionalBias } from "./bias.js";
+import { computeDimensionWeights, DIMENSION_KEYS, type DimensionWeights } from "./ic-weights.js";
 import { saveTradeIdea } from "./persist.js";
 
 /** Result of the mechanical trade decision — passed to the synthesizer */
@@ -33,6 +34,8 @@ export interface TradeDecision {
   alternatives: { direction: Direction; total: number }[];
   /** Directional lean within the range — present even when conviction is below threshold */
   bias: DirectionalBias;
+  /** IC-based dimension weights used for this decision */
+  weights: DimensionWeights;
 }
 
 /**
@@ -45,11 +48,28 @@ export async function processTradeIdea(
   htfContext: HtfContext,
   outputs: DimensionOutput[],
 ): Promise<{ id: string; decision: TradeDecision }> {
+  // Compute IC-based dimension weights from historical outcomes
+  const weights = await computeDimensionWeights(asset);
+
+  // Log IC weight diagnostics
+  if (weights.calibrated) {
+    const wStr = DIMENSION_KEYS.map((dim) => `${dim}:${chalk.bold(String(weights[dim]))}`).join("  ");
+    const icStr = DIMENSION_KEYS.map((dim) => {
+      const ic = weights.ic[dim];
+      const color = ic > 0.1 ? chalk.green : ic > 0 ? chalk.yellow : chalk.red;
+      return `${dim}:${color(ic.toFixed(3))}`;
+    }).join("  ");
+    console.log(`      ${chalk.cyan("▸")} IC weights (n=${weights.sampleCount}): ${wStr}`);
+    console.log(`        IC: ${icStr}`);
+  } else {
+    console.log(`      ${chalk.dim("▹")} IC weights: equal (${weights.sampleCount}/${20} samples, need more data)`);
+  }
+
   // Score all three directions mechanically
   const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
   const scored = directions.map((dir) => ({
     direction: dir,
-    confluence: computeConfluence(outputs, dir),
+    confluence: computeConfluence(outputs, dir, weights),
   }));
 
   // Compute directional bias from LONG vs SHORT scores
@@ -86,6 +106,7 @@ export async function processTradeIdea(
     confluence: trackDirection.confluence,
     skipped,
     bias,
+    weights,
   });
 
   const decision: TradeDecision = {
@@ -99,6 +120,7 @@ export async function processTradeIdea(
       .filter((s) => s.direction !== trackDirection.direction)
       .map((s) => ({ direction: s.direction, total: s.confluence.total })),
     bias,
+    weights,
   };
 
   // ─── Console output ───────────────────────────────────────────────

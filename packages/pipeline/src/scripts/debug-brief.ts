@@ -39,6 +39,7 @@ import {
   type ExchangeFlowsOutput,
 } from "../orchestrator/types.js";
 import { computeConfluence, CONVICTION_THRESHOLD, type Confluence } from "../orchestrator/trade-idea/confluence.js";
+import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import type { DirectionalBias } from "../orchestrator/trade-idea/bias.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
@@ -126,7 +127,10 @@ async function resolveTarget(): Promise<ResolvedIds> {
 
   const briefIdx = args.indexOf("--brief");
   if (briefIdx !== -1 && args[briefIdx + 1]) {
-    const brief = await prisma.brief.findUniqueOrThrow({ where: { id: args[briefIdx + 1] }, select: { id: true, asset: true } });
+    const brief = await prisma.brief.findUniqueOrThrow({
+      where: { id: args[briefIdx + 1] },
+      select: { id: true, asset: true },
+    });
     const run = await prisma.notifyRun.findFirst({ where: { briefId: brief.id }, select: { id: true } });
     return { runId: run?.id ?? null, briefId: brief.id, asset: brief.asset };
   }
@@ -177,9 +181,7 @@ function buildRun(run: NotifyRun, artifacts: RunArtifacts): string {
     if (ds.dimensions?.length) {
       out += "\nDimension Deltas:\n";
       for (const dim of ds.dimensions) {
-        const regimeChange = dim.regimeFlipped
-          ? `${dim.prevRegime} → ${dim.currRegime} [FLIP]`
-          : dim.currRegime;
+        const regimeChange = dim.regimeFlipped ? `${dim.prevRegime} → ${dim.currRegime} [FLIP]` : dim.currRegime;
         out += `\n${dim.dimension}: ${regimeChange}\n`;
         if (dim.topMovers?.length) {
           for (const m of dim.topMovers) {
@@ -218,7 +220,10 @@ function buildOverview(
   out += kv("Timestamp", `${brief.timestamp.toISOString()} (${ago(brief.timestamp)})`);
   out += kv("Dimensions", brief.dimensions.join(", "));
   out += kv("Brief Length", `${brief.brief.length} chars, ${brief.brief.split(/\s+/).length} words`);
-  out += kv("Rich Brief", brief.richBrief ? `${(brief.richBrief as { blocks: unknown[] }).blocks?.length ?? "?"} blocks` : "none");
+  out += kv(
+    "Rich Brief",
+    brief.richBrief ? `${(brief.richBrief as { blocks: unknown[] }).blocks?.length ?? "?"} blocks` : "none",
+  );
 
   if (prevBrief) {
     out += subsection("Previous Brief (delta reference)");
@@ -230,7 +235,9 @@ function buildOverview(
       prevBrief.htf?.regime,
       prevBrief.sentiment?.regime,
       prevBrief.exchangeFlows?.regime,
-    ].filter(Boolean).join(", ");
+    ]
+      .filter(Boolean)
+      .join(", ");
     out += kv("Regimes", prevRegimes);
     if (prevBrief.htf?.snapshotPrice) out += kv("Snapshot Price", price(prevBrief.htf.snapshotPrice));
     if (prevBrief.sentiment?.compositeIndex != null) out += kv("F&G Index", num(prevBrief.sentiment.compositeIndex));
@@ -240,8 +247,14 @@ function buildOverview(
 }
 
 function buildDimDerivatives(d: {
-  regime: string; previousRegime: string | null; stress: string | null; previousStress: string | null;
-  oiSignal: string | null; since: Date; context: unknown; interpretation: string;
+  regime: string;
+  previousRegime: string | null;
+  stress: string | null;
+  previousStress: string | null;
+  oiSignal: string | null;
+  since: Date;
+  context: unknown;
+  interpretation: string;
 }): string {
   let out = section("DERIVATIVES STRUCTURE");
 
@@ -302,7 +315,11 @@ function buildDimDerivatives(d: {
 }
 
 function buildDimEtfs(d: {
-  regime: string; previousRegime: string | null; since: Date; context: unknown; interpretation: string;
+  regime: string;
+  previousRegime: string | null;
+  since: Date;
+  context: unknown;
+  interpretation: string;
 }): string {
   let out = section("INSTITUTIONAL FLOWS (ETFs)");
 
@@ -334,8 +351,13 @@ function buildDimEtfs(d: {
 }
 
 function buildDimHtf(d: {
-  regime: string; previousRegime: string | null; since: Date; lastStructure: string | null;
-  snapshotPrice: number | null; context: unknown; interpretation: string;
+  regime: string;
+  previousRegime: string | null;
+  since: Date;
+  lastStructure: string | null;
+  snapshotPrice: number | null;
+  context: unknown;
+  interpretation: string;
 }): string {
   let out = section("HTF TECHNICAL STRUCTURE");
 
@@ -423,11 +445,18 @@ function buildDimHtf(d: {
 }
 
 function buildDimSentiment(d: {
-  regime: string; previousRegime: string | null; since: Date;
-  compositeIndex: number | null; compositeLabel: string | null;
-  positioning: number | null; trend: number | null; institutionalFlows: number | null;
-  exchangeFlows: number | null; expertConsensus: number | null;
-  context: unknown; interpretation: string;
+  regime: string;
+  previousRegime: string | null;
+  since: Date;
+  compositeIndex: number | null;
+  compositeLabel: string | null;
+  positioning: number | null;
+  trend: number | null;
+  institutionalFlows: number | null;
+  exchangeFlows: number | null;
+  expertConsensus: number | null;
+  context: unknown;
+  interpretation: string;
 }): string {
   let out = section("MARKET SENTIMENT");
 
@@ -458,7 +487,11 @@ function buildDimSentiment(d: {
 }
 
 function buildDimExchangeFlows(d: {
-  regime: string; previousRegime: string | null; since: Date; context: unknown; interpretation: string;
+  regime: string;
+  previousRegime: string | null;
+  since: Date;
+  context: unknown;
+  interpretation: string;
 }): string {
   let out = section("EXCHANGE FLOWS & LIQUIDITY");
 
@@ -499,18 +532,31 @@ function buildRegimes(brief: {
   let out = section("REGIME SUMMARY");
 
   const dims = [
-    { label: "Derivatives Structure", regime: brief.derivatives?.regime, prev: brief.derivatives?.previousRegime, extra: brief.derivatives?.stress ? `stress=${brief.derivatives.stress}` : null },
+    {
+      label: "Derivatives Structure",
+      regime: brief.derivatives?.regime,
+      prev: brief.derivatives?.previousRegime,
+      extra: brief.derivatives?.stress ? `stress=${brief.derivatives.stress}` : null,
+    },
     { label: "Institutional Flows (ETFs)", regime: brief.etfs?.regime, prev: brief.etfs?.previousRegime },
-    { label: "HTF Technical", regime: brief.htf?.regime, prev: brief.htf?.previousRegime, extra: brief.htf?.lastStructure ? `struct=${brief.htf.lastStructure}` : null },
-    { label: "Market Sentiment", regime: brief.sentiment?.regime, prev: brief.sentiment?.previousRegime, extra: brief.sentiment?.compositeIndex != null ? `F&G=${brief.sentiment.compositeIndex.toFixed(0)}` : null },
+    {
+      label: "HTF Technical",
+      regime: brief.htf?.regime,
+      prev: brief.htf?.previousRegime,
+      extra: brief.htf?.lastStructure ? `struct=${brief.htf.lastStructure}` : null,
+    },
+    {
+      label: "Market Sentiment",
+      regime: brief.sentiment?.regime,
+      prev: brief.sentiment?.previousRegime,
+      extra: brief.sentiment?.compositeIndex != null ? `F&G=${brief.sentiment.compositeIndex.toFixed(0)}` : null,
+    },
     { label: "Exchange Flows", regime: brief.exchangeFlows?.regime, prev: brief.exchangeFlows?.previousRegime },
   ];
 
   for (const d of dims) {
     const flipped = d.prev && d.prev !== d.regime;
-    const regimeStr = flipped
-      ? `${d.prev} → ${d.regime}  [FLIP]`
-      : (d.regime ?? "—");
+    const regimeStr = flipped ? `${d.prev} → ${d.regime}  [FLIP]` : (d.regime ?? "—");
     const extra = d.extra ? `  (${d.extra})` : "";
     out += `${d.label.padEnd(32)} ${regimeStr}${extra}\n`;
   }
@@ -528,7 +574,7 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
   const scored = directions.map((dir) => ({
     direction: dir,
-    confluence: computeConfluence(storedOutputs, dir),
+    confluence: computeConfluence(storedOutputs, dir, EQUAL_WEIGHTS),
   }));
 
   out += `${"Direction".padEnd(8)} ${"derivatives".padEnd(14)} ${"etfs".padEnd(8)} ${"htf".padEnd(8)} ${"exchFlows".padEnd(12)} total\n`;
@@ -546,7 +592,10 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   out += subsection("Directional Bias");
   out += kv("Lean", bias.lean);
   out += kv("Strength", `${bias.strength}/100`);
-  out += kv("Conviction Gap", `${bias.convictionGap} pts ${bias.convictionGap >= 0 ? "(above threshold)" : "(below threshold)"}`);
+  out += kv(
+    "Conviction Gap",
+    `${bias.convictionGap} pts ${bias.convictionGap >= 0 ? "(above threshold)" : "(below threshold)"}`,
+  );
   if (bias.topFactors.length > 0) {
     out += kv("Top Factors", bias.topFactors.map((f) => `${f.dimension}:+${f.score}`).join("  "));
   }
@@ -562,7 +611,14 @@ function buildTradeIdea(tradeIdea: {
   compositeTarget: number;
   confluence: unknown;
   createdAt: Date;
-  levels: Array<{ type: string; label: string; price: number; outcome: string; qualityScore: number | null; resolvedAt: Date | null }>;
+  levels: Array<{
+    type: string;
+    label: string;
+    price: number;
+    outcome: string;
+    qualityScore: number | null;
+    resolvedAt: Date | null;
+  }>;
   returns: Array<{ hoursAfter: number; price: number; returnPct: number; qualityAtPoint: number }>;
 }): string {
   let out = section("TRADE IDEA");
@@ -572,11 +628,14 @@ function buildTradeIdea(tradeIdea: {
   out += kv("Skipped", tradeIdea.skipped ? "YES (conviction below threshold)" : "NO (trade taken)");
   out += kv("Entry Price", price(tradeIdea.entryPrice));
   out += kv("Composite Target", price(tradeIdea.compositeTarget));
-  const distPct = (tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice * 100;
-  out += kv("Target Distance", `${Math.abs(tradeIdea.compositeTarget - tradeIdea.entryPrice).toFixed(2)} (${pct(distPct)})`);
+  const distPct = ((tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
+  out += kv(
+    "Target Distance",
+    `${Math.abs(tradeIdea.compositeTarget - tradeIdea.entryPrice).toFixed(2)} (${pct(distPct)})`,
+  );
   out += kv("Created", `${tradeIdea.createdAt.toISOString()} (${ago(tradeIdea.createdAt)})`);
 
-  const conf = tradeIdea.confluence as Confluence & { bias?: Record<string, unknown> } | null;
+  const conf = tradeIdea.confluence as (Confluence & { bias?: Record<string, unknown> }) | null;
   if (conf) {
     out += subsection("Stored Confluence");
     const dimKeys = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
@@ -592,7 +651,10 @@ function buildTradeIdea(tradeIdea: {
       out += kv("Bias Strength", `${b.strength}/100`);
       out += kv("Conviction Gap", `${b.convictionGap} pts`);
       if (Array.isArray(b.topFactors) && b.topFactors.length > 0) {
-        out += kv("Top Factors", b.topFactors.map((f: Record<string, unknown>) => `${f.dimension}:+${f.score}`).join("  "));
+        out += kv(
+          "Top Factors",
+          b.topFactors.map((f: Record<string, unknown>) => `${f.dimension}:+${f.score}`).join("  "),
+        );
       }
     }
   }
@@ -605,7 +667,7 @@ function buildTradeIdea(tradeIdea: {
     if (invalidations.length > 0) {
       out += "Invalidation (Stop Loss):\n";
       for (const l of invalidations) {
-        const d = (l.price - tradeIdea.entryPrice) / tradeIdea.entryPrice * 100;
+        const d = ((l.price - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
         const quality = l.qualityScore != null ? `  quality=${num(l.qualityScore)}` : "";
         const resolved = l.resolvedAt ? `  resolved=${l.resolvedAt.toISOString()}` : "";
         out += `  ${l.label.padEnd(5)} ${price(l.price).padEnd(16)} (${pct(d)})  outcome=${l.outcome}${quality}${resolved}\n`;
@@ -614,7 +676,7 @@ function buildTradeIdea(tradeIdea: {
     if (targets.length > 0) {
       out += "Targets (Take Profit):\n";
       for (const l of targets) {
-        const d = (l.price - tradeIdea.entryPrice) / tradeIdea.entryPrice * 100;
+        const d = ((l.price - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
         const quality = l.qualityScore != null ? `  quality=${num(l.qualityScore)}` : "";
         const resolved = l.resolvedAt ? `  resolved=${l.resolvedAt.toISOString()}` : "";
         out += `  ${l.label.padEnd(5)} ${price(l.price).padEnd(16)} (${pct(d)})  outcome=${l.outcome}${quality}${resolved}\n`;
@@ -627,7 +689,12 @@ function buildTradeIdea(tradeIdea: {
     out += `${"Hours".padEnd(8)} ${"Price".padEnd(16)} ${"Return".padEnd(12)} Quality\n`;
     out += sep("─", 44) + "\n";
     for (const r of tradeIdea.returns) {
-      const label = r.hoursAfter < 24 ? `${r.hoursAfter}h` : r.hoursAfter < 168 ? `${r.hoursAfter / 24}d` : `${(r.hoursAfter / 168).toFixed(0)}w`;
+      const label =
+        r.hoursAfter < 24
+          ? `${r.hoursAfter}h`
+          : r.hoursAfter < 168
+            ? `${r.hoursAfter / 24}d`
+            : `${(r.hoursAfter / 168).toFixed(0)}w`;
       out += `${label.padEnd(8)} ${price(r.price).padEnd(16)} ${pct(r.returnPct).padEnd(12)} ${num(r.qualityAtPoint)}\n`;
     }
   }
@@ -701,11 +768,47 @@ function buildRichBrief(richBrief: { blocks: Array<Record<string, unknown>> }): 
 // ─── Reconstruct DimensionOutput[] from stored brief ─────────────────────────
 
 function buildOutputsFromBrief(brief: {
-  derivatives: { regime: string; previousRegime: string | null; stress: string | null; previousStress: string | null; oiSignal: string | null; since: Date; context: unknown; interpretation: string } | null;
+  derivatives: {
+    regime: string;
+    previousRegime: string | null;
+    stress: string | null;
+    previousStress: string | null;
+    oiSignal: string | null;
+    since: Date;
+    context: unknown;
+    interpretation: string;
+  } | null;
   etfs: { regime: string; previousRegime: string | null; since: Date; context: unknown; interpretation: string } | null;
-  htf: { regime: string; previousRegime: string | null; since: Date; lastStructure: string | null; snapshotPrice: number | null; context: unknown; interpretation: string } | null;
-  sentiment: { regime: string; previousRegime: string | null; since: Date; compositeIndex: number | null; compositeLabel: string | null; positioning: number | null; trend: number | null; institutionalFlows: number | null; exchangeFlows: number | null; expertConsensus: number | null; context: unknown; interpretation: string } | null;
-  exchangeFlows: { regime: string; previousRegime: string | null; since: Date; context: unknown; interpretation: string } | null;
+  htf: {
+    regime: string;
+    previousRegime: string | null;
+    since: Date;
+    lastStructure: string | null;
+    snapshotPrice: number | null;
+    context: unknown;
+    interpretation: string;
+  } | null;
+  sentiment: {
+    regime: string;
+    previousRegime: string | null;
+    since: Date;
+    compositeIndex: number | null;
+    compositeLabel: string | null;
+    positioning: number | null;
+    trend: number | null;
+    institutionalFlows: number | null;
+    exchangeFlows: number | null;
+    expertConsensus: number | null;
+    context: unknown;
+    interpretation: string;
+  } | null;
+  exchangeFlows: {
+    regime: string;
+    previousRegime: string | null;
+    since: Date;
+    context: unknown;
+    interpretation: string;
+  } | null;
 }): DimensionOutput[] {
   const outputs: DimensionOutput[] = [];
 
@@ -805,7 +908,7 @@ async function main() {
     }),
   ]);
 
-  const artifacts = run ? ((run.artifacts as RunArtifacts) ?? {}) : {} as RunArtifacts;
+  const artifacts = run ? ((run.artifacts as RunArtifacts) ?? {}) : ({} as RunArtifacts);
   const storedOutputs = buildOutputsFromBrief(brief);
 
   // Reconstruct trade decision for LLM prompt rebuilding
@@ -821,6 +924,15 @@ async function main() {
       threshold: 200, // not persisted; use default (compression-aware threshold only applies at run time)
       alternatives: [], // not persisted
       bias: (storedConf?.bias ?? { lean: "NEUTRAL", strength: 0, convictionGap: 0, topFactors: [] }) as DirectionalBias,
+      weights: {
+        derivatives: 1,
+        etfs: 1,
+        htf: 1,
+        exchangeFlows: 1,
+        calibrated: false,
+        sampleCount: 0,
+        ic: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 },
+      },
     };
   }
 
@@ -844,10 +956,15 @@ async function main() {
   write(outDir, "07-regimes.txt", buildRegimes(brief));
   write(outDir, "08-confluence.txt", buildConfluence(storedOutputs));
   if (tradeIdea) write(outDir, "09-trade-idea.txt", buildTradeIdea(tradeIdea));
-  if (brief.richBrief) write(outDir, "10-rich-brief.txt", buildRichBrief(brief.richBrief as { blocks: Array<Record<string, unknown>> }));
+  if (brief.richBrief)
+    write(outDir, "10-rich-brief.txt", buildRichBrief(brief.richBrief as { blocks: Array<Record<string, unknown>> }));
   write(outDir, "11-brief-text.txt", brief.brief);
   write(outDir, "12-llm-system-prompt.txt", buildSystemPrompt(promptDecision, isDeltaBrief));
-  write(outDir, "13-llm-user-prompt.txt", buildPrompt(asset as "BTC" | "ETH", storedOutputs, promptDecision, storedDelta));
+  write(
+    outDir,
+    "13-llm-user-prompt.txt",
+    buildPrompt(asset as "BTC" | "ETH", storedOutputs, promptDecision, storedDelta),
+  );
 
   const contexts: Record<string, unknown> = {};
   if (brief.derivatives) contexts.derivatives = brief.derivatives.context;

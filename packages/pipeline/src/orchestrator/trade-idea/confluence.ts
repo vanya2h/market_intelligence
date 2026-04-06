@@ -25,6 +25,7 @@ import type { HtfContext } from "../../htf/types.js";
 import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { DimensionOutput } from "../types.js";
 import type { Direction } from "./composite-target.js";
+import type { DimensionWeights } from "./ic-weights.js";
 
 export const CONVICTION_THRESHOLD = 200;
 
@@ -53,10 +54,10 @@ function directional(score: number, direction: Direction): number {
 //   - Coinbase premium: institutional demand proxy
 
 // Component weights
-const DERIV_W_POSITIONING = 0.30;
-const DERIV_W_STRESS = 0.20;
-const DERIV_W_FUNDING = 0.30;
-const DERIV_W_CBPREMIUM = 0.20;
+const DERIV_W_POSITIONING = 0.3;
+const DERIV_W_STRESS = 0.2;
+const DERIV_W_FUNDING = 0.3;
+const DERIV_W_CBPREMIUM = 0.2;
 
 function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number {
   if (direction === "FLAT") return 0;
@@ -92,13 +93,13 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
   switch (stress.state) {
     case "CAPITULATION": {
       const liqIntensity = clamp((signals.liqPct3m - 90) / 10, 0, 1);
-      const oiDrop = clamp((-signals.oiChange24h - 0.10) / 0.10, 0, 1);
+      const oiDrop = clamp((-signals.oiChange24h - 0.1) / 0.1, 0, 1);
       stressScore = 70 + 30 * (liqIntensity * 0.5 + oiDrop * 0.5); // 70–100
       break;
     }
     case "UNWINDING": {
       const liqIntensity = clamp((signals.liqPct1m - 70) / 30, 0, 1);
-      const oiDrop = clamp((-signals.oiChange24h - 0.05) / 0.10, 0, 1);
+      const oiDrop = clamp((-signals.oiChange24h - 0.05) / 0.1, 0, 1);
       stressScore = 40 + 40 * (liqIntensity * 0.5 + oiDrop * 0.5); // 40–80
       break;
     }
@@ -148,8 +149,8 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
 //   - Reversal ratio measures conviction of the reversal
 
 const ETF_W_SIGMA = 0.35;
-const ETF_W_REVERSAL_CONFIRM = 0.30;
-const ETF_W_REVERSAL = 0.20;
+const ETF_W_REVERSAL_CONFIRM = 0.3;
+const ETF_W_REVERSAL = 0.2;
 const ETF_W_REGIME = 0.15;
 
 /**
@@ -269,7 +270,6 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
   return clamp(directional(rawScore, direction), -100, 100);
 }
 
-
 // ─── Exchange Flows (-100 to +100) ───────────────────────────────────────────
 // On-chain supply pressure — all magnitude-based:
 //   - Reserve change (7d/30d) is the primary signal — continuous, not regime-gated
@@ -307,9 +307,7 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
     extremeScore = -(50 + 50 * clamp(m.reserveChange30dPct / 3, 0, 1)); // -50 to -100
   }
 
-  const rawScore =
-    reserveScore * EF_W_RESERVE +
-    extremeScore * EF_W_EXTREME;
+  const rawScore = reserveScore * EF_W_RESERVE + extremeScore * EF_W_EXTREME;
 
   return clamp(directional(rawScore, direction), -100, 100);
 }
@@ -348,16 +346,36 @@ function convictionMap(raw: number): number {
   return Math.sign(raw) * 100 * Math.pow(Math.abs(raw) / 100, 0.65);
 }
 
-export function computeConfluence(outputs: DimensionOutput[], direction: Direction): Confluence {
+/**
+ * Compute confluence scores for all dimensions in a given direction.
+ *
+ * When IC-based weights are provided, each dimension's score is scaled
+ * by its weight (derived from historical accuracy / noise ratio).
+ * Equal weights (1.0 each) are the default when calibration data is insufficient.
+ *
+ * The raw score (-100..+100) is first mapped through the power curve,
+ * then multiplied by the dimension's weight. With weights summing to 4
+ * the total range remains -400..+400, preserving threshold compatibility.
+ */
+export function computeConfluence(
+  outputs: DimensionOutput[],
+  direction: Direction,
+  weights: DimensionWeights,
+): Confluence {
   const deriv = outputs.find((o) => o.dimension === "DERIVATIVES");
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");
   const ef = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
-  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction) : 0);
-  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0);
-  const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0);
-  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0);
+  const wDeriv = weights.derivatives;
+  const wEtf = weights.etfs;
+  const wHtf = weights.htf;
+  const wEf = weights.exchangeFlows;
+
+  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction) : 0) * wDeriv;
+  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0) * wEtf;
+  const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0) * wHtf;
+  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0) * wEf;
 
   return {
     derivatives: Math.round(derivatives),

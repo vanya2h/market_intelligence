@@ -10,6 +10,7 @@ import type { $Enums, Prisma } from "../../generated/prisma/client.js";
 import type { Direction, LevelResult } from "./composite-target.js";
 import type { Confluence } from "./confluence.js";
 import type { DirectionalBias } from "./bias.js";
+import type { DimensionWeights } from "./ic-weights.js";
 
 interface SaveTradeIdeaInput {
   briefId: string;
@@ -20,6 +21,7 @@ interface SaveTradeIdeaInput {
   levels: LevelResult[];
   confluence: Confluence;
   bias: DirectionalBias;
+  weights: DimensionWeights;
   skipped: boolean;
 }
 
@@ -34,6 +36,15 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       confluence: {
         ...input.confluence,
         bias: input.bias,
+        weights: {
+          derivatives: input.weights.derivatives,
+          etfs: input.weights.etfs,
+          htf: input.weights.htf,
+          exchangeFlows: input.weights.exchangeFlows,
+          calibrated: input.weights.calibrated,
+          sampleCount: input.weights.sampleCount,
+          ic: input.weights.ic,
+        },
       } as unknown as Prisma.InputJsonValue,
       skipped: input.skipped,
       levels: {

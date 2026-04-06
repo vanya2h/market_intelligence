@@ -17,8 +17,17 @@ import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { synthesize, buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { computeDelta } from "../orchestrator/delta.js";
-import { DIMENSION_LABELS, type DimensionOutput, type DerivativesOutput, type EtfsOutput, type HtfOutput, type SentimentOutput, type ExchangeFlowsOutput } from "../orchestrator/types.js";
+import {
+  DIMENSION_LABELS,
+  type DimensionOutput,
+  type DerivativesOutput,
+  type EtfsOutput,
+  type HtfOutput,
+  type SentimentOutput,
+  type ExchangeFlowsOutput,
+} from "../orchestrator/types.js";
 import { computeConfluence, computeConvictionThreshold } from "../orchestrator/trade-idea/confluence.js";
+import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
@@ -37,7 +46,10 @@ function scoreStr(score: number): string {
 function wordWrap(text: string, indent: string, maxWidth: number): void {
   const lines = text.split("\n");
   for (const line of lines) {
-    if (line.trim() === "") { console.log(); continue; }
+    if (line.trim() === "") {
+      console.log();
+      continue;
+    }
     const words = line.split(" ");
     let current = indent;
     for (const word of words) {
@@ -68,7 +80,8 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   const present = new Set(outputs.map((o) => o.dimension));
   const expected = ["DERIVATIVES", "ETFS", "HTF", "SENTIMENT", "EXCHANGE_FLOWS"] as const;
   for (const dim of expected) {
-    if (!present.has(dim)) gaps.push(`${chalk.red("MISSING")} ${DIMENSION_LABELS[dim]} — dimension pipeline failed or was skipped`);
+    if (!present.has(dim))
+      gaps.push(`${chalk.red("MISSING")} ${DIMENSION_LABELS[dim]} — dimension pipeline failed or was skipped`);
   }
 
   // Derivatives gaps
@@ -87,10 +100,14 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   if (etfs) {
     const flow = etfs.context.flow;
     if (Math.abs(flow.todaySigma) < 0.5) {
-      gaps.push(`${chalk.dim("LOW SIGNAL")} ETFs: today's flow sigma ${flow.todaySigma.toFixed(2)} is unremarkable (< 0.5σ)`);
+      gaps.push(
+        `${chalk.dim("LOW SIGNAL")} ETFs: today's flow sigma ${flow.todaySigma.toFixed(2)} is unremarkable (< 0.5σ)`,
+      );
     }
     if (etfs.context.regime === "ETF_NEUTRAL" || etfs.context.regime === "MIXED") {
-      gaps.push(`${chalk.dim("LOW SIGNAL")} ETFs: regime is ${etfs.context.regime} — no institutional directional edge`);
+      gaps.push(
+        `${chalk.dim("LOW SIGNAL")} ETFs: regime is ${etfs.context.regime} — no institutional directional edge`,
+      );
     }
   }
 
@@ -105,14 +122,22 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
       gaps.push(`${chalk.yellow("STALE")} HTF: RSI extreme peaked ${ctx.staleness.rsiExtreme} candles ago (fading)`);
     }
     if (ctx.staleness.cvdDivergencePeak != null && ctx.staleness.cvdDivergencePeak > 5) {
-      gaps.push(`${chalk.yellow("STALE")} HTF: CVD divergence R² peaked ${ctx.staleness.cvdDivergencePeak} candles ago (fading)`);
+      gaps.push(
+        `${chalk.yellow("STALE")} HTF: CVD divergence R² peaked ${ctx.staleness.cvdDivergencePeak} candles ago (fading)`,
+      );
     }
     if (ctx.regime === "RANGING") {
       gaps.push(`${chalk.dim("LOW SIGNAL")} HTF: RANGING regime — no directional structure`);
     }
     // Volatility
-    if (!ctx.volatility.compressionAfterMove && ctx.volatility.atrPercentile > 30 && ctx.volatility.atrPercentile < 70) {
-      gaps.push(`${chalk.dim("LOW SIGNAL")} HTF: ATR at ${ctx.volatility.atrPercentile}th percentile — neither compressed nor expanded`);
+    if (
+      !ctx.volatility.compressionAfterMove &&
+      ctx.volatility.atrPercentile > 30 &&
+      ctx.volatility.atrPercentile < 70
+    ) {
+      gaps.push(
+        `${chalk.dim("LOW SIGNAL")} HTF: ATR at ${ctx.volatility.atrPercentile}th percentile — neither compressed nor expanded`,
+      );
     }
   }
 
@@ -121,7 +146,9 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   if (sent) {
     const idx = sent.context.metrics.compositeIndex;
     if (idx >= 35 && idx <= 65) {
-      gaps.push(`${chalk.dim("LOW SIGNAL")} Sentiment: composite F&G at ${idx.toFixed(0)} — neutral zone, no contrarian edge`);
+      gaps.push(
+        `${chalk.dim("LOW SIGNAL")} Sentiment: composite F&G at ${idx.toFixed(0)} — neutral zone, no contrarian edge`,
+      );
     }
     // Expert consensus disabled
     gaps.push(`${chalk.dim("DISABLED")} Sentiment: expert consensus at 0% weight (collecting baseline data)`);
@@ -143,10 +170,14 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
       .sort((a, b) => a.score - b.score);
     const worst = weakest[0]!;
     if (worst.score < 0) {
-      gaps.push(`${chalk.yellow("OPPOSING")} Trade: ${worst.dim} scores ${worst.score} — actively opposing the direction`);
+      gaps.push(
+        `${chalk.yellow("OPPOSING")} Trade: ${worst.dim} scores ${worst.score} — actively opposing the direction`,
+      );
     }
     const deficit = decision.threshold - conf.total;
-    gaps.push(`${chalk.yellow("DEFICIT")} Trade: needs +${deficit} more conviction to pass threshold (${decision.threshold})`);
+    gaps.push(
+      `${chalk.yellow("DEFICIT")} Trade: needs +${deficit} more conviction to pass threshold (${decision.threshold})`,
+    );
   }
 
   return gaps;
@@ -168,8 +199,11 @@ async function main() {
   // ─── Delta ─────────────────────────────────────────────────────────
   section("DELTA ANALYSIS");
   const deltaSummary = await computeDelta(asset, outputs);
-  const tierColor = deltaSummary.tier === "high" ? chalk.red : deltaSummary.tier === "medium" ? chalk.yellow : chalk.green;
-  console.log(`  Tier: ${tierColor.bold(deltaSummary.tier.toUpperCase())}  Max Z: ${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(3)}`);
+  const tierColor =
+    deltaSummary.tier === "high" ? chalk.red : deltaSummary.tier === "medium" ? chalk.yellow : chalk.green;
+  console.log(
+    `  Tier: ${tierColor.bold(deltaSummary.tier.toUpperCase())}  Max Z: ${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(3)}`,
+  );
   console.log(`  ${chalk.dim(deltaSummary.changeSummary)}`);
 
   // ─── Dimension regimes ──────────────────────────────────────────────
@@ -189,18 +223,23 @@ async function main() {
     const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
     const scored = directions.map((dir) => ({
       direction: dir,
-      confluence: computeConfluence(outputs, dir),
+      confluence: computeConfluence(outputs, dir, EQUAL_WEIGHTS),
     }));
 
     for (const s of scored) {
       const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
       const parts = dims.map((d) => `${d}=${scoreStr(s.confluence[d])}`).join("  ");
-      const totalColor = s.confluence.total >= threshold ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
+      const totalColor =
+        s.confluence.total >= threshold ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
       const passIcon = s.confluence.total >= threshold ? chalk.green(" ✓ TAKE") : "";
-      console.log(`  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${totalColor(String(s.confluence.total))}${passIcon}`);
+      console.log(
+        `  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${totalColor(String(s.confluence.total))}${passIcon}`,
+      );
     }
 
-    const directional = scored.filter((s) => s.direction !== "FLAT").sort((a, b) => b.confluence.total - a.confluence.total);
+    const directional = scored
+      .filter((s) => s.direction !== "FLAT")
+      .sort((a, b) => b.confluence.total - a.confluence.total);
     const bestDirectional = directional[0]!;
     const flatScore = scored.find((s) => s.direction === "FLAT")!;
     const chosen = bestDirectional.confluence.total >= threshold ? bestDirectional : flatScore;
@@ -223,13 +262,24 @@ async function main() {
         .filter((s) => s.direction !== trackDirection.direction)
         .map((s) => ({ direction: s.direction, total: s.confluence.total })),
       bias,
+      weights: {
+        derivatives: 1,
+        etfs: 1,
+        htf: 1,
+        exchangeFlows: 1,
+        calibrated: false,
+        sampleCount: 0,
+        ic: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 },
+      },
     };
 
     console.log();
     const decisionIcon = skipped ? chalk.yellow("SKIPPED") : chalk.green("TAKEN");
     console.log(`  Decision: ${chalk.bold(trackDirection.direction)} — ${decisionIcon}`);
     console.log(`  Entry: $${entryPrice.toFixed(2)}  Target: $${compositeTarget.toFixed(2)}`);
-    console.log(`  Conviction: ${trackDirection.confluence.total} / ${threshold}${threshold < 200 ? chalk.dim(` (compression-adjusted, default 200)`) : ""}`);
+    console.log(
+      `  Conviction: ${trackDirection.confluence.total} / ${threshold}${threshold < 200 ? chalk.dim(` (compression-adjusted, default 200)`) : ""}`,
+    );
   } else {
     console.log(chalk.dim("  No HTF output — cannot compute trade decision"));
   }
@@ -258,7 +308,9 @@ async function main() {
     for (const block of richBrief.blocks) {
       const tag = chalk.cyan(`[${block.type}]`);
       if (block.type === "regime_banner") {
-        console.log(`  ${tag} ${chalk.bold(block.regime)} — ${block.sentiment}${block.subtitle ? ` (${block.subtitle})` : ""}`);
+        console.log(
+          `  ${tag} ${chalk.bold(block.regime)} — ${block.sentiment}${block.subtitle ? ` (${block.subtitle})` : ""}`,
+        );
       } else if (block.type === "tension") {
         console.log(`  ${tag} ${block.title}: ${block.left.label} vs ${block.right.label}`);
       } else if (block.type === "callout") {
@@ -267,9 +319,13 @@ async function main() {
       } else if (block.type === "signal") {
         console.log(`  ${tag} ${block.direction} (${block.strength}/3) — ${block.label}`);
       } else if (block.type === "level_map") {
-        console.log(`  ${tag} current=$${block.current.toLocaleString()} levels: ${block.levels.map((l) => `${l.label}@$${l.price.toLocaleString()}`).join(", ")}`);
+        console.log(
+          `  ${tag} current=$${block.current.toLocaleString()} levels: ${block.levels.map((l) => `${l.label}@$${l.price.toLocaleString()}`).join(", ")}`,
+        );
       } else if (block.type === "metric_row") {
-        const items = block.items.map((i) => `${i.label}=${i.value}${i.sentiment ? ` (${i.sentiment})` : ""}`).join("  ");
+        const items = block.items
+          .map((i) => `${i.label}=${i.value}${i.sentiment ? ` (${i.sentiment})` : ""}`)
+          .join("  ");
         console.log(`  ${tag} ${items}`);
       } else if (block.type === "heading") {
         console.log(`  ${tag} ${chalk.bold(block.text)}`);

@@ -8,6 +8,7 @@ import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { callLlm } from "../llm.js";
 import { computeConfluence, computeConvictionThreshold } from "../orchestrator/trade-idea/confluence.js";
+import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
@@ -35,7 +36,7 @@ async function main() {
     const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
     const scored = directions.map((dir) => ({
       direction: dir,
-      confluence: computeConfluence(outputs, dir),
+      confluence: computeConfluence(outputs, dir, EQUAL_WEIGHTS),
     }));
     const directional = scored
       .filter((s) => s.direction !== "FLAT")
@@ -59,8 +60,20 @@ async function main() {
       threshold,
       alternatives: scored
         .filter((s) => s.direction !== track.direction)
-        .map((s) => ({ direction: s.direction, total: s.confluence.total })),
+        .map((s) => ({
+          direction: s.direction,
+          total: s.confluence.total,
+        })),
       bias,
+      weights: {
+        derivatives: 1,
+        etfs: 1,
+        htf: 1,
+        exchangeFlows: 1,
+        calibrated: false,
+        sampleCount: 0,
+        ic: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 },
+      },
     };
   }
 
