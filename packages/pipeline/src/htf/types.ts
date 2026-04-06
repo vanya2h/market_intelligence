@@ -78,9 +78,19 @@ export type SpotFuturesCvdDivergence =
   | "NONE";
 
 export interface CvdWindow {
-  regime: CvdRegime; // trend direction based on linear regression
-  slope: number; // normalized slope (delta per candle / avg volume)
-  r2: number; // R² of the linear fit — confidence in the trend
+  regime: CvdRegime; // trend direction from swing structure (HH/HL vs LH/LL)
+  slope: number; // magnitude: normalized distance of last low from last high
+  r2: number; // confidence: 1.0 = clean structure, lower = mixed signals
+}
+
+/** CVD extreme spike detection — overbought/oversold within the swing structure. */
+export interface CvdExtreme {
+  /** "OVERBOUGHT" | "OVERSOLD" | "NONE" */
+  state: "OVERBOUGHT" | "OVERSOLD" | "NONE";
+  /** Percentile (0–100) of recent CVD change vs the window's change distribution */
+  changePctile: number;
+  /** How far the current CVD value is from the last swing high/low, normalized */
+  extensionPct: number;
 }
 
 export interface CvdSeries {
@@ -89,6 +99,7 @@ export interface CvdSeries {
   long: CvdWindow; // 75 candles (~12.5d) — confirmed swing trend
   divergence: CvdDivergence; // price vs CVD swing-point disagreement
   divergenceMechanism: CvdDivergenceMechanism; // absorption or exhaustion
+  extreme: CvdExtreme; // overbought/oversold spike within swing structure
 }
 
 export interface CvdContext {
@@ -115,7 +126,9 @@ export interface HtfEvent {
     | "structure_shift_bearish"
     | "cvd_divergence_bullish"
     | "cvd_divergence_bearish"
-    | "cvd_suspect_bounce";
+    | "cvd_suspect_bounce"
+    | "cvd_overbought"
+    | "cvd_oversold";
   detail: string;
   at: string;
 }

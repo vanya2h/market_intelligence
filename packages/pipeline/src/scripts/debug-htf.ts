@@ -266,6 +266,121 @@ async function main() {
     "Divergence",
     fc.divergence !== "NONE" ? chalk.yellow.bold(`${fc.divergence} (${fc.divergenceMechanism})`) : chalk.dim("none"),
   );
+  row(
+    "Extreme",
+    fc.extreme.state !== "NONE"
+      ? chalk.yellow.bold(`${fc.extreme.state}  pctile=${fc.extreme.changePctile}  ext=${fc.extreme.extensionPct.toFixed(1)}%`)
+      : chalk.dim(`none  (pctile=${fc.extreme.changePctile}  ext=${fc.extreme.extensionPct.toFixed(1)}%)`),
+  );
+
+  // ── Divergence debug: dump pivots on futures long window ───────────────────
+  {
+    const LOOKBACK = 14;
+    const MIN_PIVOT_DISTANCE = 5;
+    const MIN_PRICE_SWING_PCT = 0.5;
+    const CVD_LONG_LOOKBACK = 75;
+    const futuresLong = snapshot.futuresH4Candles.slice(-CVD_LONG_LOOKBACK);
+    // rebuild CVD curve
+    const cvdCurve: number[] = [];
+    let running = 0;
+    for (const c of futuresLong) {
+      running += 2 * c.takerBuyVolume - c.volume;
+      cvdCurve.push(running);
+    }
+    // swing highs/lows
+    const swH = (vals: number[], lb: number) => {
+      const r: { index: number; value: number }[] = [];
+      for (let i = lb; i < vals.length - lb; i++) {
+        const v = vals[i]!;
+        let ok = true;
+        for (let j = 1; j <= lb; j++) {
+          if (vals[i - j]! >= v || vals[i + j]! >= v) { ok = false; break; }
+        }
+        if (ok) r.push({ index: i, value: v });
+      }
+      return r;
+    };
+    const swL = (vals: number[], lb: number) => {
+      const r: { index: number; value: number }[] = [];
+      for (let i = lb; i < vals.length - lb; i++) {
+        const v = vals[i]!;
+        let ok = true;
+        for (let j = 1; j <= lb; j++) {
+          if (vals[i - j]! <= v || vals[i + j]! <= v) { ok = false; break; }
+        }
+        if (ok) r.push({ index: i, value: v });
+      }
+      return r;
+    };
+    const lastTwo = <T extends { index: number; value: number }>(arr: T[]): [T, T] | null => {
+      for (let i = arr.length - 1; i >= 1; i--) {
+        if (arr[i]!.index - arr[i - 1]!.index >= MIN_PIVOT_DISTANCE) {
+          return [arr[i - 1]!, arr[i]!];
+        }
+      }
+      return null;
+    };
+    const priceHighs = futuresLong.map(c => c.high);
+    const priceLows  = futuresLong.map(c => c.low);
+    const pH = swH(priceHighs, LOOKBACK);
+    const pL = swL(priceLows,  LOOKBACK);
+    const cH = swH(cvdCurve,   LOOKBACK);
+    const cL = swL(cvdCurve,   LOOKBACK);
+
+    hdr("Divergence Debug — Futures pivots (long window)");
+    console.log(`  ${chalk.dim(`LOOKBACK=${LOOKBACK}  MIN_DIST=${MIN_PIVOT_DISTANCE}  MIN_SWING=${MIN_PRICE_SWING_PCT}%`)}`);
+    console.log(`  Price swing highs (${pH.length} total, last 5):`);
+    for (const p of pH.slice(-5)) {
+      const candle = futuresLong[p.index]!;
+      console.log(`    idx=${p.index}  high=${fmt$(p.value)}  time=${new Date(candle.time).toISOString()}`);
+    }
+    console.log(`  Price swing lows (${pL.length} total, last 5):`);
+    for (const p of pL.slice(-5)) {
+      const candle = futuresLong[p.index]!;
+      console.log(`    idx=${p.index}  low=${fmt$(p.value)}  time=${new Date(candle.time).toISOString()}`);
+    }
+    console.log(`  CVD swing highs (${cH.length} total, last 5):`);
+    for (const p of cH.slice(-5)) {
+      const candle = futuresLong[p.index]!;
+      console.log(`    idx=${p.index}  cvd=${p.value.toFixed(2)}  time=${new Date(candle.time).toISOString()}`);
+    }
+    console.log(`  CVD swing lows (${cL.length} total, last 5):`);
+    for (const p of cL.slice(-5)) {
+      const candle = futuresLong[p.index]!;
+      console.log(`    idx=${p.index}  cvd=${p.value.toFixed(2)}  time=${new Date(candle.time).toISOString()}`);
+    }
+
+    const pHPair = lastTwo(pH);
+    const pLPair = lastTwo(pL);
+    const cHPair = lastTwo(cH);
+    const cLPair = lastTwo(cL);
+
+    if (pHPair && pLPair && cHPair && cLPair) {
+      const priceMid = (pHPair[1].value + pLPair[1].value) / 2;
+      const minSwing = priceMid * (MIN_PRICE_SWING_PCT / 100);
+      const priceHH = pHPair[1].value > pHPair[0].value &&
+        Math.abs(pHPair[1].value - pHPair[0].value) >= minSwing;
+      const cvdHH   = cHPair[1].value > cHPair[0].value;
+      const priceLL = pLPair[1].value < pLPair[0].value &&
+        Math.abs(pLPair[1].value - pLPair[0].value) >= minSwing;
+      const cvdLL   = cLPair[1].value < cLPair[0].value;
+      const priceDiffH = Math.abs(pHPair[1].value - pHPair[0].value);
+      const priceDiffL = Math.abs(pLPair[1].value - pLPair[0].value);
+      console.log(`\n  Decision (minSwing=${fmt$(minSwing)}):`);
+      console.log(`    priceHH=${priceHH} (${fmt$(pHPair[0].value)} → ${fmt$(pHPair[1].value)}, diff=${fmt$(priceDiffH)}, dist=${pHPair[1].index - pHPair[0].index}c)`);
+      console.log(`    cvdHH  =${cvdHH}   (${cHPair[0].value.toFixed(2)} → ${cHPair[1].value.toFixed(2)}, dist=${cHPair[1].index - cHPair[0].index}c)`);
+      console.log(`    priceLL=${priceLL} (${fmt$(pLPair[0].value)} → ${fmt$(pLPair[1].value)}, diff=${fmt$(priceDiffL)}, dist=${pLPair[1].index - pLPair[0].index}c)`);
+      console.log(`    cvdLL  =${cvdLL}   (${cLPair[0].value.toFixed(2)} → ${cLPair[1].value.toFixed(2)}, dist=${cLPair[1].index - cLPair[0].index}c)`);
+
+      if (cvdHH && !priceHH) console.log(`    → BEARISH ABSORPTION`);
+      else if (cvdLL && !priceLL) console.log(`    → BULLISH ABSORPTION`);
+      else if (priceHH && !cvdHH) console.log(`    → BEARISH EXHAUSTION`);
+      else if (priceLL && !cvdLL) console.log(`    → BULLISH EXHAUSTION`);
+      else console.log(`    → NONE`);
+    } else {
+      console.log(`\n  Not enough spaced pivots for divergence (pH=${!!pHPair} pL=${!!pLPair} cH=${!!cHPair} cL=${!!cLPair})`);
+    }
+  }
 
   hdr("CVD — Spot (4h)");
   const sc = ctx.cvd.spot;

@@ -21,6 +21,7 @@ import {
   CvdContext,
   CvdDivergence,
   CvdDivergenceMechanism,
+  CvdExtreme,
   CvdRegime,
   CvdSeries,
   CvdWindow,
@@ -126,22 +127,77 @@ function buildCvdCurve(candles: Candle[]): number[] {
   return curve;
 }
 
-/** Classify a CVD window into a regime using slope + R². */
+/**
+ * Classify a CVD window into a regime using swing structure.
+ *
+ * Finds swing highs/lows on the CVD curve, then checks:
+ *   HH + HL → RISING     (buyers in control)
+ *   LH + LL → DECLINING  (sellers in control)
+ *   mixed   → FLAT
+ *
+ * Magnitude (slope field): how far the last swing low is from the last swing
+ * high, normalized by average volume — captures the amplitude of the move.
+ *
+ * Confidence (r2 field): 1.0 when both HH/HL or LH/LL agree, 0.5 when only
+ * one condition holds, 0 when neither.
+ */
 function classifyWindow(candles: Candle[], cvdCurve: number[]): CvdWindow {
   const n = candles.length;
   if (n < 10) return { regime: "FLAT", slope: 0, r2: 0 };
 
-  const { slope, r2 } = linreg(cvdCurve);
+  // Use smaller lookback for short windows, larger for long
+  const lb = n <= 25 ? 3 : 5;
 
-  const avgVolume = candles.reduce((s, c) => s + c.volume, 0) / n;
-  const normalizedSlope = avgVolume === 0 ? 0 : parseFloat((slope / avgVolume).toFixed(6));
+  const highs = swingHighs(cvdCurve, lb);
+  const lows  = swingLows(cvdCurve, lb);
 
-  let regime: CvdRegime = "FLAT";
-  if (Math.abs(normalizedSlope) >= SLOPE_THRESHOLD && r2 >= R2_THRESHOLD) {
-    regime = normalizedSlope > 0 ? "RISING" : "DECLINING";
+  if (highs.length < 2 || lows.length < 2) {
+    // Not enough pivots — fall back to simple start-vs-end direction
+    const delta = cvdCurve.at(-1)! - cvdCurve[0]!;
+    const totalVolume = candles.reduce((s, c) => s + c.volume, 0);
+    const mag = totalVolume === 0 ? 0 : Math.abs(delta) / totalVolume;
+    const regime: CvdRegime = mag > 0.01 ? (delta > 0 ? "RISING" : "DECLINING") : "FLAT";
+    return {
+      regime,
+      slope: parseFloat((regime === "DECLINING" ? -mag : mag).toFixed(6)),
+      r2: regime !== "FLAT" ? 0.25 : 0, // low confidence — no structural confirmation
+    };
   }
 
-  return { regime, slope: normalizedSlope, r2 };
+  const hh = highs.at(-1)!.value > highs.at(-2)!.value;
+  const lh = highs.at(-1)!.value < highs.at(-2)!.value;
+  const hl = lows.at(-1)!.value > lows.at(-2)!.value;
+  const ll = lows.at(-1)!.value < lows.at(-2)!.value;
+
+  // Magnitude: distance between last swing high and last swing low,
+  // normalized by total volume over the window
+  const lastHigh = highs.at(-1)!.value;
+  const lastLow  = lows.at(-1)!.value;
+  const totalVolume = candles.reduce((s, c) => s + c.volume, 0);
+  const magnitude = totalVolume === 0 ? 0 : Math.abs(lastHigh - lastLow) / totalVolume;
+
+  let regime: CvdRegime = "FLAT";
+  let confidence = 0;
+
+  if (hh && hl) {
+    regime = "RISING";
+    confidence = 1.0;
+  } else if (lh && ll) {
+    regime = "DECLINING";
+    confidence = 1.0;
+  } else if (hh || hl) {
+    regime = "RISING";
+    confidence = 0.5;
+  } else if (lh || ll) {
+    regime = "DECLINING";
+    confidence = 0.5;
+  }
+
+  return {
+    regime,
+    slope: parseFloat((regime === "DECLINING" ? -magnitude : magnitude).toFixed(6)),
+    r2: confidence,
+  };
 }
 
 /**
@@ -201,7 +257,9 @@ function detectDivergence(
 ): { divergence: CvdDivergence; mechanism: CvdDivergenceMechanism } {
   const NONE = { divergence: "NONE" as CvdDivergence, mechanism: "NONE" as CvdDivergenceMechanism };
   const MIN_PIVOTS = 2;
-  const LOOKBACK = 3;
+  const LOOKBACK = 14;
+  const MIN_PIVOT_DISTANCE = 5;     // min candles between compared pivots
+  const MIN_PRICE_SWING_PCT = 0.5;  // ignore HH/LL if price diff < 0.5%
 
   if (candles.length < LOOKBACK * 2 + MIN_PIVOTS + 1) return NONE;
 
@@ -216,10 +274,32 @@ function detectDivergence(
   if (pH.length < MIN_PIVOTS || pL.length < MIN_PIVOTS ||
       cH.length < MIN_PIVOTS || cL.length < MIN_PIVOTS) return NONE;
 
-  const priceHH = pH.at(-1)!.value > pH.at(-2)!.value; // price making higher high
-  const cvdHH   = cH.at(-1)!.value > cH.at(-2)!.value; // CVD making higher high
-  const priceLL = pL.at(-1)!.value < pL.at(-2)!.value; // price making lower low
-  const cvdLL   = cL.at(-1)!.value < cL.at(-2)!.value; // CVD making lower low
+  // Pick the last two pivots that are sufficiently spaced apart
+  const lastTwo = <T extends { index: number; value: number }>(arr: T[]): [T, T] | null => {
+    for (let i = arr.length - 1; i >= 1; i--) {
+      if (arr[i]!.index - arr[i - 1]!.index >= MIN_PIVOT_DISTANCE) {
+        return [arr[i - 1]!, arr[i]!];
+      }
+    }
+    return null;
+  };
+
+  const pHPair = lastTwo(pH);
+  const pLPair = lastTwo(pL);
+  const cHPair = lastTwo(cH);
+  const cLPair = lastTwo(cL);
+
+  if (!pHPair || !pLPair || !cHPair || !cLPair) return NONE;
+
+  const priceMid = (pHPair[1].value + pLPair[1].value) / 2;
+  const minSwing = priceMid * (MIN_PRICE_SWING_PCT / 100);
+
+  const priceHH = pHPair[1].value > pHPair[0].value &&
+    Math.abs(pHPair[1].value - pHPair[0].value) >= minSwing;
+  const cvdHH   = cHPair[1].value > cHPair[0].value;
+  const priceLL = pLPair[1].value < pLPair[0].value &&
+    Math.abs(pLPair[1].value - pLPair[0].value) >= minSwing;
+  const cvdLL   = cLPair[1].value < cLPair[0].value;
 
   // Bearish: absorption (CVD HH, price fails) — stronger than exhaustion
   if (cvdHH && !priceHH) return { divergence: "BEARISH", mechanism: "ABSORPTION" };
@@ -260,11 +340,83 @@ function computeSpotFuturesDivergence(
 }
 
 /**
- * Full CVD analysis: dual-window regime + pivot-based divergence.
+ * Detect overbought/oversold CVD extremes within the swing structure.
+ *
+ * When CVD is in a RISING structure (HH/HL), an unusually large upward spike
+ * signals overbought — aggressive buyers exhausting themselves at the top,
+ * likely forming a new swing high. Mirror logic for DECLINING + downward spike.
+ *
+ * Uses the percentile of recent CVD change (last 5 candles' cumulative delta)
+ * within the full window's distribution of rolling 5-candle changes.
+ * Also measures how far the current value extends beyond the last swing extreme.
+ */
+const CVD_EXTREME_ROLL = 5; // rolling window for change measurement
+const CVD_EXTREME_PCTILE = 90; // percentile threshold for extreme
+
+function detectCvdExtreme(
+  cvdCurve: number[],
+  longWindow: CvdWindow,
+): CvdExtreme {
+  const NONE: CvdExtreme = { state: "NONE", changePctile: 50, extensionPct: 0 };
+  if (cvdCurve.length < CVD_EXTREME_ROLL + 10) return NONE;
+
+  // Build distribution of rolling N-candle CVD changes across the window
+  const changes: number[] = [];
+  for (let i = CVD_EXTREME_ROLL; i < cvdCurve.length; i++) {
+    changes.push(cvdCurve[i]! - cvdCurve[i - CVD_EXTREME_ROLL]!);
+  }
+  const recentChange = changes.at(-1)!;
+
+  // Percentile of the recent change within the distribution
+  const sorted = [...changes].sort((a, b) => a - b);
+  let rank = 0;
+  for (const v of sorted) { if (v < recentChange) rank++; else break; }
+  const changePctile = Math.round((rank / sorted.length) * 100);
+
+  // Extension: how far current CVD is beyond the last swing high or low
+  const lb = cvdCurve.length <= 25 ? 3 : 5;
+  const highs = swingHighs(cvdCurve, lb);
+  const lows  = swingLows(cvdCurve, lb);
+
+  const curValue = cvdCurve.at(-1)!;
+  const cvdRange = Math.max(...cvdCurve) - Math.min(...cvdCurve);
+  if (cvdRange === 0) return NONE;
+
+  let extensionPct = 0;
+  let state: CvdExtreme["state"] = "NONE";
+
+  if (longWindow.regime === "RISING" && highs.length >= 1) {
+    const lastSwingHigh = highs.at(-1)!.value;
+    if (curValue > lastSwingHigh) {
+      extensionPct = ((curValue - lastSwingHigh) / cvdRange) * 100;
+    }
+    if (changePctile >= CVD_EXTREME_PCTILE) {
+      state = "OVERBOUGHT";
+    }
+  } else if (longWindow.regime === "DECLINING" && lows.length >= 1) {
+    const lastSwingLow = lows.at(-1)!.value;
+    if (curValue < lastSwingLow) {
+      extensionPct = ((lastSwingLow - curValue) / cvdRange) * 100;
+    }
+    if (changePctile <= (100 - CVD_EXTREME_PCTILE)) {
+      state = "OVERSOLD";
+    }
+  }
+
+  return {
+    state,
+    changePctile,
+    extensionPct: parseFloat(extensionPct.toFixed(1)),
+  };
+}
+
+/**
+ * Full CVD analysis: dual-window regime + pivot-based divergence + extremes.
  *
  * Short window (20 candles ≈ 3.3d): detects early regime shifts for entries.
  * Long window  (75 candles ≈ 12.5d): confirms the trend across a swing hold.
  * Divergence checked on the long window using swing high/low comparison.
+ * Extremes checked on the long window — spikes within the swing structure.
  */
 function cvdAnalysis(candles: Candle[]): CvdSeries {
   const longSlice  = candles.slice(-CVD_LONG_LOOKBACK);
@@ -278,8 +430,9 @@ function cvdAnalysis(candles: Candle[]): CvdSeries {
 
   const value = longCurve.length > 0 ? parseFloat(longCurve.at(-1)!.toFixed(2)) : 0;
   const { divergence, mechanism: divergenceMechanism } = detectDivergence(longSlice, longCurve);
+  const extreme = detectCvdExtreme(longCurve, longWindow);
 
-  return { value, short: shortWindow, long: longWindow, divergence, divergenceMechanism };
+  return { value, short: shortWindow, long: longWindow, divergence, divergenceMechanism, extreme };
 }
 
 /**
@@ -579,7 +732,7 @@ function cvdDivergencePeakStaleness(candles: Candle[]): number | null {
 
 // ─── Volume Profile ─────────────────────────────────────────────────────────
 
-const VP_BIN_PCT = 0.001;          // 0.1% of price per bin
+const VP_BIN_PCT = 0.005;          // 0.5% of price per bin (~$350 at BTC $70k)
 const VP_MIN_RANGE_CANDLES = 20;   // minimum candles for meaningful profile
 const VP_DISPLACEMENT_SINGLE = 5;  // single-candle displacement threshold (×ATR)
 const VP_DISPLACEMENT_WINDOW = 5;  // 3-candle window displacement threshold (×ATR)
@@ -758,13 +911,18 @@ function analyzeVolumeProfile(
  * 1. Detect where the current range started (last displacement)
  * 2. Build + analyze the volume profile from range start to now
  */
+// Hardcoded range anchor: the Feb 4 displacement marks the start of the
+// current trading range for both BTC and ETH.
+const VP_RANGE_ANCHOR = new Date("2026-02-04T00:00:00Z").getTime();
+
 function computeVolumeProfileContext(
   futuresCandles: Candle[],
   atr: number,
   currentPrice: number,
 ): VolumeProfileContext {
   const binSize = currentPrice * VP_BIN_PCT;
-  const rangeStartIdx = findRangeStart(futuresCandles, atr);
+  const anchorIdx = futuresCandles.findIndex(c => c.time >= VP_RANGE_ANCHOR);
+  const rangeStartIdx = anchorIdx >= 0 ? anchorIdx : findRangeStart(futuresCandles, atr);
   const rangeCandles = futuresCandles.slice(rangeStartIdx);
 
   const profileMap = buildVolumeProfile(rangeCandles, binSize);
@@ -995,6 +1153,23 @@ function detectEvents(
     });
   }
 
+  // CVD extreme (overbought/oversold spike within swing structure)
+  if (cvd.futures.extreme.state === "OVERBOUGHT") {
+    events.push({
+      type: "cvd_overbought",
+      detail: `Futures CVD overbought spike — change at ${cvd.futures.extreme.changePctile}th percentile, `
+        + `${cvd.futures.extreme.extensionPct.toFixed(1)}% extension beyond last swing high`,
+      at,
+    });
+  } else if (cvd.futures.extreme.state === "OVERSOLD") {
+    events.push({
+      type: "cvd_oversold",
+      detail: `Futures CVD oversold spike — change at ${cvd.futures.extreme.changePctile}th percentile, `
+        + `${cvd.futures.extreme.extensionPct.toFixed(1)}% extension beyond last swing low`,
+      at,
+    });
+  }
+
   return events;
 }
 
@@ -1077,32 +1252,54 @@ function computeBias(
   const rsiDevDaily = (50 - rsi.daily) / 50;
   const momentum = clamp(rsiDev4h * 0.7 + rsiDevDaily * 0.3, -1, 1);
 
-  // 3. Flow — CVD order flow direction and divergence.
-  //    Futures divergence is the primary signal, spot confirms/discounts.
+  // 3. Flow — CVD order flow direction from swing structure + divergence boost.
+  //    Base signal comes from regime direction weighted by magnitude & confidence.
+  //    Divergence layered on top as a reversal amplifier.
   let flow = 0;
   const { futures, spot, spotFuturesDivergence } = cvd;
 
+  // Base flow from CVD regime direction.
+  // Short window captures the current move, long window the structural trend.
+  // Futures weighted 60%, spot 40%.
+  const regimeSign = (w: CvdWindow): number =>
+    w.regime === "RISING" ? 1 : w.regime === "DECLINING" ? -1 : 0;
+  const windowScore = (w: CvdWindow): number =>
+    regimeSign(w) * clamp(Math.abs(w.slope) / 0.01, 0.2, 1.0) * (0.4 + w.r2 * 0.6);
+
+  const futuresBase = windowScore(futures.short) * 0.6 + windowScore(futures.long) * 0.4;
+  const spotBase    = windowScore(spot.short) * 0.6 + windowScore(spot.long) * 0.4;
+  flow = futuresBase * 0.6 + spotBase * 0.4;
+
+  // Divergence boost — amplifies the base when price and CVD disagree.
   if (futures.divergence !== "NONE") {
     const sign = futures.divergence === "BULLISH" ? 1 : -1;
-    const slopeMag = clamp(Math.abs(futures.short.slope) / 0.5, 0.3, 1.0);
     const mechMult = futures.divergenceMechanism === "ABSORPTION" ? 1.25
       : futures.divergenceMechanism === "EXHAUSTION" ? 0.75 : 1.0;
-    const r2Conf = 0.4 + futures.short.r2 * 0.6;
-    flow += sign * 0.6 * slopeMag * mechMult * r2Conf;
+    flow += sign * 0.3 * mechMult;
   }
-
   if (spot.divergence !== "NONE") {
     const sign = spot.divergence === "BULLISH" ? 1 : -1;
-    const slopeMag = clamp(Math.abs(spot.short.slope) / 0.5, 0.3, 1.0);
-    const r2Conf = 0.4 + spot.short.r2 * 0.6;
-    flow += sign * 0.4 * slopeMag * r2Conf;
+    flow += sign * 0.15;
   }
 
   // Double-divergence boost
   if (futures.divergence !== "NONE" && spot.divergence !== "NONE" &&
       futures.divergence === spot.divergence) {
-    const r2Boost = futures.short.r2 > 0.7 ? 1.2 : 1.0;
-    flow *= 1.4 * r2Boost;
+    flow *= 1.4;
+  }
+
+  // CVD extreme — overbought/oversold spike counters the prevailing direction.
+  // OVERBOUGHT in a RISING structure = buyers exhausting, contrarian bearish.
+  // OVERSOLD in a DECLINING structure = sellers exhausting, contrarian bullish.
+  // Magnitude scales with how extreme the percentile is beyond the threshold.
+  if (futures.extreme.state === "OVERBOUGHT") {
+    const depth = clamp((futures.extreme.changePctile - CVD_EXTREME_PCTILE) / (100 - CVD_EXTREME_PCTILE), 0, 1);
+    const ext = clamp(futures.extreme.extensionPct / 20, 0, 1);
+    flow -= 0.3 * (0.6 * depth + 0.4 * ext); // pushes bearish
+  } else if (futures.extreme.state === "OVERSOLD") {
+    const depth = clamp(((100 - CVD_EXTREME_PCTILE) - futures.extreme.changePctile) / (100 - CVD_EXTREME_PCTILE), 0, 1);
+    const ext = clamp(futures.extreme.extensionPct / 20, 0, 1);
+    flow += 0.3 * (0.6 * depth + 0.4 * ext); // pushes bullish
   }
 
   // Spot-futures alignment modifier
