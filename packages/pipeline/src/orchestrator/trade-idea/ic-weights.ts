@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "../../storage/db.js";
+import { getRedis } from "../../storage/redis.js";
 import type { $Enums } from "../../generated/prisma/client.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -38,6 +39,17 @@ export interface DimensionWeights {
 
 /** Minimum resolved trade ideas required to trust IC estimates */
 const MIN_SAMPLES = 20;
+
+/**
+ * EMA smoothing factor for IC values.
+ * α = 0.1 → half-life ≈ 6–7 hourly runs.
+ * A single new resolved idea shifts weights by only ~10% of what a fresh
+ * recompute would produce, preventing intra-session weight flips.
+ */
+const IC_EMA_ALPHA = 0.1;
+
+/** Redis key prefix for persisted smoothed IC values */
+const IC_EMA_KEY_PREFIX = "ic_ema:";
 
 /**
  * Floor weight — no dimension drops below this even with poor IC.
@@ -90,6 +102,31 @@ function pearsonCorrelation(xs: number[], ys: number[]): number {
 
   const denom = Math.sqrt(varX * varY);
   return denom === 0 ? 0 : cov / denom;
+}
+
+// ─── IC EMA persistence ─────────────────────────────────────────────────────
+
+type SmoothedIc = Record<DimensionKey, number>;
+
+function icEmaKey(asset: $Enums.Asset): string {
+  return `${IC_EMA_KEY_PREFIX}${asset}`;
+}
+
+async function loadSmoothedIc(asset: $Enums.Asset): Promise<SmoothedIc | null> {
+  try {
+    return await getRedis().get<SmoothedIc>(icEmaKey(asset));
+  } catch {
+    return null;
+  }
+}
+
+async function saveSmoothedIc(asset: $Enums.Asset, ic: SmoothedIc): Promise<void> {
+  try {
+    // No TTL — smoothed ICs are intentionally long-lived state
+    await getRedis().set(icEmaKey(asset), ic);
+  } catch {
+    // Non-fatal: next run will recompute from fresh ICs
+  }
 }
 
 // ─── Equal weights fallback ─────────────────────────────────────────────────
@@ -176,8 +213,8 @@ export async function computeDimensionWeights(asset: $Enums.Asset): Promise<Dime
 
   if (outcomes.length < MIN_SAMPLES) return equalWeights(outcomes.length);
 
-  // Compute IC and σ per dimension
-  const ic: Record<DimensionKey, number> = {
+  // Compute fresh IC and σ per dimension
+  const freshIc: Record<DimensionKey, number> = {
     derivatives: 0,
     etfs: 0,
     htf: 0,
@@ -191,9 +228,20 @@ export async function computeDimensionWeights(asset: $Enums.Asset): Promise<Dime
   };
 
   for (const dim of DIMENSION_KEYS) {
-    ic[dim] = pearsonCorrelation(scores[dim], outcomes);
+    freshIc[dim] = pearsonCorrelation(scores[dim], outcomes);
     sigma[dim] = stddev(scores[dim]);
   }
+
+  // EMA smoothing — blend fresh ICs with persisted smoothed ICs.
+  // On first run (no stored ICs), seeds EMA with fresh values.
+  const prevIc = await loadSmoothedIc(asset);
+  const ic: Record<DimensionKey, number> = { ...freshIc };
+  if (prevIc) {
+    for (const dim of DIMENSION_KEYS) {
+      ic[dim] = IC_EMA_ALPHA * freshIc[dim] + (1 - IC_EMA_ALPHA) * prevIc[dim];
+    }
+  }
+  await saveSmoothedIc(asset, ic);
 
   // Raw weight = max(IC, 0) / σ
   // Anti-predictive dimensions (IC < 0) get floor weight rather than inverse weight
