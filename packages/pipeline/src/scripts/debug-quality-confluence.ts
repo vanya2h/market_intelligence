@@ -33,12 +33,14 @@ const QUALITY_THRESHOLD = 2;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
+/** Format a -1..+1 normalized score as a signed percentage. */
 function fmtScore(v: number): string {
-  const s = v > 0 ? `+${v}` : `${v}`;
-  if (v >= 50) return chalk.green.bold(s);
-  if (v >= 20) return chalk.green(s);
-  if (v <= -50) return chalk.red.bold(s);
-  if (v <= -20) return chalk.red(s);
+  const pctVal = Math.round(v * 100);
+  const s = pctVal >= 0 ? `+${pctVal}%` : `${pctVal}%`;
+  if (v >= 0.5) return chalk.green.bold(s);
+  if (v >= 0.2) return chalk.green(s);
+  if (v <= -0.5) return chalk.red.bold(s);
+  if (v <= -0.2) return chalk.red(s);
   return chalk.dim(s);
 }
 
@@ -139,7 +141,7 @@ async function main() {
         avgScores[dim] += score;
         absAvgScores[dim] += Math.abs(score);
         if (score > 0) agreementCount[dim]++;
-        if (score >= 50) strongCount[dim]++;
+        if (score >= 0.5) strongCount[dim]++;
       }
     }
 
@@ -150,11 +152,11 @@ async function main() {
       const avg = avgScores[dim] / n;
       const absAvg = absAvgScores[dim] / n;
       console.log(
-        `    ${DIM_LABELS[dim].padEnd(14)} ${bar(avg, 100, 30)}  avg: ${fmtScore(Math.round(avg)).padStart(14)}  |avg|: ${chalk.bold(absAvg.toFixed(0)).padStart(4)}`,
+        `    ${DIM_LABELS[dim].padEnd(14)} ${bar(avg, 1, 30)}  avg: ${fmtScore(avg).padStart(14)}  |avg|: ${chalk.bold((absAvg * 100).toFixed(0) + "%").padStart(5)}`,
       );
     }
     console.log(
-      `    ${"Total".padEnd(14)} ${" ".repeat(30)}  avg: ${fmtScore(Math.round(DIMENSIONS.reduce((s, d) => s + avgScores[d], 0) / n)).padStart(14)}`,
+      `    ${"Total".padEnd(14)} ${" ".repeat(30)}  avg: ${fmtScore(DIMENSIONS.reduce((s, d) => s + avgScores[d], 0) / n).padStart(14)}`,
     );
 
     console.log(`\n  ${chalk.underline("Agreement Rate (score > 0)")}\n`);
@@ -162,7 +164,7 @@ async function main() {
       const rate = (agreementCount[dim] / n) * 100;
       const strongRate = (strongCount[dim] / n) * 100;
       console.log(
-        `    ${DIM_LABELS[dim].padEnd(14)} ${bar(rate, 100, 30)}  ${rate.toFixed(0).padStart(3)}%  (strong ≥50: ${strongRate.toFixed(0)}%)`,
+        `    ${DIM_LABELS[dim].padEnd(14)} ${bar(rate, 100, 30)}  ${rate.toFixed(0).padStart(3)}%  (strong ≥+50%: ${strongRate.toFixed(0)}%)`,
       );
     }
 
@@ -202,7 +204,7 @@ async function main() {
       const wrongAvg = highWrong.reduce((s, i) => s + i.confluence[dim], 0) / highWrong.length;
       const delta = correctAvg - wrongAvg;
       console.log(
-        `    ${DIM_LABELS[dim].padEnd(14)} correct: ${fmtScore(Math.round(correctAvg)).padStart(6)}  wrong: ${fmtScore(Math.round(wrongAvg)).padStart(6)}  Δ: ${fmtScore(Math.round(delta)).padStart(6)}`,
+        `    ${DIM_LABELS[dim].padEnd(14)} correct: ${fmtScore(correctAvg).padStart(8)}  wrong: ${fmtScore(wrongAvg).padStart(8)}  Δ: ${fmtScore(delta).padStart(8)}`,
       );
     }
   }
@@ -228,8 +230,7 @@ async function main() {
         `\n  ${date}  ${dir}${skip}  peak: ${fmtPct(idea.peakReturnPct)} at ${idea.peakHoursAfter}h  quality: ${qColor.bold(idea.peakQuality.toFixed(2))}`,
       );
       for (const dim of DIMENSIONS) {
-        const score = idea.confluence[dim];
-        console.log(`    ${DIM_LABELS[dim].padEnd(14)} ${fmtScore(score)}`);
+        console.log(`    ${DIM_LABELS[dim].padEnd(14)} ${fmtScore(idea.confluence[dim])}`);
       }
       console.log(`    ${"Total".padEnd(14)} ${fmtScore(idea.confluence.total)}`);
     }

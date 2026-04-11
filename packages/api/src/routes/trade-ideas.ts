@@ -336,12 +336,13 @@ interface ConfluenceJson {
 
 // ─── Signal effectiveness ───────────────────────────────────────────────────
 
+// Score range cuts on the new -1..+1 normalized scale.
 const SCORE_BUCKETS = [
-  { range: "strong_against", min: -100, max: -50 },
-  { range: "weak_against", min: -50, max: -10 },
-  { range: "neutral", min: -10, max: 10 },
-  { range: "weak_for", min: 10, max: 50 },
-  { range: "strong_for", min: 50, max: 100 },
+  { range: "strong_against", min: -1, max: -0.5 },
+  { range: "weak_against", min: -0.5, max: -0.1 },
+  { range: "neutral", min: -0.1, max: 0.1 },
+  { range: "weak_for", min: 0.1, max: 0.5 },
+  { range: "strong_for", min: 0.5, max: 1 },
 ] as const;
 
 /**

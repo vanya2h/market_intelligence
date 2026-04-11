@@ -3,14 +3,28 @@ import { CONFLUENCE_KEYS, DIMENSION_LABELS, CONFLUENCE_KEY_MAP, type ConfluenceK
 import { Tooltip } from "./Tooltip";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 
-const CONVICTION_THRESHOLD = 200;
+/**
+ * Conviction "fully loaded" threshold on the new -1..+1 scale (= 0.5 of full).
+ * Used purely for color/label switching in the UI; the trade decision itself
+ * is mechanical and unconditional.
+ */
+const CONVICTION_THRESHOLD = 0.5;
 
 /**
- * Recompute total from the 4 active dimensions.
- * Legacy confluence JSON may include a stale sentiment contribution in `total`.
+ * Read the persisted total directly. Confluence values are now in -1..+1
+ * (per-dim are unweighted, total is the weighted average) and the API
+ * normalizes legacy rows on read. Falls back to a per-dim sum only when the
+ * total field is missing for some legacy reason.
  */
-function computeTotal(conf: Confluence): number {
+function readTotal(conf: Confluence): number {
+  if (typeof conf.total === "number") return conf.total;
   return CONFLUENCE_KEYS.reduce((sum, key) => sum + (conf[key] ?? 0), 0);
+}
+
+/** Format a -1..+1 score as a signed integer percentage. */
+function pctLabel(score: number): string {
+  const v = Math.round(score * 100);
+  return v >= 0 ? `+${v}` : `${v}`;
 }
 
 const CONFLUENCE_TOOLTIPS: Record<ConfluenceKey, string> = {
@@ -47,10 +61,11 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
 
   const bias = conf.bias;
 
-  // Bipolar score: -100 (strong sell) to +100 (strong buy)
-  // Derived from bias strength × direction sign.
-  const strength = bias?.strength ?? 0;
-  const score = bias?.lean === "LONG" ? strength : bias?.lean === "SHORT" ? -strength : 0;
+  // Bipolar score: -100 (strong sell) to +100 (strong buy).
+  // bias.strength is now stored as 0..1; multiply by 100 here so the gauge's
+  // visual scale (which renders -100..+100) doesn't need to change.
+  const strengthPct = (bias?.strength ?? 0) * 100;
+  const score = bias?.lean === "LONG" ? strengthPct : bias?.lean === "SHORT" ? -strengthPct : 0;
 
   const color = gaugeColor(score);
   const prefix = score > 0 ? "+" : "";
@@ -118,7 +133,7 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
             <span style={{ color }} className="font-medium">
               {bias.lean}
             </span>{" "}
-            — strength {bias.strength}/100
+            — strength {Math.round(bias.strength * 100)}/100
           </span>
         ) : (
           <span>No directional edge detected</span>
@@ -129,10 +144,8 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
 }
 
 function dimScoreColor(score: number): string {
-  if (score >= 50) return "var(--green)";
-  if (score >= 20) return "var(--green)";
-  if (score <= -50) return "var(--red)";
-  if (score <= -20) return "var(--red)";
+  if (score >= 0.2) return "var(--green)";
+  if (score <= -0.2) return "var(--red)";
   return "var(--text-muted)";
 }
 
@@ -146,7 +159,6 @@ export function ConfluenceRows({ confluence }: { confluence: Confluence }) {
         const label = DIMENSION_LABELS[dim as keyof typeof DIMENSION_LABELS];
         const tooltip = CONFLUENCE_TOOLTIPS[key];
         const color = dimScoreColor(score);
-        const prefix = score > 0 ? "+" : "";
 
         return (
           <div
@@ -164,15 +176,14 @@ export function ConfluenceRows({ confluence }: { confluence: Confluence }) {
               </span>
             </Tooltip>
             <span className="font-mono-jb text-xs font-medium tabular-nums" style={{ color }}>
-              {prefix}
-              {score}
+              {pctLabel(score)}
             </span>
           </div>
         );
       })}
-      {/* Total — recomputed from active dimensions to handle legacy data */}
+      {/* Total — read directly from the persisted (normalized) total field */}
       {(() => {
-        const total = computeTotal(confluence);
+        const total = readTotal(confluence);
         return (
           <div className="flex items-center justify-between py-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -184,7 +195,7 @@ export function ConfluenceRows({ confluence }: { confluence: Confluence }) {
                 color: total >= CONVICTION_THRESHOLD ? "var(--green)" : total > 0 ? "var(--amber)" : "var(--red)",
               }}
             >
-              {total} / {CONVICTION_THRESHOLD}
+              {pctLabel(total)} / 100
             </span>
           </div>
         );

@@ -15,44 +15,44 @@ function ZoneBadge({ color, label }: { color: string; label: string }) {
 
 const opportunityZones = [
   {
-    range: "+70 to +100",
+    range: "+70% to +100%",
     label: "Strong Buy",
     color: "var(--green)",
     bias: "High conviction long",
     description:
-      "Multiple dimensions strongly agree on a buy setup. Derivatives crowding, institutional flows, HTF structure, and exchange flows all pointing the same way. This is where the system takes directional trades.",
+      "Multiple dimensions strongly agree on a buy setup. Derivatives crowding, institutional flows, HTF structure, and exchange flows all pointing the same way. Position size scales up aggressively in this zone.",
   },
   {
-    range: "+40 to +70",
+    range: "+40% to +70%",
     label: "Moderate Buy",
     color: "var(--amber)",
     bias: "Bullish lean",
     description:
-      "Directional lean toward buying, but not all dimensions agree. Some components support, others are neutral. Conviction may be insufficient for a trade — check the confluence breakdown for what's missing.",
+      "Directional lean toward buying, but not all dimensions agree. Some components support, others are neutral. Position size is moderate — check the confluence breakdown to see what's driving the lean.",
   },
   {
-    range: "-15 to +40",
+    range: "-15% to +40%",
     label: "No Edge",
     color: "var(--text-muted)",
     bias: "Wait",
     description:
-      "Dimensions are balanced or all weak. No actionable directional signal. The system will skip trade ideas in this zone. Wait for dimensions to converge.",
+      "Dimensions are balanced or all weak. The system still picks the higher-scoring direction but sizes the position small (pilot). Wait for dimensions to converge before adding risk.",
   },
   {
-    range: "-70 to -15",
+    range: "-70% to -15%",
     label: "Moderate Sell",
     color: "var(--amber)",
     bias: "Bearish lean",
     description:
-      "Directional lean toward selling. Some dimensions agree on a short setup but conviction may be below threshold. Tighten stops on longs, start scanning for short entries.",
+      "Directional lean toward selling. Tighten stops on longs, start scanning for short entries. Position size is moderate.",
   },
   {
-    range: "-100 to -70",
+    range: "-100% to -70%",
     label: "Strong Sell",
     color: "var(--red)",
     bias: "High conviction short",
     description:
-      "Multiple dimensions strongly agree on a sell setup. The mirror of Strong Buy — the system sees a high-probability reversal to the downside.",
+      "Multiple dimensions strongly agree on a sell setup. The mirror of Strong Buy — the system sees a high-probability reversal to the downside, sized aggressively.",
   },
 ];
 
@@ -71,7 +71,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "What is the Opportunity Score?",
-        a: "A bipolar directional edge score from -100 to +100. It answers the single question: \"should I buy or sell right now?\" Positive = buy setup, negative = sell setup, near zero = no edge. The score is derived from the directional bias between LONG and SHORT confluence — the gap between how strongly the market supports buying vs selling, normalized to a clean scale. The sign IS the direction, the magnitude IS the conviction.",
+        a: "A bipolar directional edge score from -100% to +100%. It answers the single question: \"should I buy or sell right now?\" Positive = buy setup, negative = sell setup, near zero = no edge. The score is derived from the directional bias between LONG and SHORT confluence — the gap between how strongly the market supports buying vs selling, normalized to a clean scale. The sign IS the direction, the magnitude IS the conviction.",
       },
       {
         q: "What do the different score zones mean?",
@@ -83,7 +83,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "What are the four confluence dimensions?",
-        a: "Four independent dimensions each score -100 to +100 for a given direction. HTF Structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull. Derivatives: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel. ETF Flows: flow sigma with regime-contradiction bonus, reversal confirmation after streaks, reversal ratio, and reversal regime. Exchange Flows: 7d/30d reserve changes and 30-day reserve extremes. Sentiment was removed from confluence scoring — it is a composite of derivatives (50%) + ETFs (30%) + HTF (20%), so including it would triple-count those dimensions.",
+        a: "Four independent dimensions each score -1 to +1 (rendered -100% to +100%) for a given direction. HTF Structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull. Derivatives: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel. ETF Flows: flow sigma with regime-contradiction bonus, reversal confirmation after streaks, reversal ratio, and reversal regime. Exchange Flows: 7d/30d reserve changes and 30-day reserve extremes. The total is the IC-weighted average across the four dimensions (also -1..+1, weights sum to 1) so adding or removing a dimension never changes the displayed range. Sentiment was removed from confluence scoring — it is a composite of derivatives (50%) + ETFs (30%) + HTF (20%), so including it would triple-count those dimensions.",
       },
       {
         q: "What does it mean when dimensions disagree?",
@@ -187,19 +187,15 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "How are trade ideas generated?",
-        a: "Fully mechanical — no LLM involved in the decision. The system scores all three directions (LONG, SHORT, FLAT) using granular confluence scoring across four dimensions. Each dimension produces a conviction score from -100 to +100. The direction with the highest total is selected. If no direction passes the conviction threshold (200 out of a possible 400), the idea is marked as 'skipped' but still tracked for accuracy measurement.",
+        a: "Fully mechanical — no LLM involved in the decision. The system scores LONG and SHORT using granular confluence scoring across four dimensions. Each dimension produces a conviction score from -1 to +1 (rendered as -100% to +100%). The direction with the higher weighted-average total is always taken; position size scales with conviction × inverse volatility (no skip threshold).",
       },
       {
         q: "What are the four confluence dimensions?",
-        a: "Derivatives (crowded longs/shorts, stress events like capitulation/unwinding, funding extremes, OI fuel), ETF Flows (flow sigma with regime-contradiction bonus, reversal confirmation, reversal ratio, reversal regime), HTF Structure (volatility compression, CVD divergence, RSI stretch, volume profile displacement, MA mean-reversion pull), and Exchange Flows (7d/30d reserve changes, 30-day reserve extremes). Each scores -100 to +100 independently. Sentiment was removed — it is a composite of the other dimensions, so including it would triple-count signals.",
+        a: "Derivatives (crowded longs/shorts, stress events like capitulation/unwinding, funding extremes, OI fuel), ETF Flows (flow sigma with regime-contradiction bonus, reversal confirmation, reversal ratio, reversal regime), HTF Structure (volatility compression, CVD divergence, RSI stretch, volume profile displacement, MA mean-reversion pull), and Exchange Flows (7d/30d reserve changes, 30-day reserve extremes). Each scores -1 to +1 independently (shown as -100% to +100%). Sentiment was removed — it is a composite of the other dimensions, so including it would triple-count signals.",
       },
       {
-        q: "What is the conviction threshold and why 200?",
-        a: "The total conviction ranges from -400 to +400 (four dimensions). A directional trade is only 'taken' when total >= 200 — meaning at least two dimensions need to strongly agree, or several need to moderately agree. This filters out low-conviction noise. Ideas below 200 are still saved and tracked as 'skipped' so we can measure whether the threshold is too strict (missing good trades) or too loose (taking bad ones). For volatility compression setups, the threshold is dynamically lowered (down to 120) since the coiled spring setup compensates for ambiguity in weaker dimensions.",
-      },
-      {
-        q: "What happens when a trade idea is skipped?",
-        a: "Skipped ideas are tracked with the same returns curve and level resolution as taken ideas. The UI shows a 'missed move' indicator that measures how wrong the skip was, using the same time-decay quality formula (returnPct × e^(-t/72)). A fast move in the predicted direction scores high (significant miss), while a slow move scores low (negligible). This directly calibrates the conviction threshold.",
+        q: "How does conviction scale into position size?",
+        a: "Total conviction is the IC-weighted average of the four dimension scores, in -1..+1 (shown as -100% to +100%). Every directional setup is taken — no skip threshold — but position size scales non-linearly with conviction × inverse volatility. A +75% conviction with the volatility compression bonus produces a much larger position than +25% with no compression. The dimension count is invariant: adding a fifth dimension changes only the average, not the displayed range or the scale of every threshold downstream.",
       },
       {
         q: "What is the volatility compression (coiled spring) signal?",
@@ -211,7 +207,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "What role does the LLM play in trade ideas?",
-        a: "None in the decision itself. Direction, targets, levels, and confluence scoring are all computed mechanically by code. The LLM receives the mechanical decision and writes a human-readable brief describing it — explaining what's driving conviction or why a trade was skipped. The LLM cannot override the direction or suggest alternatives.",
+        a: "None in the decision itself. Direction, targets, levels, and confluence scoring are all computed mechanically by code. The LLM receives the mechanical decision and writes a human-readable brief describing it — explaining what's driving conviction. The LLM cannot override the direction or suggest alternatives.",
       },
       {
         q: "What timeframe does the analysis use?",
@@ -240,7 +236,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "How does confluence scoring and the conviction gate work?",
-        a: "Each of four dimensions (Derivatives, ETFs, HTF, Exchange Flows) produces a conviction score from -100 to +100 relative to the trade direction — not a simple agree/disagree, but a granular measure of how strongly each dimension supports the trade. The total conviction ranges from -400 to +400. A directional trade is only taken when total >= 200 (or a lower dynamic threshold for compression setups). This keeps you out of low-conviction noise and ensures multiple independent data sources agree before risking capital. Sentiment was removed from scoring — it is a composite of the other three dimensions and would triple-count their signals.",
+        a: "Each of four dimensions (Derivatives, ETFs, HTF, Exchange Flows) produces a conviction score from -1 to +1 (rendered -100% to +100%) relative to the trade direction — not a simple agree/disagree, but a granular measure of how strongly each dimension supports the trade. The total is the IC-weighted average across dimensions (also -1..+1, weights sum to 1), so adding or removing a dimension never changes the displayed range. Position size scales non-linearly with conviction × inverse volatility. Sentiment is excluded — it is a composite of the other dimensions and would triple-count their signals.",
       },
     ],
   },

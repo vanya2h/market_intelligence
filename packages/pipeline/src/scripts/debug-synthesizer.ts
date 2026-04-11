@@ -35,12 +35,14 @@ import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+/** Format a -1..+1 normalized score as a signed percentage. */
 function scoreStr(score: number): string {
-  const s = score > 0 ? `+${score}` : `${score}`;
-  if (score >= 50) return chalk.green.bold(s);
-  if (score >= 20) return chalk.green(s);
-  if (score <= -50) return chalk.red.bold(s);
-  if (score <= -20) return chalk.red(s);
+  const v = Math.round(score * 100);
+  const s = v >= 0 ? `+${v}%` : `${v}%`;
+  if (score >= 0.5) return chalk.green.bold(s);
+  if (score >= 0.2) return chalk.green(s);
+  if (score <= -0.5) return chalk.red.bold(s);
+  if (score <= -0.2) return chalk.red(s);
   return chalk.dim(s);
 }
 
@@ -225,10 +227,8 @@ async function main() {
     for (const s of scored) {
       const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
       const parts = dims.map((d) => `${d}=${scoreStr(s.confluence[d])}`).join("  ");
-      const totalColor =
-        s.confluence.total >= 200 ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
       console.log(
-        `  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${totalColor(String(s.confluence.total))}`,
+        `  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${scoreStr(s.confluence.total)}`,
       );
     }
 
@@ -267,7 +267,7 @@ async function main() {
     console.log(`  Decision: ${chalk.bold(chosen.direction)} — ${chalk.green("TAKEN")}`);
     console.log(`  Entry: $${entryPrice.toFixed(2)}  Target: $${compositeTarget.toFixed(2)}`);
     console.log(
-      `  Conviction: ${chosen.confluence.total} / 400  Size: ${sizing.positionSizePct}% notional (${sizing.convictionMultiplier}x)`,
+      `  Conviction: ${scoreStr(chosen.confluence.total)} / 100  Size: ${sizing.positionSizePct}% notional (${sizing.convictionMultiplier}x)`,
     );
   } else {
     console.log(chalk.dim("  No HTF output — cannot compute trade decision"));

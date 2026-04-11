@@ -1,9 +1,21 @@
 import type { Confluence } from "@market-intel/api";
 import { CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_LABELS, CONFLUENCE_KEY_MAP } from "../lib/dimensions";
 
-/** Recompute total from active dimensions — legacy data may include stale sentiment in `total` */
-function computeTotal(conf: Confluence): number {
+/**
+ * All confluence values now live in -1..+1 (per-dim are unweighted normalized
+ * scores; total is the weighted average). The UI renders them as percentages.
+ * The API normalizes legacy rows on read, so we trust `confluence.total` here.
+ * We still fall back to summing per-dim if `total` is missing (very old rows).
+ */
+function readTotal(conf: Confluence): number {
+  if (typeof conf.total === "number") return conf.total;
   return CONFLUENCE_KEYS.reduce((sum, key) => sum + (conf[key] ?? 0), 0);
+}
+
+/** Format a -1..+1 score as a signed integer percentage. */
+function pctLabel(score: number): string {
+  const v = Math.round(score * 100);
+  return v >= 0 ? `+${v}` : `${v}`;
 }
 
 const LABELS: Record<string, string> = Object.fromEntries(
@@ -14,28 +26,21 @@ const LABELS: Record<string, string> = Object.fromEntries(
 );
 
 function scoreColor(score: number): string {
-  if (score >= 50) return "var(--green)";
-  if (score >= 20) return "var(--green)";
-  if (score <= -50) return "var(--red)";
-  if (score <= -20) return "var(--red)";
+  if (score >= 0.2) return "var(--green)";
+  if (score <= -0.2) return "var(--red)";
   return "var(--text-muted)";
 }
 
-function scoreLabel(score: number): string {
-  if (score > 0) return `+${score}`;
-  return `${score}`;
-}
-
 function totalColor(total: number): string {
-  if (total >= 300) return "var(--green)";
-  if (total >= 150) return "var(--amber)";
-  if (total <= -150) return "var(--red)";
+  if (total >= 0.6) return "var(--green)";
+  if (total >= 0.25) return "var(--amber)";
+  if (total <= -0.25) return "var(--red)";
   return "var(--text-muted)";
 }
 
 /** Inline badges — compact row of dimension scores + total */
 export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
-  const total = computeTotal(confluence);
+  const total = readTotal(confluence);
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {CONFLUENCE_KEYS.map((dim) => {
@@ -46,12 +51,12 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
             className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[0.625rem] font-medium"
             style={{
               color: scoreColor(score),
-              background: score >= 20 ? "var(--green-dim)" : score <= -20 ? "var(--red-dim)" : "var(--bg-hover)",
+              background: score >= 0.2 ? "var(--green-dim)" : score <= -0.2 ? "var(--red-dim)" : "var(--bg-hover)",
               border: "1px solid var(--border-subtle)",
             }}
           >
             {DIMENSION_SHORT_LABELS[dim]}
-            <span className="font-mono-jb tabular-nums">{scoreLabel(score)}</span>
+            <span className="font-mono-jb tabular-nums">{pctLabel(score)}</span>
           </span>
         );
       })}
@@ -59,7 +64,7 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
         className="text-[0.625rem] font-bold font-mono-jb tabular-nums"
         style={{ color: totalColor(total) }}
       >
-        {"\u03A3"}{total}/400
+        {"\u03A3"}{pctLabel(total)}/100
       </span>
     </div>
   );
@@ -67,17 +72,17 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
 
 /** Full breakdown — visual bars with dimension scores and conviction meter */
 export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) {
-  const maxScore = 100;
-  const total = computeTotal(confluence);
-  const maxTotal = 400;
-  const convictionPct = Math.max(0, Math.min(100, (total / maxTotal) * 100));
+  const total = readTotal(confluence);
+  // Conviction meter fills 0..100% based on |total| (signed by color), so a
+  // total of +1 fills the bar; -1 also fills it but in red.
+  const convictionPct = Math.max(0, Math.min(100, Math.abs(total) * 100));
 
   return (
     <div className="flex flex-col gap-2">
       {/* Per-dimension bars */}
       {CONFLUENCE_KEYS.map((dim) => {
         const score = confluence[dim] ?? 0;
-        const absPct = Math.abs(score) / maxScore;
+        const absPct = Math.min(1, Math.abs(score));
         const isPositive = score >= 0;
 
         return (
@@ -118,7 +123,7 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
               className="w-10 shrink-0 text-right font-mono-jb tabular-nums text-[0.625rem] font-bold"
               style={{ color: scoreColor(score) }}
             >
-              {scoreLabel(score)}
+              {pctLabel(score)}
             </span>
           </div>
         );
@@ -142,9 +147,9 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
             className="absolute top-0.5 bottom-0.5 left-0 rounded-sm transition-all"
             style={{
               width: `${convictionPct}%`,
-              background: total >= 300
+              background: total >= 0.6
                 ? "var(--green)"
-                : total >= 150
+                : total >= 0.25
                   ? "var(--amber)"
                   : total > 0
                     ? "var(--text-muted)"
@@ -158,7 +163,7 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
           className="w-16 shrink-0 text-right font-mono-jb tabular-nums text-[0.625rem] font-bold"
           style={{ color: totalColor(total) }}
         >
-          {total}/400
+          {pctLabel(total)}/100
         </span>
       </div>
     </div>

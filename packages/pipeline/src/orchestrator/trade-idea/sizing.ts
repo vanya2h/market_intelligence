@@ -7,22 +7,22 @@
  * Formula:
  *   dailyVol     = ATR_4h / price
  *   base         = DAILY_VOL_TARGET / dailyVol × 100   (% of account notional)
- *   multiplier   = 0.25 + 1.75 × (conviction/400)^1.5  (power curve γ=1.5)
+ *   multiplier   = 0.25 + 1.75 × conviction^1.5         (power curve γ=1.5)
  *   positionSizePct = clamp(base × multiplier, MIN, MAX)
  *
- * Conviction range 0–400:
- *   0   → multiplier 0.25 — minimal pilot position
- *   200 → multiplier ≈0.87 — moderate position
- *   300 → multiplier ≈1.39 — full-size position
- *   400 → multiplier 2.0  — maximum conviction
+ * Conviction range 0–1 (the new normalized confluence total):
+ *   0    → multiplier 0.25 — minimal pilot position
+ *   0.5  → multiplier ≈0.87 — moderate position
+ *   0.75 → multiplier ≈1.39 — full-size position
+ *   1.0  → multiplier 2.0  — maximum conviction
  *
  * Compression bonus (+0.25x): applied when ATR is compressed after a
  * recent displacement (coiled spring). Setup quality justifies larger size
  * despite potentially ambiguous weaker dimensions.
  *
  * BTC vs ETH sizing example at equal account:
- *   BTC ATR/price ≈ 1.65% → base ≈ 121% → size at conviction 300: ~168% (capped 150%)
- *   ETH ATR/price ≈ 4.40% → base ≈ 45%  → size at conviction 300: ~63%
+ *   BTC ATR/price ≈ 1.65% → base ≈ 121% → size at conviction 0.75: ~168% (capped 150%)
+ *   ETH ATR/price ≈ 4.40% → base ≈ 45%  → size at conviction 0.75: ~63%
  */
 
 import type { HtfContext } from "../../htf/types.js";
@@ -46,7 +46,10 @@ export interface PositionSize {
 /**
  * Compute position size from conviction score and current HTF volatility.
  *
- * @param conviction - Raw confluence total for the chosen direction (0–400)
+ * @param conviction - Confluence total for the chosen direction (0..1, the new
+ *                     normalized weighted average). Negative values are clamped
+ *                     to 0 (the caller passes the chosen-direction total, but
+ *                     defensive code path).
  * @param htfContext - HTF context providing ATR, price, and volatility state
  */
 export function computePositionSize(conviction: number, htfContext: HtfContext): PositionSize {
@@ -60,7 +63,7 @@ export function computePositionSize(conviction: number, htfContext: HtfContext):
 
   // 3. Non-linear conviction multiplier (power curve γ=1.5)
   //    Aggressively rewards high conviction; keeps low conviction small.
-  const normalizedConviction = Math.max(conviction, 0) / 400;
+  const normalizedConviction = Math.max(conviction, 0);
   const base = 0.25 + 1.75 * Math.pow(normalizedConviction, 1.5);
 
   // 4. Compression bonus: coiled spring after displacement = higher setup quality

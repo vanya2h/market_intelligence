@@ -26,15 +26,15 @@ export interface DirectionalBias {
   /** Which way the market is leaning */
   lean: BiasDirection;
   /**
-   * Strength of the lean: 0–100.
-   * Derived from the margin between LONG total and SHORT total,
-   * normalized against a practical max margin of 400.
-   * 0 = perfectly balanced. 100 = all dimensions agree.
+   * Strength of the lean: 0..1 (UI displays as a percentage).
+   * Derived from the margin between LONG total and SHORT total, normalized
+   * against a practical max margin of 2 (since each total ∈ [-1, +1]).
+   * 0 = perfectly balanced. 1 = all dimensions aligned with one side.
    */
   strength: number;
   /**
    * Top 1–3 dimensions driving the lean (positive score for the lean direction).
-   * Empty when lean is NEUTRAL.
+   * Per-dim scores are in 0..1. Empty when lean is NEUTRAL.
    */
   topFactors: BiasFactor[];
 }
@@ -43,14 +43,17 @@ export interface DirectionalBias {
 
 /**
  * Practical normalizer for the LONG-minus-SHORT margin.
- * When all 4 dims agree on one direction (each scoring +100 for LONG / -100 for SHORT),
- * totals are +400 and -400 → margin = 800. We use 400 so strength=100 is reachable
- * at realistic extremes (all dims aligned, opponent neutral). Anything above is clamped.
+ * Each total ∈ [-1, +1], so margin ∈ [-2, +2]. strength = |margin| / 2 ∈ [0, 1].
+ * 1 is reached when one direction is fully positive and the other fully negative.
  */
-const MAX_MARGIN = 400;
+const MAX_MARGIN = 2;
 
-/** Dead-zone: margins within ±5 are treated as NEUTRAL to filter noise. */
-const LEAN_DEAD_ZONE = 5;
+/** Dead-zone: margins within ±0.025 are treated as NEUTRAL to filter noise. */
+const LEAN_DEAD_ZONE = 0.025;
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
@@ -66,7 +69,7 @@ export function computeBias(longConf: Confluence, shortConf: Confluence): Direct
     margin < -LEAN_DEAD_ZONE ? "SHORT" :
     "NEUTRAL";
 
-  const strength = Math.round(Math.min((Math.abs(margin) / MAX_MARGIN) * 100, 100));
+  const strength = round3(Math.min(Math.abs(margin) / MAX_MARGIN, 1));
 
   const leanConf = lean === "SHORT" ? shortConf : longConf;
 

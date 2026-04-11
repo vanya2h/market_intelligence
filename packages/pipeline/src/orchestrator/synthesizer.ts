@@ -30,14 +30,21 @@ function buildCacheKey(asset: string, decision: TradeDecision | null): string {
   return `orchestrator-${asset.toLowerCase()}-${hash}`;
 }
 
+/** Format a -1..+1 score as a signed integer percentage (e.g. +45, -22). */
+function pct(score: number): string {
+  const v = Math.round(score * 100);
+  return v >= 0 ? `+${v}` : `${v}`;
+}
+
 function buildTradeSection(decision: TradeDecision | null): string {
   if (!decision) {
     return `### Trade Decision
 No HTF data available — trade idea could not be computed.`;
   }
   const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
-  return `### Trade Decision: ${decision.direction} (conviction=${decision.confluence.total}/400, size=${decision.sizing.positionSizePct}% notional)
-**Breakdown:** Deriv=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Flows=${decision.confluence.exchangeFlows}
+  const c = decision.confluence;
+  return `### Trade Decision: ${decision.direction} (conviction=${pct(c.total)}/100, size=${decision.sizing.positionSizePct}% notional)
+**Breakdown:** Deriv=${pct(c.derivatives)}, ETFs=${pct(c.etfs)}, HTF=${pct(c.htf)}, Flows=${pct(c.exchangeFlows)}
 **Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%)
 
 State the setup and the single biggest risk.`;

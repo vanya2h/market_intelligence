@@ -1,13 +1,19 @@
 /**
  * Confluence Scoring
  *
- * Each dimension produces a conviction score from -100 to +100
- * relative to the trade idea direction:
- *   +100 = maximum agreement (dimension strongly supports direction)
- *   -100 = maximum disagreement (dimension strongly opposes direction)
- *      0 = neutral / no signal
+ * Each dimension produces a conviction score from -1 to +1 relative to the
+ * trade idea direction:
+ *   +1 = maximum agreement (dimension strongly supports direction)
+ *   -1 = maximum disagreement (dimension strongly opposes direction)
+ *    0 = neutral / no signal
  *
- * Total conviction = sum of all dimensions (-400 to +400).
+ * Per-dim values are unweighted normalized scores. The total is the weighted
+ * average across all dimensions (Σ score_i × weight_i, with Σweight_i = 1),
+ * also in -1..+1 — and crucially, invariant to the number of dimensions.
+ *
+ * Adding or removing a dimension only changes what gets averaged; the displayed
+ * range and every downstream threshold stay valid.
+ *
  * Every trade is taken; position size scales with conviction (see sizing.ts).
  *
  * Sentiment is excluded from scoring — it is a composite of derivatives (50%),
@@ -323,6 +329,7 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
 
 /**
  * Power-curve conviction mapping — amplifies moderate signals.
+ * Operates on the internal -100..+100 raw score and returns the same range.
  * Raw 10→22, 20→35, 30→45, 50→63, 70→78, 100→100.
  * Pushes the typical +15-25 range into +28-38 where it becomes meaningful.
  */
@@ -330,16 +337,23 @@ function convictionMap(raw: number): number {
   return Math.sign(raw) * 100 * Math.pow(Math.abs(raw) / 100, 0.65);
 }
 
+/** 3-decimal rounding for compact JSON storage. */
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
 /**
  * Compute confluence scores for all dimensions in a given direction.
  *
- * When IC-based weights are provided, each dimension's score is scaled
- * by its weight (derived from historical accuracy / noise ratio).
- * Equal weights (1.0 each) are the default when calibration data is insufficient.
+ * Per-dim values are unweighted normalized scores in -1..+1: each dimension's
+ * raw -100..+100 score is passed through the power curve, then divided by 100.
  *
- * The raw score (-100..+100) is first mapped through the power curve,
- * then multiplied by the dimension's weight. With weights summing to 4
- * the total range remains -400..+400, preserving threshold compatibility.
+ * The total is the weighted average across dimensions: Σ(score_i × weight_i),
+ * where IC-based weights sum to 1 (so total ∈ [-1, +1] regardless of how many
+ * dimensions exist).
+ *
+ * Equal weights (0.25 each by default) are used when calibration data is
+ * insufficient.
  */
 export function computeConfluence(
   outputs: DimensionOutput[],
@@ -351,21 +365,24 @@ export function computeConfluence(
   const htf = outputs.find((o) => o.dimension === "HTF");
   const ef = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
-  const wDeriv = weights.derivatives;
-  const wEtf = weights.etfs;
-  const wHtf = weights.htf;
-  const wEf = weights.exchangeFlows;
+  // Unweighted normalized scores in -1..+1.
+  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction) : 0) / 100;
+  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0) / 100;
+  const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0) / 100;
+  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0) / 100;
 
-  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction) : 0) * wDeriv;
-  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0) * wEtf;
-  const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0) * wHtf;
-  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0) * wEf;
+  // Weighted average — weights sum to 1, so total ∈ [-1, +1].
+  const total =
+    derivatives * weights.derivatives +
+    etfScore * weights.etfs +
+    htfScore * weights.htf +
+    exchangeFlows * weights.exchangeFlows;
 
   return {
-    derivatives: Math.round(derivatives),
-    etfs: Math.round(etfScore),
-    htf: Math.round(htfScore),
-    exchangeFlows: Math.round(exchangeFlows),
-    total: Math.round(derivatives + etfScore + htfScore + exchangeFlows),
+    derivatives: round3(derivatives),
+    etfs: round3(etfScore),
+    htf: round3(htfScore),
+    exchangeFlows: round3(exchangeFlows),
+    total: round3(total),
   };
 }

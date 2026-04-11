@@ -33,6 +33,8 @@
     "debug:twitter": "tsx src/scripts/debug-twitter-synth.bin.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "backfill:confluence": "tsx src/scripts/backfill-confluence-normalize.ts",
+    "validate:confluence": "tsx src/scripts/validate-confluence.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

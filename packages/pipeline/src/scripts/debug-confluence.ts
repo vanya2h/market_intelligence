@@ -36,12 +36,14 @@ function bar(value: number, max: number, width: number): string {
   return empty.repeat(start) + ch.repeat(Math.min(filled, half)) + empty.repeat(half);
 }
 
+/** Format a -1..+1 normalized score as a signed percentage label. */
 function scoreStr(score: number): string {
-  const s = score > 0 ? `+${score}` : `${score}`;
-  if (score >= 50) return chalk.green.bold(s);
-  if (score >= 20) return chalk.green(s);
-  if (score <= -50) return chalk.red.bold(s);
-  if (score <= -20) return chalk.red(s);
+  const v = Math.round(score * 100);
+  const s = v >= 0 ? `+${v}%` : `${v}%`;
+  if (score >= 0.5) return chalk.green.bold(s);
+  if (score >= 0.2) return chalk.green(s);
+  if (score <= -0.5) return chalk.red.bold(s);
+  if (score <= -0.2) return chalk.red(s);
   return chalk.dim(s);
 }
 
@@ -197,18 +199,13 @@ async function main() {
     ];
 
     for (const dim of dims) {
-      console.log(`    ${dim.name}  ${bar(dim.score, 100, 40)}  ${scoreStr(dim.score).padStart(12)}`);
+      console.log(`    ${dim.name}  ${bar(dim.score, 1, 40)}  ${scoreStr(dim.score).padStart(12)}`);
     }
 
     console.log();
-    const totalStr =
-      confluence.total >= 200
-        ? chalk.green.bold(String(confluence.total))
-        : confluence.total > 0
-          ? chalk.yellow(String(confluence.total))
-          : chalk.red(String(confluence.total));
+    const totalLabel = scoreStr(confluence.total);
     console.log(
-      `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalStr.padStart(12)} / 400`,
+      `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalLabel.padStart(12)} / 100`,
     );
   }
 
@@ -224,12 +221,12 @@ async function main() {
   const leanColor = bias.lean === "LONG" ? chalk.green : bias.lean === "SHORT" ? chalk.red : chalk.yellow;
 
   console.log(`  Lean      : ${leanColor.bold(bias.lean)}`);
-  console.log(`  Strength  : ${bar(bias.strength, 100, 40)}  ${scoreStr(bias.strength).padStart(12)} / 100`);
+  console.log(`  Strength  : ${bar(bias.strength, 1, 40)}  ${scoreStr(bias.strength).padStart(12)} / 100`);
 
   if (bias.topFactors.length > 0) {
     console.log(`\n  Top driving dimensions:`);
     for (const f of bias.topFactors) {
-      console.log(`    ${f.dimension.padEnd(16)} ${bar(f.score, 100, 40)}  ${scoreStr(f.score).padStart(12)}`);
+      console.log(`    ${f.dimension.padEnd(16)} ${bar(f.score, 1, 40)}  ${scoreStr(f.score).padStart(12)}`);
     }
   } else {
     console.log(`\n  (signals balanced — no dominant lean)`);

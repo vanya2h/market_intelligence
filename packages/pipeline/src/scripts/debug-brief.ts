@@ -590,9 +590,12 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
 
   out += subsection("Directional Bias");
   out += kv("Lean", bias.lean);
-  out += kv("Strength", `${bias.strength}/100`);
+  out += kv("Strength", `${Math.round(bias.strength * 100)}/100`);
   if (bias.topFactors.length > 0) {
-    out += kv("Top Factors", bias.topFactors.map((f) => `${f.dimension}:+${f.score}`).join("  "));
+    out += kv(
+      "Top Factors",
+      bias.topFactors.map((f) => `${f.dimension}:+${Math.round(f.score * 100)}%`).join("  "),
+    );
   }
 
   return out;
@@ -633,21 +636,28 @@ function buildTradeIdea(tradeIdea: {
   const conf = tradeIdea.confluence as (Confluence & { bias?: Record<string, unknown> }) | null;
   if (conf) {
     out += subsection("Stored Confluence");
+    const fmtPctScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
     const dimKeys = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
     for (const dk of dimKeys) {
-      if (dk in conf) out += kv(dk, String(conf[dk]));
+      if (dk in conf) out += kv(dk, fmtPctScore(conf[dk] ?? 0));
     }
-    out += kv("Total", String(conf.total));
+    out += kv("Total", fmtPctScore(conf.total));
 
     if (conf.bias) {
       const b = conf.bias;
       out += "\n";
       out += kv("Bias Lean", String(b.lean));
-      out += kv("Bias Strength", `${b.strength}/100`);
+      const strength = typeof b.strength === "number" ? b.strength : 0;
+      out += kv("Bias Strength", `${Math.round(strength * 100)}/100`);
       if (Array.isArray(b.topFactors) && b.topFactors.length > 0) {
         out += kv(
           "Top Factors",
-          b.topFactors.map((f: Record<string, unknown>) => `${f.dimension}:+${f.score}`).join("  "),
+          b.topFactors
+            .map((f: Record<string, unknown>) => {
+              const s = typeof f.score === "number" ? f.score : 0;
+              return `${f.dimension}:+${Math.round(s * 100)}%`;
+            })
+            .join("  "),
         );
       }
     }

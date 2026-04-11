@@ -294,7 +294,7 @@ model TradeIdea {
     direction       TradeDirection
     entryPrice      Float
     compositeTarget Float
-    confluence      Json? // { derivatives, etfs, htf, sentiment, total } each -100..+100
+    confluence      Json? // { derivatives, etfs, htf, exchangeFlows, total, bias, weights, sizing } — per-dim and total in -1..+1
     positionSizePct Float          @default(0) // recommended position size as % of account notional (5–150)
     // deprecated
     skipped         Boolean        @default(false) // true when conviction < threshold

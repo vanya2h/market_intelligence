@@ -55,13 +55,17 @@ const IC_EMA_KEY_PREFIX = "ic_ema:";
  * Floor weight — no dimension drops below this even with poor IC.
  * Prevents a dimension from being fully silenced due to a bad streak
  * while still allowing significant re-weighting.
- * With 4 dimensions summing to 4, floor of 0.25 means worst case a
- * dimension gets 1/16 of total rather than 1/4.
+ * Weights now sum to 1; floor of 0.0625 means worst case a dimension gets
+ * 1/16 of the total weight (same fraction as before, when weights summed to 4
+ * and the floor was 0.25).
  */
-const WEIGHT_FLOOR = 0.25;
+const WEIGHT_FLOOR = 0.0625;
 
-/** Number of dimensions — weights are normalized to sum to this */
-const N_DIMS = DIMENSION_KEYS.length;
+/**
+ * Total weight after normalization. Set to 1 so the confluence total is a
+ * weighted average in -1..+1, invariant to dimension count.
+ */
+const WEIGHT_SUM = 1;
 
 // ─── Statistics ─────────────────────────────────────────────────────────────
 
@@ -131,12 +135,16 @@ async function saveSmoothedIc(asset: $Enums.Asset, ic: SmoothedIc): Promise<void
 
 // ─── Equal weights fallback ─────────────────────────────────────────────────
 
-/** Equal weights (1.0 each) — used as fallback and by debug scripts */
+/**
+ * Equal weights — used as fallback and by debug scripts.
+ * Each dimension gets `WEIGHT_SUM / N_DIMS` so the weights sum to 1
+ * (= 0.25 each for 4 dims).
+ */
 export const EQUAL_WEIGHTS: DimensionWeights = {
-  derivatives: 1,
-  etfs: 1,
-  htf: 1,
-  exchangeFlows: 1,
+  derivatives: WEIGHT_SUM / DIMENSION_KEYS.length,
+  etfs: WEIGHT_SUM / DIMENSION_KEYS.length,
+  htf: WEIGHT_SUM / DIMENSION_KEYS.length,
+  exchangeFlows: WEIGHT_SUM / DIMENSION_KEYS.length,
   calibrated: false,
   sampleCount: 0,
   ic: {
@@ -166,7 +174,9 @@ function equalWeights(sampleCount: number = 0): DimensionWeights {
  * - σ = standard deviation of scores
  * - Raw weight = max(IC, 0) / σ  (anti-predictive dims get floor weight)
  *
- * Weights are normalized to sum to N_DIMS (4), preserving the -400..+400 range.
+ * Weights are normalized to sum to 1, so the confluence total stays a weighted
+ * average in -1..+1 invariant to dimension count. Per-dim scores are read from
+ * the persisted (already normalized) confluence JSON.
  */
 export async function computeDimensionWeights(asset: $Enums.Asset): Promise<DimensionWeights> {
   const ideas = await prisma.tradeIdea.findMany({
@@ -264,7 +274,7 @@ export async function computeDimensionWeights(asset: $Enums.Asset): Promise<Dime
 
   if (totalRaw === 0) return equalWeights(outcomes.length);
 
-  // First pass: normalize to sum = N_DIMS
+  // First pass: normalize to sum = WEIGHT_SUM (= 1)
   const normalized: Record<DimensionKey, number> = {
     derivatives: 0,
     etfs: 0,
@@ -272,7 +282,7 @@ export async function computeDimensionWeights(asset: $Enums.Asset): Promise<Dime
     exchangeFlows: 0,
   };
   for (const dim of DIMENSION_KEYS) {
-    normalized[dim] = (rawWeights[dim] / totalRaw) * N_DIMS;
+    normalized[dim] = (rawWeights[dim] / totalRaw) * WEIGHT_SUM;
   }
 
   // Second pass: apply floor and redistribute
