@@ -348,10 +348,7 @@ const SCORE_BUCKETS = [
  * Peak return velocity: max(returnPct / hoursAfter),
  * signed positive when the move matches the predicted direction.
  */
-function peakVelocity(
-  returns: { hoursAfter: number; returnPct: number }[],
-  direction: string,
-): number | null {
+function peakVelocity(returns: { hoursAfter: number; returnPct: number }[], direction: string): number | null {
   if (returns.length === 0) return null;
   const sign = direction === "SHORT" ? -1 : 1;
   let best: number | null = null;
@@ -412,7 +409,7 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
       id: idea.id,
       briefId: idea.briefId,
       direction: idea.direction,
-      skipped: idea.skipped,
+      positionSizePct: idea.positionSizePct,
       createdAt: idea.createdAt.toISOString(),
       peakVelocity: v,
       peakReturnPct: peakReturn?.returnPct ?? null,
@@ -432,9 +429,7 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
     }
 
     const buckets: SignalBucket[] = SCORE_BUCKETS.map(({ range, min, max }) => {
-      const inBucket = pairs.filter((p) =>
-        range === "strong_for" ? p.score >= min : p.score >= min && p.score < max,
-      );
+      const inBucket = pairs.filter((p) => (range === "strong_for" ? p.score >= min : p.score >= min && p.score < max));
       const count = inBucket.length;
       const avgVelocity = count > 0 ? inBucket.reduce((s, p) => s + p.velocity, 0) / count : null;
       return { range, min, max, count, avgVelocity };

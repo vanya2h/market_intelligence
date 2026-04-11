@@ -379,7 +379,7 @@ function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) 
 
   const tooltip = [
     `${dateStr} ${timeStr}`,
-    `${idea.direction}${idea.skipped ? " (skipped)" : ""}`,
+    idea.direction,
     returnStr && `Peak: ${returnStr} at ${timeToStr}`,
     qualityStr,
   ]
@@ -395,7 +395,7 @@ function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) 
       className="relative h-7 w-7 rounded-sm flex items-center justify-center text-[0.4375rem] font-mono-jb transition-transform hover:scale-125 hover:z-10"
       style={{
         background: baseColor,
-        border: `1px ${idea.skipped ? "dashed" : "solid"} ${borderColor}`,
+        border: `1px solid ${borderColor}`,
         color: !hasData
           ? "var(--text-muted)"
           : isPositive

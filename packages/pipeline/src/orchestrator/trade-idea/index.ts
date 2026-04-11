@@ -2,10 +2,11 @@
  * Trade Idea — Barrel Orchestrator
  *
  * Fully mechanical trade idea generation:
- * 1. Score confluence for all three directions (LONG / SHORT / FLAT)
- * 2. Pick the direction with highest conviction
- * 3. Compute composite target + R:R levels from HTF context
- * 4. Always persist (skipped ideas tracked for model accuracy measurement)
+ * 1. Score confluence for LONG and SHORT
+ * 2. Pick the direction with higher total (always taken — no skipping)
+ * 3. Compute position size from conviction + volatility
+ * 4. Compute composite target + R:R levels from HTF context
+ * 5. Always persist
  *
  * The LLM synthesizer receives our mechanical decision and describes it
  * in human-readable form — it does NOT pick the direction.
@@ -16,9 +17,10 @@ import type { $Enums } from "../../generated/prisma/client.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
-import { computeConfluence, computeConvictionThreshold, type Confluence } from "./confluence.js";
+import { computeConfluence, type Confluence } from "./confluence.js";
 import { computeBias, type DirectionalBias } from "./bias.js";
 import { computeDimensionWeights, DIMENSION_KEYS, type DimensionWeights } from "./ic-weights.js";
+import { computePositionSize, type PositionSize } from "./sizing.js";
 import { saveTradeIdea } from "./persist.js";
 
 /** Result of the mechanical trade decision — passed to the synthesizer */
@@ -27,12 +29,11 @@ export interface TradeDecision {
   confluence: Confluence;
   entryPrice: number;
   compositeTarget: number;
-  skipped: boolean;
-  /** Effective conviction threshold used for this decision (may be lower than default for compression setups) */
-  threshold: number;
-  /** Why this direction was chosen over the alternatives */
+  /** Recommended position size (% of account notional) and sizing diagnostics */
+  sizing: PositionSize;
+  /** Why this direction was chosen over the alternative */
   alternatives: { direction: Direction; total: number }[];
-  /** Directional lean within the range — present even when conviction is below threshold */
+  /** Directional lean — always present */
   bias: DirectionalBias;
   /** IC-based dimension weights used for this decision */
   weights: DimensionWeights;
@@ -65,8 +66,8 @@ export async function processTradeIdea(
     console.log(`      ${chalk.dim("▹")} IC weights: equal (${weights.sampleCount}/${20} samples, need more data)`);
   }
 
-  // Score all three directions mechanically
-  const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
+  // Score LONG and SHORT — always pick the winner, no skipping
+  const directions: Direction[] = ["LONG", "SHORT"];
   const scored = directions.map((dir) => ({
     direction: dir,
     confluence: computeConfluence(outputs, dir, weights),
@@ -77,54 +78,42 @@ export async function processTradeIdea(
   const shortConf = scored.find((s) => s.direction === "SHORT")!.confluence;
   const bias = computeBias(longConf, shortConf);
 
-  // Pick the directional candidate with the highest total (exclude FLAT from competition)
-  const directional = scored
-    .filter((s) => s.direction !== "FLAT")
-    .sort((a, b) => b.confluence.total - a.confluence.total);
+  // Always pick the direction with the highest total
+  const chosen = scored.sort((a, b) => b.confluence.total - a.confluence.total)[0]!;
 
-  const bestDirectional = directional[0]!;
-  const flatScore = scored.find((s) => s.direction === "FLAT")!;
+  // Compute position size from conviction + current volatility
+  const sizing = computePositionSize(chosen.confluence.total, htfContext);
 
-  // Choose direction: take the best directional if it passes threshold, else FLAT
-  const threshold = computeConvictionThreshold(htfContext);
-  const chosen = bestDirectional.confluence.total >= threshold ? bestDirectional : flatScore;
-
-  const skipped = chosen.direction !== "FLAT" ? false : bestDirectional.confluence.total < threshold;
-
-  // For skipped (FLAT chosen due to low conviction): still compute levels for the best directional
-  // so we can track what would have happened
-  const trackDirection = skipped ? bestDirectional : chosen;
-  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, trackDirection.direction);
+  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, chosen.direction);
 
   const id = await saveTradeIdea({
     briefId,
     asset,
-    direction: trackDirection.direction,
+    direction: chosen.direction,
     entryPrice,
     compositeTarget,
     levels,
-    confluence: trackDirection.confluence,
-    skipped,
+    confluence: chosen.confluence,
+    sizing,
     bias,
     weights,
   });
 
   const decision: TradeDecision = {
-    direction: trackDirection.direction,
-    confluence: trackDirection.confluence,
+    direction: chosen.direction,
+    confluence: chosen.confluence,
     entryPrice,
     compositeTarget,
-    skipped,
-    threshold,
+    sizing,
     alternatives: scored
-      .filter((s) => s.direction !== trackDirection.direction)
+      .filter((s) => s.direction !== chosen.direction)
       .map((s) => ({ direction: s.direction, total: s.confluence.total })),
     bias,
     weights,
   };
 
   // ─── Console output ───────────────────────────────────────────────
-  const confStr = Object.entries(trackDirection.confluence)
+  const confStr = Object.entries(chosen.confluence)
     .filter(([k]) => k !== "total")
     .map(([dim, score]) => {
       const s = score as number;
@@ -135,39 +124,27 @@ export async function processTradeIdea(
 
   const altStr = decision.alternatives.map((a) => `${a.direction}=${a.total}`).join("  ");
 
-  if (skipped) {
-    const gapStr = chalk.yellow(`${bias.convictionGap} pts to threshold`);
-    const factorsStr = bias.topFactors.map((f) => `${f.dimension}:+${f.score}`).join(" ");
-    console.log(
-      `      ${chalk.dim("▹")} trade idea: ${chalk.bold(trackDirection.direction)} ` +
-        `conviction=${trackDirection.confluence.total}/${threshold} — ${chalk.yellow("SKIPPED")} (tracking)`,
-    );
-    console.log(`        ${confStr}`);
-    console.log(`        ${chalk.dim(`alternatives: ${altStr}`)}`);
-    console.log(`        bias: ${chalk.bold(bias.lean)} strength=${bias.strength}/100  gap=${gapStr}`);
-    if (factorsStr) console.log(`        driving: ${chalk.dim(factorsStr)}`);
-  } else {
-    const targetDist = Math.abs(compositeTarget - entryPrice);
-    const stops = levels
-      .filter((l) => l.type === "INVALIDATION")
-      .map((l) => `${l.label}@${l.price.toFixed(0)}`)
-      .join(" ");
-    const targets = levels
-      .filter((l) => l.type === "TARGET")
-      .map((l) => `${l.label}@${l.price.toFixed(0)}`)
-      .join(" ");
+  const targetDist = Math.abs(compositeTarget - entryPrice);
+  const stops = levels
+    .filter((l) => l.type === "INVALIDATION")
+    .map((l) => `${l.label}@${l.price.toFixed(0)}`)
+    .join(" ");
+  const targets = levels
+    .filter((l) => l.type === "TARGET")
+    .map((l) => `${l.label}@${l.price.toFixed(0)}`)
+    .join(" ");
 
-    console.log(
-      `      ${chalk.green("▸")} trade idea: ${chalk.bold(trackDirection.direction)} ` +
-        `entry=${entryPrice.toFixed(0)} ` +
-        `target=${compositeTarget.toFixed(0)} (${targetDist.toFixed(0)}) ` +
-        `conviction=${chalk.bold(String(trackDirection.confluence.total))}`,
-    );
-    console.log(`        stops: ${stops}`);
-    console.log(`        targets: ${targets}`);
-    console.log(`        ${confStr}`);
-    console.log(`        ${chalk.dim(`alternatives: ${altStr}`)}`);
-  }
+  console.log(
+    `      ${chalk.green("▸")} trade idea: ${chalk.bold(chosen.direction)} ` +
+      `entry=${entryPrice.toFixed(0)} ` +
+      `target=${compositeTarget.toFixed(0)} (${targetDist.toFixed(0)}) ` +
+      `conviction=${chalk.bold(String(chosen.confluence.total))} ` +
+      `size=${chalk.cyan(`${sizing.positionSizePct}%`)} (${sizing.convictionMultiplier}x)`,
+  );
+  console.log(`        stops: ${stops}`);
+  console.log(`        targets: ${targets}`);
+  console.log(`        ${confStr}`);
+  console.log(`        ${chalk.dim(`alternatives: ${altStr}`)}`);
 
   return { id, decision };
 }

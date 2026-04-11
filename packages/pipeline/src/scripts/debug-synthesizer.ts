@@ -26,10 +26,11 @@ import {
   type SentimentOutput,
   type ExchangeFlowsOutput,
 } from "../orchestrator/types.js";
-import { computeConfluence, computeConvictionThreshold } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
+import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -162,22 +163,18 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
     }
   }
 
-  // Trade decision gaps
-  if (decision?.skipped) {
+  // Trade decision gaps — flag dimensions actively opposing the chosen direction
+  if (decision) {
     const conf = decision.confluence;
-    const weakest = (["derivatives", "etfs", "htf", "exchangeFlows"] as const)
+    const opposing = (["derivatives", "etfs", "htf", "exchangeFlows"] as const)
       .map((d) => ({ dim: d, score: conf[d] }))
+      .filter((d) => d.score < 0)
       .sort((a, b) => a.score - b.score);
-    const worst = weakest[0]!;
-    if (worst.score < 0) {
+    for (const o of opposing.slice(0, 2)) {
       gaps.push(
-        `${chalk.yellow("OPPOSING")} Trade: ${worst.dim} scores ${worst.score} — actively opposing the direction`,
+        `${chalk.yellow("OPPOSING")} Trade: ${o.dim} scores ${o.score} — actively opposing the direction`,
       );
     }
-    const deficit = decision.threshold - conf.total;
-    gaps.push(
-      `${chalk.yellow("DEFICIT")} Trade: needs +${deficit} more conviction to pass threshold (${decision.threshold})`,
-    );
   }
 
   return gaps;
@@ -219,8 +216,7 @@ async function main() {
   let decision: TradeDecision | null = null;
 
   if (htfOut) {
-    const threshold = computeConvictionThreshold(htfOut.context);
-    const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
+    const directions: Direction[] = ["LONG", "SHORT"];
     const scored = directions.map((dir) => ({
       direction: dir,
       confluence: computeConfluence(outputs, dir, EQUAL_WEIGHTS),
@@ -230,36 +226,30 @@ async function main() {
       const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
       const parts = dims.map((d) => `${d}=${scoreStr(s.confluence[d])}`).join("  ");
       const totalColor =
-        s.confluence.total >= threshold ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
-      const passIcon = s.confluence.total >= threshold ? chalk.green(" ✓ TAKE") : "";
+        s.confluence.total >= 200 ? chalk.green.bold : s.confluence.total > 0 ? chalk.yellow : chalk.red;
       console.log(
-        `  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${totalColor(String(s.confluence.total))}${passIcon}`,
+        `  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${totalColor(String(s.confluence.total))}`,
       );
     }
 
-    const directional = scored
-      .filter((s) => s.direction !== "FLAT")
-      .sort((a, b) => b.confluence.total - a.confluence.total);
-    const bestDirectional = directional[0]!;
-    const flatScore = scored.find((s) => s.direction === "FLAT")!;
-    const chosen = bestDirectional.confluence.total >= threshold ? bestDirectional : flatScore;
-    const skipped = chosen.direction !== "FLAT" ? false : bestDirectional.confluence.total < threshold;
-    const trackDirection = skipped ? bestDirectional : chosen;
-    const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, trackDirection.direction);
+    const sorted = [...scored].sort((a, b) => b.confluence.total - a.confluence.total);
+    const chosen = sorted[0]!;
+    const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, chosen.direction);
 
     const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
     const shortConf = scored.find((s) => s.direction === "SHORT")!.confluence;
     const bias = computeBias(longConf, shortConf);
 
+    const sizing = computePositionSize(chosen.confluence.total, htfOut.context);
+
     decision = {
-      direction: trackDirection.direction,
-      confluence: trackDirection.confluence,
+      direction: chosen.direction,
+      confluence: chosen.confluence,
       entryPrice,
       compositeTarget,
-      skipped,
-      threshold,
+      sizing,
       alternatives: scored
-        .filter((s) => s.direction !== trackDirection.direction)
+        .filter((s) => s.direction !== chosen.direction)
         .map((s) => ({ direction: s.direction, total: s.confluence.total })),
       bias,
       weights: {
@@ -274,11 +264,10 @@ async function main() {
     };
 
     console.log();
-    const decisionIcon = skipped ? chalk.yellow("SKIPPED") : chalk.green("TAKEN");
-    console.log(`  Decision: ${chalk.bold(trackDirection.direction)} — ${decisionIcon}`);
+    console.log(`  Decision: ${chalk.bold(chosen.direction)} — ${chalk.green("TAKEN")}`);
     console.log(`  Entry: $${entryPrice.toFixed(2)}  Target: $${compositeTarget.toFixed(2)}`);
     console.log(
-      `  Conviction: ${trackDirection.confluence.total} / ${threshold}${threshold < 200 ? chalk.dim(` (compression-adjusted, default 200)`) : ""}`,
+      `  Conviction: ${chosen.confluence.total} / 400  Size: ${sizing.positionSizePct}% notional (${sizing.convictionMultiplier}x)`,
     );
   } else {
     console.log(chalk.dim("  No HTF output — cannot compute trade decision"));

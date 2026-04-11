@@ -11,6 +11,7 @@ import type { Direction, LevelResult } from "./composite-target.js";
 import type { Confluence } from "./confluence.js";
 import type { DirectionalBias } from "./bias.js";
 import type { DimensionWeights } from "./ic-weights.js";
+import type { PositionSize } from "./sizing.js";
 
 interface SaveTradeIdeaInput {
   briefId: string;
@@ -20,9 +21,9 @@ interface SaveTradeIdeaInput {
   compositeTarget: number;
   levels: LevelResult[];
   confluence: Confluence;
+  sizing: PositionSize;
   bias: DirectionalBias;
   weights: DimensionWeights;
-  skipped: boolean;
 }
 
 export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> {
@@ -33,6 +34,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       direction: input.direction,
       entryPrice: input.entryPrice,
       compositeTarget: input.compositeTarget,
+      positionSizePct: input.sizing.positionSizePct,
       confluence: {
         ...input.confluence,
         bias: input.bias,
@@ -45,8 +47,12 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
           sampleCount: input.weights.sampleCount,
           ic: input.weights.ic,
         },
+        sizing: {
+          positionSizePct: input.sizing.positionSizePct,
+          convictionMultiplier: input.sizing.convictionMultiplier,
+          dailyVolPct: input.sizing.dailyVolPct,
+        },
       } as unknown as Prisma.InputJsonValue,
-      skipped: input.skipped,
       levels: {
         create: input.levels.map((l) => ({
           type: l.type,

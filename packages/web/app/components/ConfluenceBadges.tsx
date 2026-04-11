@@ -27,15 +27,13 @@ function scoreLabel(score: number): string {
 }
 
 function totalColor(total: number): string {
-  if (total >= 200) return "var(--green)";
+  if (total >= 300) return "var(--green)";
   if (total >= 150) return "var(--amber)";
   if (total <= -150) return "var(--red)";
   return "var(--text-muted)";
 }
 
-const CONVICTION_THRESHOLD = 200;
-
-/** Inline badges — compact row of dimension scores + total / threshold */
+/** Inline badges — compact row of dimension scores + total */
 export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
   const total = computeTotal(confluence);
   return (
@@ -61,7 +59,7 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
         className="text-[0.625rem] font-bold font-mono-jb tabular-nums"
         style={{ color: totalColor(total) }}
       >
-        {"\u03A3"}{total}/{CONVICTION_THRESHOLD}
+        {"\u03A3"}{total}/400
       </span>
     </div>
   );
@@ -73,8 +71,6 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
   const total = computeTotal(confluence);
   const maxTotal = 400;
   const convictionPct = Math.max(0, Math.min(100, (total / maxTotal) * 100));
-  const thresholdPct = (CONVICTION_THRESHOLD / maxTotal) * 100;
-  const passesThreshold = total >= CONVICTION_THRESHOLD;
 
   return (
     <div className="flex flex-col gap-2">
@@ -128,7 +124,7 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
         );
       })}
 
-      {/* Conviction meter */}
+      {/* Conviction meter — fill to 400, color by strength */}
       <div className="mt-1 flex items-center gap-2">
         <span
           className="w-20 shrink-0 text-[0.5625rem] font-bold uppercase tracking-wider"
@@ -141,38 +137,18 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
           className="relative flex-1 h-5 rounded-sm overflow-hidden"
           style={{ background: "var(--bg-hover)" }}
         >
-          {/* Threshold marker */}
-          <div
-            className="absolute top-0 bottom-0 w-px z-10"
-            style={{
-              left: `${thresholdPct}%`,
-              background: "var(--text-muted)",
-              opacity: 0.5,
-            }}
-          />
-          <span
-            className="absolute text-[0.5rem] font-mono-jb z-10"
-            style={{
-              left: `${thresholdPct}%`,
-              top: 0,
-              transform: "translateX(-50%)",
-              color: "var(--text-muted)",
-              opacity: 0.7,
-            }}
-          >
-            200
-          </span>
-
           {/* Fill bar */}
           <div
             className="absolute top-0.5 bottom-0.5 left-0 rounded-sm transition-all"
             style={{
               width: `${convictionPct}%`,
-              background: passesThreshold
+              background: total >= 300
                 ? "var(--green)"
-                : total > 0
+                : total >= 150
                   ? "var(--amber)"
-                  : "var(--red)",
+                  : total > 0
+                    ? "var(--text-muted)"
+                    : "var(--red)",
               opacity: 0.6,
             }}
           />
@@ -182,7 +158,7 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
           className="w-16 shrink-0 text-right font-mono-jb tabular-nums text-[0.625rem] font-bold"
           style={{ color: totalColor(total) }}
         >
-          {total}/{CONVICTION_THRESHOLD}
+          {total}/400
         </span>
       </div>
     </div>

@@ -110,10 +110,16 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
             <span style={{ color }} className="font-medium">
               {tradeIdea.direction}
             </span>{" "}
-            taken — conviction passed threshold
+            taken — sized to conviction
           </span>
         ) : bias && bias.lean !== "NEUTRAL" ? (
-          <span>{Math.abs(bias.convictionGap)} pts to threshold</span>
+          <span>
+            Bias{" "}
+            <span style={{ color }} className="font-medium">
+              {bias.lean}
+            </span>{" "}
+            — strength {bias.strength}/100
+          </span>
         ) : (
           <span>No directional edge detected</span>
         )}

@@ -8,10 +8,7 @@
  *      0 = neutral / no signal
  *
  * Total conviction = sum of all dimensions (-400 to +400).
- * A trade is only taken when total >= CONVICTION_THRESHOLD.
- *
- * For FLAT ideas: scores reflect how strongly the market favors staying
- * rangebound. Positive = supports flat, negative = breakout likely.
+ * Every trade is taken; position size scales with conviction (see sizing.ts).
  *
  * Sentiment is excluded from scoring — it is a composite of derivatives (50%),
  * ETFs (30%), and HTF (20%), so including it would triple-count those dimensions.
@@ -26,8 +23,6 @@ import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { DimensionOutput } from "../types.js";
 import type { Direction } from "./composite-target.js";
 import type { DimensionWeights } from "./ic-weights.js";
-
-export const CONVICTION_THRESHOLD = 200;
 
 export interface Confluence {
   derivatives: number;
@@ -325,29 +320,6 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
-
-/**
- * Effective conviction threshold for this setup.
- *
- * ATR compression after a displacement is a high-quality setup:
- * the spring is coiled and an expansion is imminent — directional consensus
- * at 200 is not required because the setup quality compensates for ambiguity
- * in weaker dimensions (e.g. neutral ETF flows, flat derivatives).
- *
- * Threshold scales linearly with compression depth:
- *   ATR at 10th pct → 175   (mild compression)
- *   ATR at 5th pct  → 155   (strong compression)
- *   ATR at 2nd pct  → 130   (extreme — case on 2026-03-28)
- */
-export function computeConvictionThreshold(htfCtx: HtfContext): number {
-  const { compressionAfterMove, atrPercentile } = htfCtx.volatility;
-  if (compressionAfterMove && atrPercentile <= 10) {
-    // Linear interpolation: pct=10 → 175, pct=0 → 120
-    const depth = (10 - atrPercentile) / 10; // 0 at 10th pct, 1 at 0th pct
-    return Math.round(175 - depth * 55); // 175 → 120
-  }
-  return CONVICTION_THRESHOLD;
-}
 
 /**
  * Power-curve conviction mapping — amplifies moderate signals.

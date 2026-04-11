@@ -143,7 +143,7 @@ model DimensionState {
     previousStress String?
 
     // HTF-specific
-    lastStructure  String?
+    lastStructure String?
 
     @@unique([asset, dimension])
     @@index([asset])
@@ -174,13 +174,13 @@ model Brief {
     dimensions Dimension[]
 
     // Relations to per-dimension models
-    derivatives    DerivativesDimension?
-    etfs           EtfsDimension?
-    htf            HtfDimension?
-    sentiment      SentimentDimension?
-    exchangeFlows  ExchangeFlowsDimension?
-    tradeIdea      TradeIdea?
-    notifyRuns     NotifyRun[]
+    derivatives   DerivativesDimension?
+    etfs          EtfsDimension?
+    htf           HtfDimension?
+    sentiment     SentimentDimension?
+    exchangeFlows ExchangeFlowsDimension?
+    tradeIdea     TradeIdea?
+    notifyRuns    NotifyRun[]
 
     @@index([asset, timestamp])
     @@map("briefs")
@@ -233,9 +233,9 @@ model HtfDimension {
 }
 
 model SentimentDimension {
-    id                 String          @id @default(cuid())
-    briefId            String          @unique
-    brief              Brief           @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    id                 String           @id @default(cuid())
+    briefId            String           @unique
+    brief              Brief            @relation(fields: [briefId], references: [id], onDelete: Cascade)
     regime             SentimentRegime
     previousRegime     SentimentRegime?
     since              DateTime
@@ -253,9 +253,9 @@ model SentimentDimension {
 }
 
 model ExchangeFlowsDimension {
-    id             String              @id @default(cuid())
-    briefId        String              @unique
-    brief          Brief               @relation(fields: [briefId], references: [id], onDelete: Cascade)
+    id             String               @id @default(cuid())
+    briefId        String               @unique
+    brief          Brief                @relation(fields: [briefId], references: [id], onDelete: Cascade)
     regime         ExchangeFlowsRegime
     previousRegime ExchangeFlowsRegime?
     since          DateTime
@@ -294,27 +294,29 @@ model TradeIdea {
     direction       TradeDirection
     entryPrice      Float
     compositeTarget Float
-    confluence      Json?          // { derivatives, etfs, htf, sentiment, total } each -100..+100
+    confluence      Json? // { derivatives, etfs, htf, sentiment, total } each -100..+100
+    positionSizePct Float          @default(0) // recommended position size as % of account notional (5–150)
+    // deprecated
     skipped         Boolean        @default(false) // true when conviction < threshold
     createdAt       DateTime       @default(now())
 
-    levels          TradeIdeaLevel[]
-    returns         TradeIdeaReturn[]
+    levels  TradeIdeaLevel[]
+    returns TradeIdeaReturn[]
 
     @@index([asset, createdAt])
     @@map("trade_ideas")
 }
 
 model TradeIdeaLevel {
-    id             String       @id @default(cuid())
-    tradeIdeaId    String
-    tradeIdea      TradeIdea    @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
-    type           LevelType    // INVALIDATION (stop loss) or TARGET (take profit)
-    label          String       // e.g. "1:3" for invalidation, "T1" / "T2" / "T3" for target
-    price          Float        // the price level (or distance for FLAT ideas)
-    outcome        TradeOutcome @default(OPEN)
-    qualityScore   Float?
-    resolvedAt     DateTime?
+    id           String       @id @default(cuid())
+    tradeIdeaId  String
+    tradeIdea    TradeIdea    @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
+    type         LevelType // INVALIDATION (stop loss) or TARGET (take profit)
+    label        String // e.g. "1:3" for invalidation, "T1" / "T2" / "T3" for target
+    price        Float // the price level (or distance for FLAT ideas)
+    outcome      TradeOutcome @default(OPEN)
+    qualityScore Float?
+    resolvedAt   DateTime?
 
     @@unique([tradeIdeaId, type, label])
     @@index([tradeIdeaId])

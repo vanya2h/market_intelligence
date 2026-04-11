@@ -10,7 +10,7 @@
 import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
-import { computeConfluence, CONVICTION_THRESHOLD } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import type {
@@ -184,10 +184,8 @@ async function main() {
 
   for (const dir of directions) {
     const confluence = computeConfluence(outputs, dir, EQUAL_WEIGHTS);
-    const passes = confluence.total >= CONVICTION_THRESHOLD;
-    const passIcon = passes ? chalk.green.bold("TAKE ✓") : chalk.red("SKIP ✗");
 
-    console.log(`\n  ── ${chalk.bold(dir)} ──────────────────────── ${passIcon}`);
+    console.log(`\n  ── ${chalk.bold(dir)} ────────────────────────`);
     console.log();
 
     // Per-dimension breakdown with visual bars
@@ -204,13 +202,13 @@ async function main() {
 
     console.log();
     const totalStr =
-      confluence.total >= CONVICTION_THRESHOLD
+      confluence.total >= 200
         ? chalk.green.bold(String(confluence.total))
         : confluence.total > 0
           ? chalk.yellow(String(confluence.total))
           : chalk.red(String(confluence.total));
     console.log(
-      `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalStr.padStart(12)} / ${CONVICTION_THRESHOLD}`,
+      `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalStr.padStart(12)} / 400`,
     );
   }
 
@@ -224,15 +222,9 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════════\n");
 
   const leanColor = bias.lean === "LONG" ? chalk.green : bias.lean === "SHORT" ? chalk.red : chalk.yellow;
-  const gapAbs = Math.abs(bias.convictionGap);
-  const gapLabel =
-    bias.convictionGap < 0
-      ? chalk.yellow(`${gapAbs} pts below threshold`)
-      : chalk.green(`${gapAbs} pts above threshold — trade fires`);
 
   console.log(`  Lean      : ${leanColor.bold(bias.lean)}`);
   console.log(`  Strength  : ${bar(bias.strength, 100, 40)}  ${scoreStr(bias.strength).padStart(12)} / 100`);
-  console.log(`  Gap       : ${gapLabel}`);
 
   if (bias.topFactors.length > 0) {
     console.log(`\n  Top driving dimensions:`);

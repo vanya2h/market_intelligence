@@ -5,10 +5,10 @@
  * Answers: "which way is this range likely to resolve, and how strongly?"
  *
  * This is a runtime computation — not persisted. Additive: the trade signal
- * system (conviction threshold) is unchanged.
+ * system (position sizing) is unchanged.
  */
 
-import { CONVICTION_THRESHOLD, type Confluence } from "./confluence.js";
+import type { Confluence } from "./confluence.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ export interface DirectionalBias {
   /**
    * Strength of the lean: 0–100.
    * Derived from the margin between LONG total and SHORT total,
-   * normalized against a practical max margin of 500.
+   * normalized against a practical max margin of 400.
    * 0 = perfectly balanced. 100 = all dimensions agree.
    */
   strength: number;
@@ -37,12 +37,6 @@ export interface DirectionalBias {
    * Empty when lean is NEUTRAL.
    */
   topFactors: BiasFactor[];
-  /**
-   * Points separating the leading direction from CONVICTION_THRESHOLD.
-   * Negative = below threshold (how far still to go).
-   * Positive = threshold already exceeded (trade fires).
-   */
-  convictionGap: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -76,13 +70,6 @@ export function computeBias(longConf: Confluence, shortConf: Confluence): Direct
 
   const leanConf = lean === "SHORT" ? shortConf : longConf;
 
-  const leadingTotal =
-    lean === "LONG" ? longConf.total :
-    lean === "SHORT" ? shortConf.total :
-    Math.max(longConf.total, shortConf.total);
-
-  const convictionGap = leadingTotal - CONVICTION_THRESHOLD;
-
   const dims: ReadonlyArray<keyof Omit<Confluence, "total">> = [
     "derivatives", "etfs", "htf", "exchangeFlows",
   ];
@@ -95,5 +82,5 @@ export function computeBias(longConf: Confluence, shortConf: Confluence): Direct
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
 
-  return { lean, strength, topFactors, convictionGap };
+  return { lean, strength, topFactors };
 }

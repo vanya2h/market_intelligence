@@ -35,22 +35,8 @@ function buildTradeSection(decision: TradeDecision | null): string {
     return `### Trade Decision
 No HTF data available — trade idea could not be computed.`;
   }
-  if (decision.skipped) {
-    const { bias } = decision;
-    const gapAbs = Math.abs(bias.convictionGap);
-    const factorsStr = bias.topFactors.length > 0
-      ? bias.topFactors.map((f) => `${f.dimension} (+${f.score})`).join(", ")
-      : "none — signals balanced";
-    return `### Trade Decision: SKIPPED
-**Bias:** ${bias.lean} (${bias.strength}/100) | **Conviction:** ${decision.confluence.total}/${decision.threshold} (${gapAbs} pts short)
-**Breakdown:** Deriv=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Flows=${decision.confluence.exchangeFlows}
-**Drivers:** ${factorsStr}
-**Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)}
-
-State the directional lean and what specific catalyst would push conviction above threshold.`;
-  }
   const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
-  return `### Trade Decision: ${decision.direction} (${decision.confluence.total}/${decision.threshold})
+  return `### Trade Decision: ${decision.direction} (conviction=${decision.confluence.total}/400, size=${decision.sizing.positionSizePct}% notional)
 **Breakdown:** Deriv=${decision.confluence.derivatives}, ETFs=${decision.confluence.etfs}, HTF=${decision.confluence.htf}, Flows=${decision.confluence.exchangeFlows}
 **Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%)
 
@@ -111,9 +97,7 @@ ${buildTradeSection(decision)}`
 
 export function buildSystemPrompt(decision: TradeDecision | null, isDelta: boolean = false): string {
   const biasSection = decision
-    ? decision.skipped
-      ? `\n3. Directional lean: which way and what flips it into a trade.`
-      : `\n3. Trade: direction, why it works now, what price kills it.`
+    ? `\n3. Trade: direction, why it works now, what price kills it.`
     : ``;
 
   const structure = isDelta

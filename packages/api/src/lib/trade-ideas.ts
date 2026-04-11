@@ -36,7 +36,12 @@ export interface DirectionalBias {
   lean: "LONG" | "SHORT" | "NEUTRAL";
   strength: number;
   topFactors: BiasFactor[];
-  convictionGap: number;
+}
+
+export interface SizingInfo {
+  positionSizePct: number;
+  convictionMultiplier: number;
+  dailyVolPct: number;
 }
 
 export interface Confluence {
@@ -46,6 +51,7 @@ export interface Confluence {
   exchangeFlows: number;
   total: number;
   bias?: DirectionalBias;
+  sizing?: SizingInfo;
 }
 
 export interface TradeIdeaLevel {
@@ -72,6 +78,8 @@ export interface TradeIdea {
   entryPrice: number;
   compositeTarget: number;
   confluence: Confluence | null;
+  /** Recommended position size as % of account notional (5–150) */
+  positionSizePct: number;
   skipped: boolean;
   createdAt: Date;
   levels: TradeIdeaLevel[];
@@ -88,6 +96,7 @@ export function parseTradeIdea(raw: Jsonify<TradeIdeaRaw>): TradeIdea {
     compositeTarget: raw.compositeTarget,
     confluence: raw.confluence as Confluence | null,
     skipped: raw.skipped,
+    positionSizePct: raw.positionSizePct,
     createdAt: new Date(raw.createdAt),
     levels: raw.levels.map((l) => ({
       type: l.type as LevelType,
@@ -143,7 +152,7 @@ export interface IdeaSummary {
   id: string;
   briefId: string;
   direction: string;
-  skipped: boolean;
+  positionSizePct: number;
   createdAt: string;
   peakVelocity: number | null;
   peakReturnPct: number | null;

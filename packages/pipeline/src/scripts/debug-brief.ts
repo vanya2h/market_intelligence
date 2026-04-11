@@ -38,7 +38,7 @@ import {
   type SentimentOutput,
   type ExchangeFlowsOutput,
 } from "../orchestrator/types.js";
-import { computeConfluence, CONVICTION_THRESHOLD, type Confluence } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence, type Confluence } from "../orchestrator/trade-idea/confluence.js";
 import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import type { DirectionalBias } from "../orchestrator/trade-idea/bias.js";
@@ -581,8 +581,7 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   out += sep("─", 58) + "\n";
   for (const s of scored) {
     const c = s.confluence;
-    const pass = c.total >= CONVICTION_THRESHOLD ? "  [PASS]" : "";
-    out += `${s.direction.padEnd(8)} ${String(c.derivatives).padEnd(14)} ${String(c.etfs).padEnd(8)} ${String(c.htf).padEnd(8)} ${String(c.exchangeFlows).padEnd(12)} ${c.total}${pass}\n`;
+    out += `${s.direction.padEnd(8)} ${String(c.derivatives).padEnd(14)} ${String(c.etfs).padEnd(8)} ${String(c.htf).padEnd(8)} ${String(c.exchangeFlows).padEnd(12)} ${c.total}\n`;
   }
 
   const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
@@ -592,10 +591,6 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   out += subsection("Directional Bias");
   out += kv("Lean", bias.lean);
   out += kv("Strength", `${bias.strength}/100`);
-  out += kv(
-    "Conviction Gap",
-    `${bias.convictionGap} pts ${bias.convictionGap >= 0 ? "(above threshold)" : "(below threshold)"}`,
-  );
   if (bias.topFactors.length > 0) {
     out += kv("Top Factors", bias.topFactors.map((f) => `${f.dimension}:+${f.score}`).join("  "));
   }
@@ -649,7 +644,6 @@ function buildTradeIdea(tradeIdea: {
       out += "\n";
       out += kv("Bias Lean", String(b.lean));
       out += kv("Bias Strength", `${b.strength}/100`);
-      out += kv("Conviction Gap", `${b.convictionGap} pts`);
       if (Array.isArray(b.topFactors) && b.topFactors.length > 0) {
         out += kv(
           "Top Factors",
@@ -914,16 +908,22 @@ async function main() {
   // Reconstruct trade decision for LLM prompt rebuilding
   let promptDecision: TradeDecision | null = null;
   if (tradeIdea) {
-    const storedConf = tradeIdea.confluence as unknown as Confluence & { bias?: DirectionalBias };
+    const storedConf = tradeIdea.confluence as unknown as Confluence & {
+      bias?: DirectionalBias;
+      sizing?: { positionSizePct: number; convictionMultiplier: number; dailyVolPct: number };
+    };
     promptDecision = {
       direction: tradeIdea.direction as Direction,
       confluence: storedConf,
       entryPrice: tradeIdea.entryPrice,
       compositeTarget: tradeIdea.compositeTarget,
-      skipped: tradeIdea.skipped,
-      threshold: 200, // not persisted; use default (compression-aware threshold only applies at run time)
+      sizing: storedConf.sizing ?? {
+        positionSizePct: tradeIdea.positionSizePct,
+        convictionMultiplier: 0,
+        dailyVolPct: 0,
+      },
       alternatives: [], // not persisted
-      bias: (storedConf?.bias ?? { lean: "NEUTRAL", strength: 0, convictionGap: 0, topFactors: [] }) as DirectionalBias,
+      bias: (storedConf?.bias ?? { lean: "NEUTRAL", strength: 0, topFactors: [] }) as DirectionalBias,
       weights: {
         derivatives: 1,
         etfs: 1,
