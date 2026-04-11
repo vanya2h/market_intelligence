@@ -47,8 +47,7 @@ export interface SizingInfo {
 /**
  * Confluence values are in -1..+1 (per-dim are unweighted normalized scores;
  * total is the weighted average across dimensions). The UI renders them as
- * percentages. Legacy rows (-100..+100 / -400..+400) are auto-converted by
- * `normalizeConfluenceShape` at the API boundary in `parseTradeIdea`.
+ * percentages.
  */
 export interface Confluence {
   derivatives: number;
