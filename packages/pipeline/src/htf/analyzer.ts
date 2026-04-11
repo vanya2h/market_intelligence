@@ -37,6 +37,7 @@ import {
   RsiContext,
   SignalStaleness,
   SpotFuturesCvdDivergence,
+  SthContext,
   VolatilityContext,
   VolumeProfileContext,
   VolumeProfilePosition,
@@ -450,6 +451,37 @@ function anchoredVwap(candles: Candle[], periodStart: number): number {
   }
   if (sumV === 0) return 0;
   return parseFloat((sumPV / sumV).toFixed(2));
+}
+
+// ─── STH Realized Price proxy ────────────────────────────────────────────────
+
+const STH_WINDOW = 155; // days — standard short-term holder cohort window
+
+/**
+ * Compute the Short Term Holder realized price proxy using a 155-day VWAP.
+ *
+ * True STH-RP requires on-chain UTXO data (Glassnode). This approximation uses
+ * volume-weighted average price over the last 155 daily candles, which closely
+ * tracks the on-chain figure because exchange volume serves as a proxy for
+ * coin movement activity.
+ *
+ * Interpretation:
+ *   - Price below STH proxy: average recent buyer is underwater → behavioral
+ *     anchor for mean reversion once reclaimed (break-even selling zone)
+ *   - Price above STH proxy: average recent buyer in profit → latent sell
+ *     pressure fades as a support level on pullbacks
+ */
+function computeSthProxy(dailyCandles: Candle[], currentPrice: number): SthContext {
+  const window = dailyCandles.slice(-STH_WINDOW);
+  const sumVol = window.reduce((s, c) => s + c.volume, 0);
+  const sthPrice = sumVol === 0
+    ? currentPrice
+    : window.reduce((s, c) => s + c.close * c.volume, 0) / sumVol;
+
+  return {
+    price: parseFloat(sthPrice.toFixed(2)),
+    priceVsSthPct: parseFloat(((currentPrice / sthPrice - 1) * 100).toFixed(2)),
+  };
 }
 
 // ─── ATR ──────────────────────────────────────────────────────────────────────
@@ -1080,6 +1112,7 @@ function detectEvents(
   cross: { current: MaCrossType; recent: MaCrossType },
   structure: MarketStructure,
   cvd: CvdContext,
+  sth: SthContext,
   prevState: HtfState | null
 ): HtfEvent[] {
   const events: HtfEvent[] = [];
@@ -1104,6 +1137,26 @@ function detectEvents(
       } else if (!prevBelow && !nowAbove) {
         events.push({ type: "dma200_break", detail: `Price broke below 200 DMA ($${sma200.toFixed(0)})`, at });
       }
+    }
+  }
+
+  // STH cost-basis cross — price crossing the 155-day VWAP
+  if (prevState) {
+    const prevClose = snapshot.h4Candles.at(-2)!.close;
+    const prevBelowSth = prevClose < sth.price;
+    const nowAboveSth  = price > sth.price;
+    if (prevBelowSth && nowAboveSth) {
+      events.push({
+        type: "sth_reclaim",
+        detail: `Price reclaimed STH cost basis ($${sth.price.toFixed(0)}) — average recent buyer now in profit`,
+        at,
+      });
+    } else if (!prevBelowSth && !nowAboveSth) {
+      events.push({
+        type: "sth_break",
+        detail: `Price broke below STH cost basis ($${sth.price.toFixed(0)}) — average recent buyer now underwater`,
+        at,
+      });
     }
   }
 
@@ -1223,7 +1276,10 @@ const BIAS_W_TREND = 0.10;
 const BIAS_W_MOMENTUM = 0.20;
 const BIAS_W_FLOW = 0.20;
 const BIAS_W_COMPRESSION = 0.30;
-const BIAS_W_VP = 0.20;
+// VP is shorter-term (displacement-anchored range) → higher probability near-term signal.
+// STH is longer-term (155d behavioral cost basis) → directional context, not timing.
+const BIAS_W_VP = 0.14;
+const BIAS_W_STH = 0.06;
 
 /**
  * Compute continuous bias scores from already-computed HTF indicators.
@@ -1238,6 +1294,7 @@ function computeBias(
   cvd: CvdContext,
   vol: VolatilityContext,
   vp: VolumeProfileContext | null,
+  sth: SthContext,
 ): HtfBias {
   // 1. Trend — MA mean-reversion pull.
   //    Below MAs = bullish pull (positive), above = bearish pull (negative).
@@ -1333,13 +1390,20 @@ function computeBias(
     vpGravity = clamp(vpGravity, -1, 1);
   }
 
+  // 6. STH gravity — mean-reversion pull toward 155-day VWAP cost basis.
+  //    Behavioral anchor: holders break-even psychology creates absorption zones.
+  //    15% away from STH = full saturation (same power curve as vpGravity).
+  const sthLinear = clamp(-sth.priceVsSthPct / 15, -1, 1);
+  const sthGravity = clamp(Math.sign(sthLinear) * Math.pow(Math.abs(sthLinear), 0.6), -1, 1);
+
   // Composite: compression is unsigned — it amplifies the directional signals.
   // First compute the directional blend without compression:
   const directional =
     trend * BIAS_W_TREND +
     momentum * BIAS_W_MOMENTUM +
     flow * BIAS_W_FLOW +
-    vpGravity * BIAS_W_VP;
+    vpGravity * BIAS_W_VP +
+    sthGravity * BIAS_W_STH;
 
   // Compression scales the directional signal: 0 compression = 1× (no effect),
   // max compression = up to 2.0× amplification.
@@ -1352,6 +1416,7 @@ function computeBias(
     flow: parseFloat(flow.toFixed(3)),
     compression: parseFloat(compression.toFixed(3)),
     vpGravity: parseFloat(vpGravity.toFixed(3)),
+    sthGravity: parseFloat(sthGravity.toFixed(3)),
     composite: parseFloat(composite.toFixed(3)),
   };
 }
@@ -1431,7 +1496,9 @@ export function analyze(
       ? (prevState?.regime ?? null)
       : (prevState?.previousRegime ?? null);
 
-  const events = detectEvents(snapshot, price, sma200, rsi, cross, structure, cvdData, prevState);
+  const sth = computeSthProxy(daily, price);
+
+  const events = detectEvents(snapshot, price, sma200, rsi, cross, structure, cvdData, sth, prevState);
 
   // Signal staleness — how fresh each key signal is
   const staleness: SignalStaleness = {
@@ -1461,7 +1528,8 @@ export function analyze(
     volumeProfile,
     sweep: computeSweepLevels(daily, price),
     staleness,
-    bias: computeBias(ma, rsi, cvdData, volatility, volumeProfile),
+    sth,
+    bias: computeBias(ma, rsi, cvdData, volatility, volumeProfile, sth),
   };
 
   const nextState: HtfState = {

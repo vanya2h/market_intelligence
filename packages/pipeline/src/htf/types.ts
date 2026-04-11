@@ -25,7 +25,7 @@ export interface HtfSnapshot {
   timestamp: string; // ISO 8601
   asset: "BTC" | "ETH";
   h4Candles: Candle[]; // last ~300 4h candles → SMA 50/200 on 4h, 4h RSI
-  dailyCandles: Candle[]; // last ~104 daily candles → daily RSI, market structure
+  dailyCandles: Candle[]; // last ~200 daily candles → daily RSI, market structure, STH proxy
   futuresH4Candles: Candle[]; // last ~750 4h candles from futures → CVD + volume profile
 }
 
@@ -114,6 +114,21 @@ export interface VwapContext {
   monthly: number; // volume-weighted average price for current month
 }
 
+/**
+ * Short Term Holder realized price proxy — 155-day volume-weighted average price.
+ *
+ * Approximates the average cost basis of coins moved within the last 155 days.
+ * Acts as a behavioral mean-reversion magnet:
+ *   - Price below: STH holders underwater → strong reversion target overhead
+ *   - Price above: STH holders in profit → latent sell pressure / support on pullbacks
+ */
+export interface SthContext {
+  /** 155-day VWAP of daily closes, weighted by volume */
+  price: number;
+  /** % distance from STH cost basis: negative = price is below (holders underwater) */
+  priceVsSthPct: number;
+}
+
 export interface HtfEvent {
   type:
     | "golden_cross"
@@ -128,7 +143,9 @@ export interface HtfEvent {
     | "cvd_divergence_bearish"
     | "cvd_suspect_bounce"
     | "cvd_overbought"
-    | "cvd_oversold";
+    | "cvd_oversold"
+    | "sth_reclaim"
+    | "sth_break";
   detail: string;
   at: string;
 }
@@ -240,6 +257,8 @@ export interface HtfBias {
   compression: number;
   /** VP mean-reversion pull toward POC: +1 = below POC (bullish pull), -1 = above POC */
   vpGravity: number;
+  /** STH cost-basis gravity: +1 = far below (holders underwater, strong reversion target), -1 = far above */
+  sthGravity: number;
   /** Weighted composite: -1 (max bearish) to +1 (max bullish) */
   composite: number;
 }
@@ -256,6 +275,8 @@ export interface HtfContext {
   rsi: RsiContext;
   cvd: CvdContext;
   vwap: VwapContext;
+  /** Short Term Holder realized price proxy (155-day VWAP) — mean reversion magnet */
+  sth: SthContext;
   structure: MarketStructure;
   events: HtfEvent[];
   /** ATR-14 on 4h candles — execution-timeframe volatility context */

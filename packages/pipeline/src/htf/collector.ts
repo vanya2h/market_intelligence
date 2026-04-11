@@ -3,7 +3,7 @@
  *
  * Fetches OHLCV candles from Binance public API (no auth required):
  *   - 300 4h candles    → SMA 50/200 on 4h, 4h RSI-14
- *   - 104 daily candles → daily RSI-14, market structure (HH/HL/LH/LL)
+ *   - 200 daily candles → daily RSI-14, market structure, 155-day STH proxy
  *
  * Timeframe rationale: designed for traders operating on 1h/4h charts.
  * Daily = HTF trend reference. 4h = execution timeframe context.
@@ -74,7 +74,7 @@ export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<HtfSnapshot
 
   const [h4Candles, dailyCandles, futuresH4Candles] = await Promise.all([
     fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "4h",  300, `htf-4h-${asset.toLowerCase()}`,          TTL.H4),
-    fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "1d",  104, `htf-daily-${asset.toLowerCase()}`,       TTL.DAILY),
+    fetchKlines(BINANCE_SPOT,    "/api/v3/klines",  symbol, "1d",  200, `htf-daily-${asset.toLowerCase()}`,       TTL.DAILY),
     fetchKlines(BINANCE_FUTURES, "/fapi/v1/klines", symbol, "4h",  750, `htf-futures-4h-750-${asset.toLowerCase()}`,  TTL.H4),
   ]);
 

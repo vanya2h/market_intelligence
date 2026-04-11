@@ -573,6 +573,35 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           value: safe(() => fmtLevel(get(ctx, "vwap.monthly") as number)),
         },
         {
+          label: "Cost Basis (155d)",
+          group: "STH Realized Price",
+          value: safe(() => fmtLevel(get(ctx, "sth.price") as number)),
+          signal: (() => {
+            const pct = get(ctx, "sth.priceVsSthPct") as number;
+            // Below STH → holders underwater → bullish reversion pull upward
+            // Above STH → holders in profit → latent sell pressure
+            return pct < 0 ? ("bullish" as MetricSignal) : ("bearish" as MetricSignal);
+          })(),
+          hint: safe(() => {
+            const pct = get(ctx, "sth.priceVsSthPct") as number;
+            return pct < 0
+              ? `Price is ${Math.abs(pct).toFixed(1)}% below the average cost basis of recent buyers — strong mean-reversion target overhead`
+              : `Price is ${pct.toFixed(1)}% above the average cost basis of recent buyers — latent sell pressure fades as support on pullbacks`;
+          }),
+        },
+        {
+          label: "Distance",
+          group: "STH Realized Price",
+          value: safe(() => {
+            const pct = get(ctx, "sth.priceVsSthPct") as number;
+            return `${pct >= 0 ? "+" : ""}${formatNumber(pct, 2)}%`;
+          }),
+          signal: (() => {
+            const pct = get(ctx, "sth.priceVsSthPct") as number;
+            return pct < 0 ? ("bullish" as MetricSignal) : ("bearish" as MetricSignal);
+          })(),
+        },
+        {
           label: "Futures Short/Long",
           group: "CVD",
           value: safe(() => `${get(ctx, "cvd.futures.short.regime")} / ${get(ctx, "cvd.futures.long.regime")}`),

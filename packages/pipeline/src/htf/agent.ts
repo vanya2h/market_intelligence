@@ -35,6 +35,9 @@ function contextCacheKey(ctx: HtfContext): string {
     priceVsWeeklyVwap: ctx.price > ctx.vwap.weekly ? "above" : "below",
     priceVsMonthlyVwap: ctx.price > ctx.vwap.monthly ? "above" : "below",
     events: ctx.events.map((e) => e.type).sort(),
+    // STH cost basis — bucket to 5% bands to avoid noisy cache misses
+    sthPosition: ctx.price > ctx.sth.price ? "above" : "below",
+    sthDistBucket: Math.round(ctx.sth.priceVsSthPct / 5) * 5,
     // Staleness — bucket to avoid noisy cache misses
     staleRsi: ctx.staleness.rsiExtreme !== null ? Math.min(ctx.staleness.rsiExtreme, 10) : null,
     staleCvdDiv: ctx.staleness.cvdDivergencePeak !== null ? Math.min(ctx.staleness.cvdDivergencePeak, 10) : null,

@@ -217,6 +217,7 @@ async function main() {
     `${chalk.white(b.compression.toFixed(3))}  ${chalk.yellow("█".repeat(Math.round(b.compression * 20)).padEnd(20, "·"))}`,
   );
   row("VP gravity", `${fmtBias(b.vpGravity)}  ${bar(b.vpGravity)}`);
+  row("STH gravity", `${fmtBias(b.sthGravity)}  ${bar(b.sthGravity)}`);
   console.log();
   const compColor = b.composite > 0.1 ? chalk.green.bold : b.composite < -0.1 ? chalk.red.bold : chalk.yellow.bold;
   row("COMPOSITE", `${compColor((b.composite >= 0 ? "+" : "") + b.composite.toFixed(3))}  ${bar(b.composite, 30)}`);
@@ -419,6 +420,21 @@ async function main() {
   row("Weekly VWAP", `${chalk.white(fmt$(ctx.vwap.weekly))}  price ${fmtPct(vwapWeeklyPct)}`);
   row("Monthly VWAP", `${chalk.white(fmt$(ctx.vwap.monthly))}  price ${fmtPct(vwapMonthlyPct)}`);
 
+  // ── STH Realized Price proxy ──────────────────────────────────────────────────
+  hdr("STH Realized Price (155d VWAP proxy)");
+  const sthAbove = ctx.price > ctx.sth.price;
+  row(
+    "STH cost basis",
+    `${chalk.white(fmt$(ctx.sth.price))}  price ${fmtPct(ctx.sth.priceVsSthPct)}`,
+  );
+  row(
+    "Position",
+    sthAbove
+      ? chalk.green("ABOVE  (STH holders in profit — latent sell pressure fades as support)")
+      : chalk.red("BELOW  (STH holders underwater — strong mean-reversion target overhead)"),
+  );
+  row("Gravity bias", `${(b.sthGravity >= 0 ? chalk.green : chalk.red)((b.sthGravity >= 0 ? "+" : "") + b.sthGravity.toFixed(3))}`);
+
   // ── Volatility / ATR ──────────────────────────────────────────────────────────
   hdr("Volatility / ATR");
   const vol = ctx.volatility;
@@ -535,6 +551,7 @@ async function main() {
   const levels = [
     { label: "SMA 200", price: ctx.ma.sma200 },
     { label: "SMA 50", price: ctx.ma.sma50 },
+    { label: "STH cost basis (155d)", price: ctx.sth.price },
     { label: "VWAP weekly", price: ctx.vwap.weekly },
     { label: "VWAP monthly", price: ctx.vwap.monthly },
     { label: "VP POC", price: ctx.volumeProfile.profile.poc },
