@@ -21,7 +21,7 @@
  * It remains valuable as a narrative/context layer for the LLM synthesizer.
  */
 
-import type { DerivativesContext } from "../../types.js";
+import type { AnalysisSignals, DerivativesContext } from "../../types.js";
 import type { EtfContext } from "../../etfs/types.js";
 import type { HtfContext } from "../../htf/types.js";
 
@@ -52,7 +52,8 @@ function directional(score: number, direction: Direction): number {
 // Moderate readings produce ~0 to avoid noise in trending markets.
 //   - Positioning: CROWDED states spike, OI z-score baseline (dead zone z < 1.5)
 //   - Stress: CAPITULATION/UNWINDING spike, baseline requires elevated liq/OI
-//   - Funding: sigmoid with dead zone (pctl 35-65 → ~0)
+//   - Funding: trend-phase-aware — fresh extremes are trend-following, decays
+//     toward mean-reversion as time passes or exhaustion signals fire
 //   - Coinbase premium: sigmoid with dead zone (pctl 35-65 → ~0)
 
 // Component weights
@@ -61,7 +62,106 @@ const DERIV_W_STRESS = 0.2;
 const DERIV_W_FUNDING = 0.3;
 const DERIV_W_CBPREMIUM = 0.2;
 
-function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number {
+// ─── Funding: Trend-Phase-Aware Scoring ─────────────────────────────────────
+// Funding rate percentile is a powerful signal, but its meaning depends on
+// where we are in the trend lifecycle:
+//   - Early in a trend (fresh extreme): elevated funding confirms the move.
+//     Longs paying = bullish conviction, not exhaustion.
+//   - As time passes without exhaustion, conviction decays exponentially.
+//   - When exhaustion signals fire (CVD divergence, RSI stretched, OI declining),
+//     the signal flips to mean-reversion: elevated funding = bearish.
+//
+// Decay constant τ=5 cycles (~40h at 8h funding intervals).
+// Exhaustion accelerates decay by up to 6 effective cycles.
+
+const FUNDING_DECAY_TAU = 5;
+const FUNDING_EXHAUSTION_ACCEL = 6;
+const FUNDING_DEAD_ZONE = 20; // ±20 pctl points around median (widened from 15)
+
+/**
+ * Detect trend exhaustion from HTF momentum indicators.
+ * Returns 0..1 where 0 = no exhaustion, 1 = fully exhausted.
+ */
+function computeExhaustion(
+  htfCtx: HtfContext,
+  signals: AnalysisSignals,
+  fundingSide: "LONG" | "SHORT" | null,
+): number {
+  if (!fundingSide) return 0;
+
+  let score = 0;
+  const cvd = htfCtx.cvd;
+
+  // 1. CVD exhaustion mechanism (strongest signal: 0.35)
+  //    If longs are paying (LONG side) and CVD shows bearish divergence → trend fading.
+  //    EXHAUSTION mechanism (price HH, CVD LH) is stronger than ABSORPTION.
+  const exhaustionAligns =
+    (fundingSide === "LONG" && cvd.futures.divergence === "BEARISH") ||
+    (fundingSide === "SHORT" && cvd.futures.divergence === "BULLISH");
+  if (exhaustionAligns && cvd.futures.divergenceMechanism === "EXHAUSTION") {
+    score += 0.35;
+  } else if (exhaustionAligns && cvd.futures.divergenceMechanism === "ABSORPTION") {
+    score += 0.2;
+  }
+
+  // 2. Spot-futures divergence (0.25)
+  //    SUSPECT_BOUNCE when longs paying = leverage-driven rally, no real demand.
+  //    SPOT_LEADS when shorts paying = organic buying despite negative funding.
+  if (fundingSide === "LONG" && cvd.spotFuturesDivergence === "SUSPECT_BOUNCE") {
+    score += 0.25;
+  }
+  if (fundingSide === "SHORT" && cvd.spotFuturesDivergence === "SPOT_LEADS") {
+    score += 0.25;
+  }
+
+  // 3. RSI stretched (0.2)
+  //    Overbought when longs paying, oversold when shorts paying.
+  const rsi = htfCtx.rsi.h4;
+  if (fundingSide === "LONG" && rsi > 70) {
+    score += 0.2 * Math.min((rsi - 70) / 15, 1);
+  } else if (fundingSide === "SHORT" && rsi < 30) {
+    score += 0.2 * Math.min((30 - rsi) / 15, 1);
+  }
+
+  // 4. OI declining while funding elevated (0.2)
+  //    Positions unwinding = participants exiting despite high cost.
+  if (signals.oiChange24h < -0.02 || signals.oiChange7d < -0.05) {
+    score += 0.2;
+  }
+
+  return Math.min(score, 1);
+}
+
+/**
+ * Phase-based funding score: blends trend-following (early) with
+ * mean-reversion (late / exhausted). Returns -100..+100 (LONG-biased).
+ */
+function scoreFunding(signals: AnalysisSignals, htfCtx?: HtfContext): number {
+  const fp = signals.fundingPct1m;
+  const cycles = signals.fundingPressureCycles;
+  const side = signals.fundingPressureSide;
+
+  // Exhaustion from HTF momentum (0..1)
+  const exhaustion = htfCtx ? computeExhaustion(htfCtx, signals, side) : 0;
+
+  // Phase-based blending: trendWeight decays from 1.0 (pure trend-following)
+  // toward 0.0 (pure mean-reversion). Exhaustion accelerates the decay.
+  const effectiveCycles = cycles + exhaustion * FUNDING_EXHAUSTION_ACCEL;
+  const trendWeight = Math.exp(-Math.max(effectiveCycles - 1, 0) / FUNDING_DECAY_TAU);
+
+  // Mean-reversion score: high pctl = bearish (negative), low pctl = bullish (positive).
+  const fpDeviation = fp - 50;
+  const fpScaled = Math.sign(fpDeviation) * Math.max(Math.abs(fpDeviation) - FUNDING_DEAD_ZONE, 0);
+  const meanRevScore = -100 * Math.tanh(fpScaled / 12);
+
+  // Trend-following score: OPPOSITE sign — high funding = bullish early in trend.
+  // Only fires when in a genuine extreme (side !== null).
+  const trendScore = side !== null ? -meanRevScore : 0;
+
+  return clamp(trendWeight * trendScore + (1 - trendWeight) * meanRevScore, -100, 100);
+}
+
+function scoreDerivatives(ctx: DerivativesContext, direction: Direction, htfCtx?: HtfContext): number {
   if (direction === "FLAT") return 0;
 
   const { positioning, stress, signals } = ctx;
@@ -120,19 +220,13 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction): number
     }
   }
 
-  // 3. Funding — sigmoid with dead zone in normal range.
-  //    High pct = longs paying = bearish, low pct = shorts paying = bullish.
-  //    Dead zone: pctl 35-65 → ~0. Steep transition beyond: 20→-93, 80→+93.
-  const fp = signals.fundingPct1m;
-  const fpDeviation = fp - 50;
-  const fpDeadZone = 15; // ±15 percentile points around median = dead
-  const fpScaled = Math.sign(fpDeviation) * Math.max(Math.abs(fpDeviation) - fpDeadZone, 0);
-  let fundingScore = -100 * Math.tanh(fpScaled / 12);
-  // Amplify by consecutive extreme funding cycles
-  if (signals.fundingPressureCycles >= 3) {
-    fundingScore *= 1 + clamp((signals.fundingPressureCycles - 3) / 5, 0, 0.5);
-  }
-  fundingScore = clamp(fundingScore, -100, 100);
+  // 3. Funding — trend-phase-aware scoring.
+  //    Fresh flip to extreme funding = trend confirmation (crowd is right early).
+  //    As cycles accumulate or exhaustion signals fire, decays toward mean-reversion.
+  //    Phase 1 (cycles 1-3): trend-following — high funding = bullish
+  //    Phase 2 (cycles 4-8): decaying conviction
+  //    Phase 3 (cycles 8+ or exhaustion): mean-reversion — high funding = bearish
+  const fundingScore = scoreFunding(signals, htfCtx);
 
   // 4. Coinbase premium — institutional demand proxy with dead zone.
   //    Positive premium = US buying > offshore = bullish.
@@ -365,8 +459,10 @@ export function computeConfluence(
   const htf = outputs.find((o) => o.dimension === "HTF");
   const ef = outputs.find((o) => o.dimension === "EXCHANGE_FLOWS");
 
+  const htfCtx = htf?.context;
+
   // Unweighted normalized scores in -1..+1.
-  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction) : 0) / 100;
+  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction, htfCtx) : 0) / 100;
   const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0) / 100;
   const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0) / 100;
   const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0) / 100;
