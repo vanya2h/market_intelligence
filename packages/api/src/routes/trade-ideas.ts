@@ -17,6 +17,8 @@ import {
   DimensionEffectiveness,
   SignalEffectiveness,
   IdeaSummary,
+  MonthlyReturn,
+  PerformanceMetrics,
 } from "../lib/trade-ideas.js";
 import { AssetType } from "../lib/asset.js";
 
@@ -175,6 +177,28 @@ export const GetSignalEffectivenessController = createController({
       ),
 });
 
+// ─── GET /performance/:asset ────────────────────────────────────────────────
+
+const performanceRoute = describeRoute({
+  summary: "Get performance metrics",
+  description: "Monthly returns, cumulative PnL, and Sharpe ratio — size-weighted by conviction",
+  tags: ["Trade Ideas"],
+  responses: {
+    200: { description: "Performance metrics with monthly breakdown" },
+  },
+});
+
+export const GetPerformanceController = createController({
+  build: (factory) =>
+    factory
+      .createApp()
+      .get("/performance/:asset", performanceRoute, validator("param", AssetParamSchema), async (c) => {
+        const { asset } = c.req.valid("param");
+        const data = await getPerformanceMetrics(asset);
+        return c.json(data);
+      }),
+});
+
 // ─── Composite controller ────────────────────────────────────────────────────
 
 export const TradeIdeasController = createController({
@@ -186,7 +210,8 @@ export const TradeIdeasController = createController({
       .route("/", GetTradeIdeaStatsController.build(factory))
       .route("/", GetConfluenceStatsController.build(factory))
       .route("/", GetTradeIdeaByBriefController.build(factory))
-      .route("/", GetSignalEffectivenessController.build(factory)),
+      .route("/", GetSignalEffectivenessController.build(factory))
+      .route("/", GetPerformanceController.build(factory)),
 });
 
 export async function getTradeIdeaStats(asset: "BTC" | "ETH"): Promise<TradeIdeaStats> {
@@ -445,4 +470,105 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
   });
 
   return { dimensions, ideas: ideaSummaries, totalIdeas: ideas.length, totalWithReturns: scored.length };
+}
+
+// ─── Performance metrics ───────────────────────────────────────────────────
+
+/**
+ * Position size multiplier: 2.0 × conviction^1.5
+ * Matches the new sizing curve in packages/pipeline/src/orchestrator/trade-idea/sizing.ts
+ */
+function sizeMultiplier(conviction: number): number {
+  return 2.0 * Math.pow(Math.max(conviction, 0), 1.5);
+}
+
+/**
+ * Compute monthly returns, cumulative PnL, and Sharpe ratio.
+ *
+ * Each idea's PnL = sizeMultiplier(confluence.total) × peakReturn.
+ * Monthly returns are the sum of per-idea PnLs within each calendar month.
+ * Sharpe = mean(monthlyReturns) / std(monthlyReturns) × √12 (annualized).
+ */
+async function getPerformanceMetrics(asset: AssetType): Promise<PerformanceMetrics> {
+  const ideas = await prisma.tradeIdea.findMany({
+    where: { asset },
+    include: { returns: { orderBy: { hoursAfter: "asc" } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Compute per-idea metrics
+  const rows: { month: string; pnl: number; size: number; peakReturn: number; win: boolean }[] = [];
+
+  for (const idea of ideas) {
+    if (idea.returns.length === 0) continue;
+    const conf = idea.confluence as ConfluenceJson & { total?: number } | null;
+    const total = conf?.total ?? 0;
+    const size = sizeMultiplier(total);
+
+    // Peak return: snapshot with highest |qualityAtPoint|
+    const peak = idea.returns.reduce((best, r) =>
+      Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
+    );
+
+    const pnl = size * peak.returnPct;
+    const month = idea.createdAt.toISOString().slice(0, 7); // YYYY-MM
+
+    rows.push({ month, pnl, size, peakReturn: peak.returnPct, win: peak.returnPct > 0 });
+  }
+
+  // Group by month
+  const monthMap = new Map<string, { pnls: number[]; sizes: number[]; returns: number[]; wins: number }>();
+  for (const row of rows) {
+    const entry = monthMap.get(row.month) ?? { pnls: [], sizes: [], returns: [], wins: 0 };
+    entry.pnls.push(row.pnl);
+    entry.sizes.push(row.size);
+    entry.returns.push(row.peakReturn);
+    if (row.win) entry.wins++;
+    monthMap.set(row.month, entry);
+  }
+
+  const months: MonthlyReturn[] = Array.from(monthMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, data]) => {
+      const count = data.pnls.length;
+      return {
+        month,
+        pnl: round2(data.pnls.reduce((a: number, b: number) => a + b, 0)),
+        count,
+        avgSize: round2(data.sizes.reduce((a: number, b: number) => a + b, 0) / count),
+        winRate: round2(data.wins / count),
+        avgReturn: round2(data.returns.reduce((a: number, b: number) => a + b, 0) / count),
+      };
+    });
+
+  // Overall metrics
+  const totalPnl = rows.reduce((s, r) => s + r.pnl, 0);
+  const totalWins = rows.filter((r) => r.win).length;
+  const avgSize = rows.length > 0 ? rows.reduce((s, r) => s + r.size, 0) / rows.length : 0;
+
+  // Sharpe ratio: annualized from monthly PnLs
+  const monthlyPnls = months.map((m) => m.pnl);
+  let sharpe: number | null = null;
+  if (monthlyPnls.length >= 2) {
+    const mean = monthlyPnls.reduce((a, b) => a + b, 0) / monthlyPnls.length;
+    const variance = monthlyPnls.reduce((s, p) => s + (p - mean) ** 2, 0) / monthlyPnls.length;
+    const std = Math.sqrt(variance);
+    if (std > 0) {
+      sharpe = round2((mean / std) * Math.sqrt(12));
+    }
+  }
+
+  return {
+    months,
+    totalPnl: round2(totalPnl),
+    sharpe,
+    totalIdeas: rows.length,
+    avgPnlPerIdea: rows.length > 0 ? round2(totalPnl / rows.length) : 0,
+    winRate: rows.length > 0 ? round2(totalWins / rows.length) : 0,
+    avgSize: round2(avgSize),
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

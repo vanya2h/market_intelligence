@@ -171,3 +171,37 @@ export interface SignalEffectiveness {
   totalIdeas: number;
   totalWithReturns: number;
 }
+
+// ─── Performance metrics ───────────────────────────────────────────────────
+
+export interface MonthlyReturn {
+  /** YYYY-MM */
+  month: string;
+  /** Size-weighted PnL: Σ(multiplier × peakReturn) */
+  pnl: number;
+  /** Number of ideas in the month */
+  count: number;
+  /** Average position size multiplier */
+  avgSize: number;
+  /** Win rate (peak return > 0) */
+  winRate: number;
+  /** Average peak return (unweighted) */
+  avgReturn: number;
+}
+
+export interface PerformanceMetrics {
+  /** Monthly returns series */
+  months: MonthlyReturn[];
+  /** Cumulative size-weighted PnL */
+  totalPnl: number;
+  /** Annualized Sharpe ratio from monthly returns (risk-free = 0) */
+  sharpe: number | null;
+  /** Total number of ideas */
+  totalIdeas: number;
+  /** Overall size-weighted average return per idea */
+  avgPnlPerIdea: number;
+  /** Overall win rate */
+  winRate: number;
+  /** Average position size multiplier */
+  avgSize: number;
+}

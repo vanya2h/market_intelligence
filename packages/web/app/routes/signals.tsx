@@ -4,23 +4,26 @@ import { AppHeader } from "../components/AppHeader";
 import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
 import { AssetSelector } from "../components/AssetSelector";
-import { getSignalEffectiveness } from "../lib/trade-idea";
+import { getSignalEffectiveness, getPerformanceMetrics } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { DIMENSION_SHORT_LABELS, type ConfluenceKey } from "../lib/dimensions";
-import type { DimensionEffectiveness, SignalBucket, IdeaSummary } from "@market-intel/api";
+import type { DimensionEffectiveness, SignalBucket, IdeaSummary, PerformanceMetrics, MonthlyReturn } from "@market-intel/api";
 import { Link } from "react-router";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
-  const data = await getSignalEffectiveness(asset, api);
-  return { asset, data };
+  const [data, performance] = await Promise.all([
+    getSignalEffectiveness(asset, api),
+    getPerformanceMetrics(asset, api),
+  ]);
+  return { asset, data, performance };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Signals() {
-  const { asset, data } = useLoaderData<LoaderData>();
+  const { asset, data, performance } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -48,6 +51,9 @@ export default function Signals() {
               Per-dimension score vs peak return velocity — identifies which signals predict fast moves.
             </p>
           </div>
+
+          {/* Performance metrics */}
+          {performance.totalIdeas > 0 && <PerformanceSection performance={performance} />}
 
           {/* Sample size banner */}
           <SampleSizeBanner totalIdeas={data.totalIdeas} totalWithReturns={data.totalWithReturns} />
@@ -81,6 +87,117 @@ export default function Signals() {
         </div>
       </main>
       <StickyFooter />
+    </div>
+  );
+}
+
+// ─── Performance metrics ────────────────────────────────────────────────────
+
+function PerformanceSection({ performance: p }: { performance: PerformanceMetrics }) {
+  const pnlColor = p.totalPnl >= 0 ? "var(--green)" : "var(--red)";
+  const sharpeColor = p.sharpe === null ? "var(--text-muted)" : p.sharpe >= 1 ? "var(--green)" : p.sharpe >= 0 ? "var(--text-secondary)" : "var(--red)";
+
+  return (
+    <div
+      className="rounded-md p-4 flex flex-col gap-4"
+      style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
+    >
+      <h2 className="text-[0.6875rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        Performance
+      </h2>
+
+      {/* Summary stats row */}
+      <div className="flex flex-wrap gap-6">
+        <StatCell label="Cumulative PnL" value={`${p.totalPnl >= 0 ? "+" : ""}${p.totalPnl.toFixed(1)}`} color={pnlColor} />
+        <StatCell label="Sharpe (ann.)" value={p.sharpe !== null ? p.sharpe.toFixed(2) : "—"} color={sharpeColor} />
+        <StatCell label="Win Rate" value={`${(p.winRate * 100).toFixed(0)}%`} color="var(--text-primary)" />
+        <StatCell label="Avg PnL / Idea" value={`${p.avgPnlPerIdea >= 0 ? "+" : ""}${p.avgPnlPerIdea.toFixed(2)}`} color={p.avgPnlPerIdea >= 0 ? "var(--green)" : "var(--red)"} />
+        <StatCell label="Avg Size" value={`${p.avgSize.toFixed(2)}×`} color="var(--text-secondary)" />
+        <StatCell label="Ideas" value={String(p.totalIdeas)} color="var(--text-secondary)" />
+      </div>
+
+      {/* Monthly breakdown */}
+      {p.months.length > 0 && <MonthlyTable months={p.months} />}
+
+      <p className="text-[0.5625rem]" style={{ color: "var(--text-muted)" }}>
+        PnL = conviction multiplier × peak return. Size scales with conviction (2.0 × conv^1.5). Zero conviction = zero size.
+      </p>
+    </div>
+  );
+}
+
+function StatCell({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div>
+      <span className="text-[0.5625rem] uppercase tracking-wider block" style={{ color: "var(--text-muted)" }}>
+        {label}
+      </span>
+      <span className="font-mono-jb text-sm font-semibold" style={{ color }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function MonthlyTable({ months }: { months: MonthlyReturn[] }) {
+  const maxAbsPnl = Math.max(...months.map((m) => Math.abs(m.pnl)), 0.01);
+
+  return (
+    <div className="flex flex-col gap-1">
+      {/* Header */}
+      <div
+        className="grid grid-cols-[5rem_3rem_1fr_5rem_4rem_4rem] gap-2 items-center text-[0.5625rem] uppercase tracking-wider"
+        style={{ color: "var(--text-muted)" }}
+      >
+        <span>Month</span>
+        <span className="text-right">n</span>
+        <span className="pl-2">PnL</span>
+        <span className="text-right">Value</span>
+        <span className="text-right">Win%</span>
+        <span className="text-right">Avg Ret</span>
+      </div>
+
+      {months.map((m) => {
+        const pnlColor = m.pnl >= 0 ? "var(--green)" : "var(--red)";
+        const barWidth = maxAbsPnl > 0 ? (Math.abs(m.pnl) / maxAbsPnl) * 100 : 0;
+
+        return (
+          <div
+            key={m.month}
+            className="grid grid-cols-[5rem_3rem_1fr_5rem_4rem_4rem] gap-2 items-center py-1"
+            style={{ borderBottom: "1px solid var(--border-subtle)" }}
+          >
+            <span className="text-[0.625rem] font-medium font-mono-jb" style={{ color: "var(--text-secondary)" }}>
+              {m.month}
+            </span>
+            <span className="text-right font-mono-jb text-[0.625rem]" style={{ color: "var(--text-secondary)" }}>
+              {m.count}
+            </span>
+            <div className="relative h-4 flex items-center pl-2">
+              <div
+                className="h-2.5 rounded-sm"
+                style={{
+                  width: `${Math.max(barWidth, 2)}%`,
+                  background: `color-mix(in srgb, ${pnlColor} 35%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${pnlColor} 55%, transparent)`,
+                }}
+              />
+            </div>
+            <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: pnlColor }}>
+              {m.pnl >= 0 ? "+" : ""}{m.pnl.toFixed(1)}
+            </span>
+            <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: "var(--text-secondary)" }}>
+              {(m.winRate * 100).toFixed(0)}%
+            </span>
+            <span
+              className="text-right font-mono-jb tabular-nums text-[0.625rem]"
+              style={{ color: m.avgReturn >= 0 ? "var(--green)" : "var(--red)" }}
+            >
+              {m.avgReturn >= 0 ? "+" : ""}{m.avgReturn.toFixed(2)}%
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
