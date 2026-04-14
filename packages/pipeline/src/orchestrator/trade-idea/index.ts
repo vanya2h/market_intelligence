@@ -84,7 +84,7 @@ export async function processTradeIdea(
   // Compute position size from conviction + current volatility
   const sizing = computePositionSize(chosen.confluence.total, htfContext);
 
-  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, chosen.direction);
+  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, chosen.direction, chosen.confluence.total);
 
   const id = await saveTradeIdea({
     briefId,

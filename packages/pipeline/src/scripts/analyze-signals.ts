@@ -340,7 +340,7 @@ async function main() {
     const assetIdeas = withPeak.filter((i) => i.asset === asset);
     subsection(`${asset}`);
 
-    const labels = ["1:2", "1:3", "1:4", "1:5", "T1", "T2", "T3"];
+    const labels = ["S1", "S2", "S3", "S4", "1:2", "1:3", "1:4", "1:5", "T1", "T2", "T3"];
     for (const label of labels) {
       const levels = assetIdeas.flatMap((i) => i.levels.filter((l) => l.label === label && l.outcome !== "OPEN"));
       const wins = levels.filter((l) => l.outcome === "WIN");

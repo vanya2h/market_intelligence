@@ -4,13 +4,13 @@
  * Computes a mean-reversion price target from HTF structure levels
  * (SMA50, SMA200, VWAP weekly, VWAP monthly) using a weighted median.
  *
- * RSI acts as a confidence multiplier — the more stretched RSI is from 50,
- * the stronger the conviction in mean-reversion levels. Near-50 RSI
- * compresses the target toward the current price.
- *
  * Produces two sets of levels tracked simultaneously:
- *   - Invalidation levels at R:R 1:2, 1:3, 1:4, 1:5 (stop losses)
- *   - Target levels at T1 (50%), T2 (100%), T3 (150%) of composite target (take profits)
+ *   - Stop levels (S1–S4): ATR-multiple stops scaled by conviction
+ *   - Target levels (T1–T3): 50%/100%/150% of composite target distance
+ *
+ * Stops are volatility-based (ATR multiples) to survive normal noise.
+ * Targets are structure-based (weighted median of key levels) since
+ * that's where price actually gravitates.
  */
 
 import type { HtfContext } from "../../htf/types.js";
@@ -21,7 +21,7 @@ export type LevelType = "INVALIDATION" | "TARGET";
 
 export interface LevelResult {
   type: LevelType;
-  label: string; // "1:2", "1:3", ... or "T1", "T2", "T3"
+  label: string; // "S1", "S2", ... or "T1", "T2", "T3"
   price: number;
 }
 
@@ -47,14 +47,24 @@ const LEVEL_WEIGHTS = {
   sweep: 0.1,
 } as const;
 
-// RSI confidence: when RSI is at 50 → floor only; at extremes → full weight
-const RSI_FLOOR = 0.3;
-
 // Fallback target distance when all levels are on wrong side
-const ATR_FALLBACK_MULTIPLIER = 1.5;
+const ATR_FALLBACK_MULTIPLIER = 3.0;
 
-// R:R ratios for invalidation levels
-const RR_RATIOS = [2, 3, 4, 5] as const;
+// ─── ATR-based stop tiers ───────────────────────────────────────────────────
+// Each tier is a base ATR multiple. Conviction scaling adjusts all tiers:
+//   conviction 0.0 → 0.8× (tighter — less room for low-conviction trades)
+//   conviction 0.5 → 1.05×
+//   conviction 1.0 → 1.3× (wider — high conviction gets more room)
+
+const STOP_TIERS = [
+  { label: "S1", base: 1.0 },   // tight — scalp invalidation
+  { label: "S2", base: 1.5 },   // standard swing stop
+  { label: "S3", base: 2.0 },   // wide — room for volatility
+  { label: "S4", base: 2.5 },   // widest — high-conviction swing
+] as const;
+
+const CONVICTION_SCALE_MIN = 0.8;
+const CONVICTION_SCALE_RANGE = 0.5; // 0.8 + 0.5 × conviction
 
 // Target multipliers: fraction of composite target distance from entry
 // T1 = 50% (conservative), T2 = 100% (full target), T3 = 150% (overshoot)
@@ -64,21 +74,22 @@ const TARGET_MULTIPLIERS = [
   { label: "T3", fraction: 1.5 },
 ] as const;
 
+// FLAT mode: breakout distances as ATR multiples
+const FLAT_ATR_MULTIPLIERS: Record<string, number> = {
+  S1: 2.5,
+  S2: 2.0,
+  S3: 1.5,
+  S4: 1.0,
+};
+
 // ─── Weighted median ─────────────────────────────────────────────────────────
 
 /**
  * Computes the weighted median of a set of samples.
  *
  * Sorts samples by value, then walks through them accumulating weight
- * until the cumulative weight reaches half the total. When the median
- * falls between two samples (cumulative weight crosses the midpoint
- * within a sample), linearly interpolates between the previous and
- * current sample values proportional to how far into the current
- * sample's weight the midpoint falls.
- *
- * Unlike a weighted average, this is robust to outliers — a single
- * extreme value (e.g. SMA200 far from price) won't drag the result
- * away from the cluster of other levels.
+ * until the cumulative weight reaches half the total. Linearly interpolates
+ * when the median falls between two samples.
  */
 function weightedMedian(samples: WeightedSample[]): number {
   const sorted = [...samples].sort((a, b) => a.value - b.value);
@@ -90,7 +101,6 @@ function weightedMedian(samples: WeightedSample[]): number {
     const sample = sorted[i]!;
     cumulative += sample.weight;
     if (cumulative >= halfWeight) {
-      // Interpolate if we're between two samples
       if (i > 0 && cumulative - sample.weight < halfWeight) {
         const prev = sorted[i - 1]!;
         const fraction = (halfWeight - (cumulative - sample.weight)) / sample.weight;
@@ -103,44 +113,31 @@ function weightedMedian(samples: WeightedSample[]): number {
   return sorted[sorted.length - 1]!.value;
 }
 
-// ─── RSI confidence multiplier ───────────────────────────────────────────────
-
-/**
- * Maps RSI distance from 50 to a confidence multiplier for mean-reversion targets.
- *
- * When RSI is at an extreme (near 0 or 100), the market is stretched and
- * mean-reversion levels are trustworthy — returns a value close to 1.0,
- * letting the composite target stand at full distance from entry.
- *
- * When RSI is near 50, there's no directional stretch — returns RSI_FLOOR
- * (0.3), compressing the target toward the entry price since a reversion
- * move is less likely to reach the full structure level.
- *
- * Output range: [RSI_FLOOR, 1.0] — never zero, so targets always have
- * some distance even in neutral RSI conditions.
- */
-function rsiConfidence(rsiH4: number): number {
-  // 0-1 scale: 0 when RSI = 50, 1 when RSI = 0 or 100
-  const deviation = Math.abs(rsiH4 - 50) / 50;
-  // Scale from RSI_FLOOR to 1.0
-  return RSI_FLOOR + (1 - RSI_FLOOR) * deviation;
-}
-
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export function computeCompositeTarget(htfContext: HtfContext, direction: Direction): CompositeTargetResult {
-  const { price, ma, vwap, rsi, atr, volumeProfile, sweep } = htfContext;
+/**
+ * Compute composite target and level set for a trade idea.
+ *
+ * @param htfContext - HTF context providing structure levels, ATR, price
+ * @param direction - Trade direction
+ * @param conviction - Confluence total for chosen direction (0..1), used to
+ *                     scale stop distances — higher conviction → wider stops
+ */
+export function computeCompositeTarget(
+  htfContext: HtfContext,
+  direction: Direction,
+  conviction: number = 0,
+): CompositeTargetResult {
+  const { price, ma, vwap, atr, volumeProfile, sweep } = htfContext;
   const entryPrice = price;
+  const normalizedConviction = Math.max(conviction, 0);
 
   // FLAT: target is current price, levels are breakout thresholds based on ATR.
-  // Higher R:R ratio → tighter stop (same semantics as directional ideas).
-  // 1:2 = 1.5×ATR (loose), 1:3 = 1.25×ATR, 1:4 = 1.0×ATR, 1:5 = 0.75×ATR (tight)
   if (direction === "FLAT") {
-    const FLAT_ATR_MULTIPLIERS: Record<number, number> = { 2: 1.5, 3: 1.25, 4: 1.0, 5: 0.75 };
-    const levels: LevelResult[] = RR_RATIOS.map((ratio) => ({
+    const levels: LevelResult[] = Object.entries(FLAT_ATR_MULTIPLIERS).map(([label, mult]) => ({
       type: "INVALIDATION" as const,
-      label: `1:${ratio}`,
-      price: (FLAT_ATR_MULTIPLIERS[ratio] ?? 1) * atr, // stored as distance — checker uses ±
+      label,
+      price: mult * atr, // stored as distance — checker uses ±
     }));
 
     return { entryPrice, compositeTarget: entryPrice, levels };
@@ -173,26 +170,21 @@ export function computeCompositeTarget(htfContext: HtfContext, direction: Direct
     (direction === "LONG" && rawTarget > entryPrice) || (direction === "SHORT" && rawTarget < entryPrice);
 
   // If all structure levels are on the wrong side, use ATR fallback
-  let baseTarget: number;
-  if (targetOnCorrectSide) {
-    baseTarget = rawTarget;
-  } else {
-    baseTarget =
-      direction === "LONG" ? entryPrice + ATR_FALLBACK_MULTIPLIER * atr : entryPrice - ATR_FALLBACK_MULTIPLIER * atr;
-  }
+  const compositeTarget = targetOnCorrectSide
+    ? rawTarget
+    : direction === "LONG"
+      ? entryPrice + ATR_FALLBACK_MULTIPLIER * atr
+      : entryPrice - ATR_FALLBACK_MULTIPLIER * atr;
 
-  // Apply RSI confidence scaling
-  const confidence = rsiConfidence(rsi.h4);
-  const adjustedTarget = entryPrice + (baseTarget - entryPrice) * confidence;
-
-  const targetDistance = Math.abs(adjustedTarget - entryPrice);
+  const targetDistance = Math.abs(compositeTarget - entryPrice);
   const sign = direction === "LONG" ? 1 : -1;
 
-  // Invalidation levels: stop losses at different R:R ratios
-  const invalidationLevels: LevelResult[] = RR_RATIOS.map((ratio) => ({
+  // Invalidation levels: ATR-based stops scaled by conviction
+  const convictionScale = CONVICTION_SCALE_MIN + CONVICTION_SCALE_RANGE * normalizedConviction;
+  const invalidationLevels: LevelResult[] = STOP_TIERS.map(({ label, base }) => ({
     type: "INVALIDATION" as const,
-    label: `1:${ratio}`,
-    price: entryPrice - sign * (targetDistance / ratio),
+    label,
+    price: entryPrice - sign * base * atr * convictionScale,
   }));
 
   // Target levels: take profits at fractions of the composite target distance
@@ -204,7 +196,7 @@ export function computeCompositeTarget(htfContext: HtfContext, direction: Direct
 
   return {
     entryPrice,
-    compositeTarget: adjustedTarget,
+    compositeTarget,
     levels: [...invalidationLevels, ...targetLevels],
   };
 }
