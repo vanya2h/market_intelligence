@@ -1,4 +1,13 @@
-import { $Enums, Prisma, type RichBlock } from "@market-intel/pipeline";
+import {
+  $Enums,
+  Prisma,
+  type RichBlock,
+  type DerivativesEventType,
+  type EtfEventType,
+  type HtfEventType,
+  type SentimentEventType,
+  type ExchangeFlowsEventType,
+} from "@market-intel/pipeline";
 import { AssetType } from "./asset.js";
 import { Jsonify } from "../common/json.js";
 
@@ -8,6 +17,21 @@ export type Regime =
   | $Enums.HtfRegime
   | $Enums.SentimentRegime
   | $Enums.ExchangeFlowsRegime;
+
+/**
+ * Union of every event type emitted by any dimension. Any new event added to a
+ * dimension's event type alias automatically flows through here — callers that
+ * build exhaustive mappings (e.g., event color lookups in the web UI) will fail
+ * to typecheck until they handle the new case.
+ */
+export type DimensionEventType =
+  | DerivativesEventType
+  | EtfEventType
+  | HtfEventType
+  | SentimentEventType
+  | ExchangeFlowsEventType;
+
+export type { DerivativesEventType, EtfEventType, HtfEventType, SentimentEventType, ExchangeFlowsEventType };
 
 export const briefInclude = {
   derivatives: true,

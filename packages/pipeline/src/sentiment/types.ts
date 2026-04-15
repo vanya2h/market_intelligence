@@ -99,15 +99,17 @@ export interface SentimentMetrics {
     | null;
 }
 
+export type SentimentEventType =
+  | "extreme_fear"
+  | "extreme_greed"
+  | "consensus_bullish"
+  | "consensus_bearish"
+  | "consensus_deteriorating"
+  | "consensus_deteriorating_severe"
+  | "sentiment_divergence";
+
 export interface SentimentEvent {
-  type:
-    | "extreme_fear"
-    | "extreme_greed"
-    | "consensus_bullish"
-    | "consensus_bearish"
-    | "consensus_deteriorating"
-    | "consensus_deteriorating_severe"
-    | "sentiment_divergence";
+  type: SentimentEventType;
   detail: string;
   at: string;
 }

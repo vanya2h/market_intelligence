@@ -40,8 +40,10 @@ export interface EtfFlowMetrics {
   reversalRatio: number;
 }
 
+export type EtfEventType = "sigma_inflow" | "sigma_outflow" | "gbtc_discount" | "gbtc_premium";
+
 export interface EtfEvent {
-  type: "sigma_inflow" | "sigma_outflow" | "gbtc_discount" | "gbtc_premium";
+  type: EtfEventType;
   detail: string;
   at: string;
 }

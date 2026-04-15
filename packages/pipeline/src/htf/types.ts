@@ -38,9 +38,43 @@ export interface MaContext {
   recentCross: MaCrossType; // if a cross happened within last 10 4h candles
 }
 
+export type RsiDivergence = "BULLISH" | "BEARISH" | "NONE";
+
 export interface RsiContext {
   daily: number; // RSI-14 on daily closes — trend bias
   h4: number; // RSI-14 on 4h closes — momentum / entry context
+  /** Price vs RSI swing-point divergence on 4h — exhaustion signal */
+  divergence: RsiDivergence;
+}
+
+export type MfiDivergence = "BULLISH" | "BEARISH" | "NONE";
+
+/**
+ * Money Flow Index — volume-weighted momentum oscillator (RSI but with volume).
+ *
+ * MFI naturally decays faster than RSI when volume dries up, making it superior
+ * for detecting exhaustion (the core of mean reversion timing).
+ */
+export interface MfiContext {
+  daily: number; // MFI-14 on daily candles — swing mean reversion conviction
+  h4: number; // MFI-14 on 4h candles — execution timing
+  /** Price vs MFI swing-point divergence on 4h — volume-confirmed exhaustion */
+  divergence: MfiDivergence;
+}
+
+/**
+ * Multi-indicator divergence confluence — the core mean reversion edge.
+ *
+ * Each divergence contributes its own magnitude (how steep the disagreement
+ * between price and indicator slope). Magnitudes are weighted by indicator
+ * reliability and combined via a saturation curve into 0-1 strength.
+ */
+export interface DivergenceConfluence {
+  direction: "BULLISH" | "BEARISH" | "NONE";
+  /** Contributing divergences, each with a 0-1 magnitude */
+  sources: Array<{ indicator: "mfi" | "rsi" | "cvd_futures" | "cvd_spot"; magnitude: number }>;
+  /** Saturation-scaled 0-1 composite. ~0.4+ = actionable, ~0.75+ = high conviction. */
+  strength: number;
 }
 
 export type CvdRegime = "RISING" | "DECLINING" | "FLAT";
@@ -129,23 +163,33 @@ export interface SthContext {
   priceVsSthPct: number;
 }
 
+export type HtfEventType =
+  | "golden_cross"
+  | "death_cross"
+  | "dma200_reclaim"
+  | "dma200_break"
+  | "rsi_daily_overbought"
+  | "rsi_daily_oversold"
+  | "rsi_divergence_bullish"
+  | "rsi_divergence_bearish"
+  | "mfi_overbought"
+  | "mfi_oversold"
+  | "mfi_divergence_bullish"
+  | "mfi_divergence_bearish"
+  | "structure_shift_bullish"
+  | "structure_shift_bearish"
+  | "cvd_divergence_bullish"
+  | "cvd_divergence_bearish"
+  | "cvd_suspect_bounce"
+  | "cvd_overbought"
+  | "cvd_oversold"
+  | "divergence_confluence_bullish"
+  | "divergence_confluence_bearish"
+  | "sth_reclaim"
+  | "sth_break";
+
 export interface HtfEvent {
-  type:
-    | "golden_cross"
-    | "death_cross"
-    | "dma200_reclaim"
-    | "dma200_break"
-    | "rsi_daily_overbought"
-    | "rsi_daily_oversold"
-    | "structure_shift_bullish"
-    | "structure_shift_bearish"
-    | "cvd_divergence_bullish"
-    | "cvd_divergence_bearish"
-    | "cvd_suspect_bounce"
-    | "cvd_overbought"
-    | "cvd_oversold"
-    | "sth_reclaim"
-    | "sth_break";
+  type: HtfEventType;
   detail: string;
   at: string;
 }
@@ -158,6 +202,8 @@ export interface HtfEvent {
 export interface SignalStaleness {
   /** Candles since RSI-14 was most overbought/oversold in the short window */
   rsiExtreme: number | null;
+  /** Candles since MFI-14 was most overbought/oversold in the short window */
+  mfiExtreme: number | null;
   /** Candles since CVD divergence R² peaked (strongest conviction) */
   cvdDivergencePeak: number | null;
   /** Candles since the most recent pivot completed */
@@ -273,7 +319,11 @@ export interface HtfContext {
   price: number;
   ma: MaContext;
   rsi: RsiContext;
+  /** Money Flow Index — volume-weighted momentum for mean reversion detection */
+  mfi: MfiContext;
   cvd: CvdContext;
+  /** Multi-indicator divergence confluence — primary mean reversion trigger */
+  divergenceConfluence: DivergenceConfluence;
   vwap: VwapContext;
   /** Short Term Holder realized price proxy (155-day VWAP) — mean reversion magnet */
   sth: SthContext;

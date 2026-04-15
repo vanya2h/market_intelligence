@@ -4,6 +4,8 @@ import type { PositioningRegime, StressLevel, OiSignal as PrismaOiSignal, $Enums
 
 // Two independent dimensions (spec §1)
 
+export type AssetType = $Enums.Asset;
+
 /** Slow, structural dimension — who is crowded / trapped. */
 export type PositioningState = PositioningRegime;
 
@@ -95,8 +97,10 @@ export interface LiquidationContext {
   percentile: PercentileMap; // includes both "1m" and "3m"
 }
 
+export type DerivativesEventType = "oi_spike" | "oi_drop" | "funding_flip" | "liq_spike" | "ls_extreme";
+
 export interface RegimeEvent {
-  type: "oi_spike" | "oi_drop" | "funding_flip" | "liq_spike" | "ls_extreme";
+  type: DerivativesEventType;
   detail: string;
   at: string; // ISO timestamp
 }

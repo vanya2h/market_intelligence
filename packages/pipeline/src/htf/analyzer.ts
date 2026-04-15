@@ -25,6 +25,7 @@ import {
   CvdRegime,
   CvdSeries,
   CvdWindow,
+  DivergenceConfluence,
   HtfBias,
   HtfContext,
   HtfEvent,
@@ -34,7 +35,10 @@ import {
   MaContext,
   MaCrossType,
   MarketStructure,
+  MfiContext,
+  MfiDivergence,
   RsiContext,
+  RsiDivergence,
   SignalStaleness,
   SpotFuturesCvdDivergence,
   SthContext,
@@ -79,6 +83,112 @@ function rsi14(closes: number[]): number {
   return parseFloat((100 - 100 / (1 + rs)).toFixed(2));
 }
 
+/**
+ * Rolling RSI-14 curve — one value per candle position, built in a single pass
+ * with Wilder smoothing. Values before index 14 are filled with 50 (neutral).
+ *
+ * Used for divergence detection: compare price swing highs/lows against
+ * RSI swing highs/lows on the same curve.
+ */
+export function rsi14Curve(closes: number[]): number[] {
+  const curve: number[] = new Array(closes.length).fill(50);
+  if (closes.length < 15) return curve;
+
+  const changes = closes.slice(1).map((c, i) => c - closes[i]!);
+  const gains = changes.map((c) => (c > 0 ? c : 0));
+  const losses = changes.map((c) => (c < 0 ? -c : 0));
+
+  let avgGain = gains.slice(0, 14).reduce((s, v) => s + v, 0) / 14;
+  let avgLoss = losses.slice(0, 14).reduce((s, v) => s + v, 0) / 14;
+
+  const setAt = (closeIdx: number, rsi: number) => {
+    curve[closeIdx] = rsi;
+  };
+
+  // Seed value at index 14 (corresponds to 14 changes consumed)
+  setAt(14, avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
+
+  for (let i = 14; i < gains.length; i++) {
+    avgGain = (avgGain * 13 + gains[i]!) / 14;
+    avgLoss = (avgLoss * 13 + losses[i]!) / 14;
+    const rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+    // change index i uses closes[i] and closes[i+1]; RSI is "after i+1"
+    setAt(i + 1, rsi);
+  }
+
+  return curve;
+}
+
+// ─── MFI (Money Flow Index — volume-weighted momentum) ───────────────────────
+
+/**
+ * MFI-14 using the standard rolling 14-period sum (matches TradingView reference).
+ *
+ * Formula:
+ *   Typical Price (TP) = (H + L + C) / 3
+ *   Raw Money Flow     = TP × Volume
+ *   Positive MF        = sum of Raw MF where TP[i] > TP[i-1] (rolling 14)
+ *   Negative MF        = sum of Raw MF where TP[i] < TP[i-1] (rolling 14)
+ *   MFI                = 100 - 100 / (1 + positiveMF / negativeMF)
+ */
+function mfi14(candles: Candle[]): number {
+  if (candles.length < 15) return 50;
+
+  const tp = candles.map((c) => (c.high + c.low + c.close) / 3);
+  const n = candles.length;
+
+  let posSum = 0;
+  let negSum = 0;
+  // Rolling 14-period sum: use last 14 period-to-period classifications.
+  // Iterate i from n-14 to n-1, comparing tp[i] to tp[i-1].
+  for (let i = n - 14; i < n; i++) {
+    const rmf = tp[i]! * candles[i]!.volume;
+    if (tp[i]! > tp[i - 1]!) posSum += rmf;
+    else if (tp[i]! < tp[i - 1]!) negSum += rmf;
+  }
+
+  if (negSum === 0) return 100;
+  return parseFloat((100 - 100 / (1 + posSum / negSum)).toFixed(2));
+}
+
+/**
+ * Rolling MFI-14 curve — one value per candle using the standard rolling
+ * 14-period sum (matches TradingView reference). Uses O(n) sliding window:
+ * add newest period classification, subtract the one that rolled off.
+ * Values before index 14 are filled with 50 (neutral).
+ */
+export function mfi14Curve(candles: Candle[]): number[] {
+  const curve: number[] = new Array(candles.length).fill(50);
+  if (candles.length < 15) return curve;
+
+  const tp = candles.map((c) => (c.high + c.low + c.close) / 3);
+
+  const posMf: number[] = [0]; // align with candle indices: posMf[i] uses tp[i] vs tp[i-1]
+  const negMf: number[] = [0];
+  for (let i = 1; i < candles.length; i++) {
+    const rmf = tp[i]! * candles[i]!.volume;
+    posMf.push(tp[i]! > tp[i - 1]! ? rmf : 0);
+    negMf.push(tp[i]! < tp[i - 1]! ? rmf : 0);
+  }
+
+  // Sliding window: sum of last 14 classifications ending at index i
+  let posSum = 0;
+  let negSum = 0;
+  for (let i = 1; i <= 14; i++) {
+    posSum += posMf[i]!;
+    negSum += negMf[i]!;
+  }
+  curve[14] = negSum === 0 ? 100 : 100 - 100 / (1 + posSum / negSum);
+
+  for (let i = 15; i < candles.length; i++) {
+    posSum += posMf[i]! - posMf[i - 14]!;
+    negSum += negMf[i]! - negMf[i - 14]!;
+    curve[i] = negSum === 0 ? 100 : 100 - 100 / (1 + posSum / negSum);
+  }
+
+  return curve;
+}
+
 // ─── CVD regime detection (dual-window + divergence) ─────────────────────────
 
 const CVD_SHORT_LOOKBACK = 20;  // ~3.3 days — catches regime turns early
@@ -118,7 +228,7 @@ function linreg(values: number[]): { slope: number; intercept: number; r2: numbe
 }
 
 /** Build the cumulative CVD curve from candle deltas. */
-function buildCvdCurve(candles: Candle[]): number[] {
+export function buildCvdCurve(candles: Candle[]): number[] {
   const curve: number[] = [];
   let running = 0;
   for (const c of candles) {
@@ -205,7 +315,7 @@ function classifyWindow(candles: Candle[], cvdCurve: number[]): CvdWindow {
  * Find swing highs in a numeric series.
  * A swing high is a value strictly greater than `lookback` neighbors on each side.
  */
-function swingHighs(values: number[], lookback = 3): { index: number; value: number }[] {
+export function swingHighs(values: number[], lookback = 3): { index: number; value: number }[] {
   const results: { index: number; value: number }[] = [];
   for (let i = lookback; i < values.length - lookback; i++) {
     const v = values[i]!;
@@ -222,7 +332,7 @@ function swingHighs(values: number[], lookback = 3): { index: number; value: num
  * Find swing lows in a numeric series.
  * A swing low is a value strictly less than `lookback` neighbors on each side.
  */
-function swingLows(values: number[], lookback = 3): { index: number; value: number }[] {
+export function swingLows(values: number[], lookback = 3): { index: number; value: number }[] {
   const results: { index: number; value: number }[] = [];
   for (let i = lookback; i < values.length - lookback; i++) {
     const v = values[i]!;
@@ -312,6 +422,239 @@ function detectDivergence(
   if (priceLL && !cvdLL) return { divergence: "BULLISH", mechanism: "EXHAUSTION" };
 
   return NONE;
+}
+
+// ─── Generic price / indicator divergence (MFI, RSI, and magnitude for CVD) ─
+
+const DIV_LOOKBACK = 14;
+const DIV_MIN_PIVOT_DISTANCE = 5;
+const DIV_MIN_PRICE_SWING_PCT = 0.5;
+/** Gap size (price % + normalized indicator) that maps to magnitude 1.0 before the power curve. */
+const DIV_MAGNITUDE_SATURATION = 0.08;
+
+/**
+ * Find the last two price swing-high pivots spaced ≥ DIV_MIN_PIVOT_DISTANCE apart.
+ * Returns null if not enough pivots.
+ */
+function lastTwoPivots<T extends { index: number; value: number }>(arr: T[]): [T, T] | null {
+  for (let i = arr.length - 1; i >= 1; i--) {
+    if (arr[i]!.index - arr[i - 1]!.index >= DIV_MIN_PIVOT_DISTANCE) {
+      return [arr[i - 1]!, arr[i]!];
+    }
+  }
+  return null;
+}
+
+/**
+ * Normalize an indicator change between two points into a 0-1 scale.
+ *
+ * RSI / MFI are bounded 0-100, so we divide by 100 for a natural scale.
+ * CVD is unbounded, so we divide by the curve's value range over the window.
+ */
+function normalizeIndicatorMove(
+  indicatorCurve: number[],
+  idx1: number,
+  idx2: number,
+  kind: "bounded" | "unbounded"
+): number {
+  const v1 = indicatorCurve[idx1]!;
+  const v2 = indicatorCurve[idx2]!;
+  if (kind === "bounded") {
+    return (v2 - v1) / 100;
+  }
+  const windowSlice = indicatorCurve.slice(Math.max(0, idx1 - 5), idx2 + 1);
+  const range = Math.max(...windowSlice) - Math.min(...windowSlice);
+  if (range === 0) return 0;
+  return (v2 - v1) / range;
+}
+
+/**
+ * Generic price/indicator divergence detector — used for RSI and MFI.
+ *
+ * Uses price pivots as anchors (found via swingHighs/swingLows on price), then
+ * samples the indicator curve at those same indexes. This gives us a direct
+ * "at the time price did X, indicator did Y" comparison on matched intervals.
+ *
+ * Magnitude (0-1) measures how steep the disagreement is:
+ *   gap = |pricePctMove| + |indicatorNormMove|  (they have opposite signs, so absolutes sum)
+ *   magnitude = (gap / saturation) ^ 0.7        (power curve amplifies small-to-moderate gaps)
+ *
+ * Returns { direction: "NONE", magnitude: 0 } when no divergence detected.
+ */
+export function detectIndicatorDivergence(
+  candles: Candle[],
+  indicatorCurve: number[],
+  kind: "bounded" | "unbounded"
+): { direction: "BULLISH" | "BEARISH" | "NONE"; magnitude: number } {
+  const NONE = { direction: "NONE" as const, magnitude: 0 };
+  if (candles.length < DIV_LOOKBACK * 2 + 3) return NONE;
+  if (indicatorCurve.length !== candles.length) return NONE;
+
+  const priceHighs = swingHighs(candles.map((c) => c.high), DIV_LOOKBACK);
+  const priceLows = swingLows(candles.map((c) => c.low), DIV_LOOKBACK);
+
+  const pHPair = lastTwoPivots(priceHighs);
+  const pLPair = lastTwoPivots(priceLows);
+  if (!pHPair && !pLPair) return NONE;
+
+  const magnitudeFromGap = (pricePct: number, indicatorNorm: number): number => {
+    const gap = Math.abs(pricePct) + Math.abs(indicatorNorm);
+    const raw = Math.min(gap / DIV_MAGNITUDE_SATURATION, 1);
+    return parseFloat(Math.pow(raw, 0.7).toFixed(3));
+  };
+
+  // Bearish divergence: price HH, indicator lower at second pivot
+  if (pHPair) {
+    const [p1, p2] = pHPair;
+    const priceMid = p2.value;
+    const minSwing = priceMid * (DIV_MIN_PRICE_SWING_PCT / 100);
+    const priceHH = p2.value > p1.value && Math.abs(p2.value - p1.value) >= minSwing;
+    if (priceHH) {
+      const indMove = normalizeIndicatorMove(indicatorCurve, p1.index, p2.index, kind);
+      if (indMove < 0) {
+        const pricePct = (p2.value - p1.value) / p1.value;
+        return { direction: "BEARISH", magnitude: magnitudeFromGap(pricePct, indMove) };
+      }
+    }
+  }
+
+  // Bullish divergence: price LL, indicator higher at second pivot
+  if (pLPair) {
+    const [p1, p2] = pLPair;
+    const priceMid = p2.value;
+    const minSwing = priceMid * (DIV_MIN_PRICE_SWING_PCT / 100);
+    const priceLL = p2.value < p1.value && Math.abs(p2.value - p1.value) >= minSwing;
+    if (priceLL) {
+      const indMove = normalizeIndicatorMove(indicatorCurve, p1.index, p2.index, kind);
+      if (indMove > 0) {
+        const pricePct = (p2.value - p1.value) / p1.value;
+        return { direction: "BULLISH", magnitude: magnitudeFromGap(pricePct, indMove) };
+      }
+    }
+  }
+
+  return NONE;
+}
+
+/**
+ * MFI divergence detection on 4h candles.
+ * MFI divergences are always exhaustion (oscillator, not cumulative).
+ */
+export function detectMfiDivergence(candles: Candle[]): {
+  direction: MfiDivergence;
+  magnitude: number;
+} {
+  const curve = mfi14Curve(candles);
+  const { direction, magnitude } = detectIndicatorDivergence(candles, curve, "bounded");
+  return { direction, magnitude };
+}
+
+/**
+ * RSI divergence detection on 4h candles.
+ * Uses RSI-14 curve built from closes, aligned to candle indices.
+ */
+export function detectRsiDivergence(candles: Candle[]): {
+  direction: RsiDivergence;
+  magnitude: number;
+} {
+  const curve = rsi14Curve(candles.map((c) => c.close));
+  const { direction, magnitude } = detectIndicatorDivergence(candles, curve, "bounded");
+  return { direction, magnitude };
+}
+
+/**
+ * Compute magnitude for a CVD divergence that was already detected (with mechanism)
+ * by the existing pivot-based detector. We sample the CVD curve at the price pivots
+ * for consistent magnitude scaling across indicators.
+ *
+ * Returns 0 if direction is "NONE" or if pivots insufficient.
+ */
+export function cvdDivergenceMagnitude(
+  candles: Candle[],
+  cvdCurve: number[],
+  direction: CvdDivergence
+): number {
+  if (direction === "NONE") return 0;
+  const result = detectIndicatorDivergence(candles, cvdCurve, "unbounded");
+  // Trust the original detector's direction; use the magnitude from the generic
+  // detector when it agrees. When disagreeing, fall back to a conservative 0.3.
+  return result.direction === direction ? result.magnitude : 0.3;
+}
+
+// ─── Divergence confluence (magnitude-weighted) ──────────────────────────────
+
+/**
+ * Per-indicator weights in the confluence score. MFI is weighted highest because
+ * volume-confirmed exhaustion is the strongest single divergence signal.
+ */
+const DIV_W: Record<"mfi" | "rsi" | "cvd_futures" | "cvd_spot", number> = {
+  mfi: 1.30,         // volume-weighted momentum — strongest for mean reversion
+  cvd_futures: 1.10, // authoritative leveraged intent
+  rsi: 0.80,         // price-only momentum, weaker as standalone
+  cvd_spot: 0.70,    // confirms demand but leads less than futures
+};
+
+/** Saturation steepness — tuned so one strong MFI divergence reaches ~0.76. */
+const DIV_SATURATION_K = 1.2;
+
+/**
+ * Combine per-indicator divergences into a magnitude-weighted confluence score.
+ *
+ * Only divergences agreeing on direction contribute. The weighted sum of their
+ * magnitudes is passed through a saturation curve `1 - exp(-k × sum)` which:
+ *   - rewards strong individual signals (not just counts)
+ *   - caps at 1.0 to prevent overflow
+ *   - produces ~0.38 for one moderate divergence, ~0.76 for one strong MFI div,
+ *     ~0.89 for MFI+CVD both strong
+ */
+export function computeDivergenceConfluence(
+  mfi: { direction: MfiDivergence; magnitude: number },
+  rsi: { direction: RsiDivergence; magnitude: number },
+  cvdFutures: { direction: CvdDivergence; magnitude: number },
+  cvdSpot: { direction: CvdDivergence; magnitude: number }
+): DivergenceConfluence {
+  type Kind = "mfi" | "rsi" | "cvd_futures" | "cvd_spot";
+  const all: Array<{ indicator: Kind; direction: "BULLISH" | "BEARISH" | "NONE"; magnitude: number }> = [
+    { indicator: "mfi", direction: mfi.direction, magnitude: mfi.magnitude },
+    { indicator: "rsi", direction: rsi.direction, magnitude: rsi.magnitude },
+    { indicator: "cvd_futures", direction: cvdFutures.direction, magnitude: cvdFutures.magnitude },
+    { indicator: "cvd_spot", direction: cvdSpot.direction, magnitude: cvdSpot.magnitude },
+  ];
+
+  // Tally weighted magnitude per direction, pick whichever is larger
+  let bullSum = 0;
+  let bearSum = 0;
+  const bullSources: Array<{ indicator: Kind; magnitude: number }> = [];
+  const bearSources: Array<{ indicator: Kind; magnitude: number }> = [];
+
+  for (const d of all) {
+    if (d.direction === "NONE" || d.magnitude <= 0) continue;
+    const weighted = d.magnitude * DIV_W[d.indicator];
+    if (d.direction === "BULLISH") {
+      bullSum += weighted;
+      bullSources.push({ indicator: d.indicator, magnitude: d.magnitude });
+    } else {
+      bearSum += weighted;
+      bearSources.push({ indicator: d.indicator, magnitude: d.magnitude });
+    }
+  }
+
+  if (bullSum === 0 && bearSum === 0) {
+    return { direction: "NONE", sources: [], strength: 0 };
+  }
+
+  const bullish = bullSum >= bearSum;
+  const weightedSum = bullish ? bullSum : bearSum;
+  const sources = bullish ? bullSources : bearSources;
+
+  // Saturation curve: 1 - e^(-k×sum) — bounded 0-1, concave
+  const strength = parseFloat((1 - Math.exp(-DIV_SATURATION_K * weightedSum)).toFixed(3));
+
+  return {
+    direction: bullish ? "BULLISH" : "BEARISH",
+    sources,
+    strength,
+  };
 }
 
 /**
@@ -728,6 +1071,29 @@ function rsiExtremeStaleness(h4Closes: number[]): number | null {
 }
 
 /**
+ * Scan 4h MFI values over the short window to find how many candles ago
+ * the MFI was most extreme (furthest from 50). Threshold 30 points (>80 or <20)
+ * since MFI extremes are tighter/more significant than RSI.
+ */
+function mfiExtremeStaleness(h4Candles: Candle[]): number | null {
+  const window = h4Candles.slice(-CVD_SHORT_LOOKBACK);
+  if (window.length < 15) return null;
+
+  const curve = mfi14Curve(window);
+  let maxDist = 0;
+  let bestIdx = -1;
+  for (let i = 14; i < curve.length; i++) {
+    const dist = Math.abs(curve[i]! - 50);
+    if (dist >= 30 && dist >= maxDist) {
+      maxDist = dist;
+      bestIdx = i;
+    }
+  }
+  if (bestIdx < 0) return null;
+  return window.length - 1 - bestIdx;
+}
+
+/**
  * Find how many candles ago the CVD divergence had highest R² product
  * (strongest conviction). Scans sub-windows of the long CVD window.
  */
@@ -1109,9 +1475,11 @@ function detectEvents(
   price: number,
   sma200: number,
   rsi: RsiContext,
+  mfi: MfiContext,
   cross: { current: MaCrossType; recent: MaCrossType },
   structure: MarketStructure,
   cvd: CvdContext,
+  confluence: DivergenceConfluence,
   sth: SthContext,
   prevState: HtfState | null
 ): HtfEvent[] {
@@ -1165,6 +1533,66 @@ function detectEvents(
     events.push({ type: "rsi_daily_overbought", detail: `Daily RSI at ${rsi.daily}`, at });
   } else if (rsi.daily < 30) {
     events.push({ type: "rsi_daily_oversold", detail: `Daily RSI at ${rsi.daily}`, at });
+  }
+
+  // MFI extremes — tighter thresholds than RSI (80/20 vs 70/30) since MFI extremes
+  // inherently require volume participation and are therefore more significant.
+  if (mfi.h4 > 80) {
+    events.push({
+      type: "mfi_overbought",
+      detail: `4h MFI at ${mfi.h4} — volume-confirmed overbought, stronger signal than RSI alone`,
+      at,
+    });
+  } else if (mfi.h4 < 20) {
+    events.push({
+      type: "mfi_oversold",
+      detail: `4h MFI at ${mfi.h4} — volume-confirmed oversold, stronger signal than RSI alone`,
+      at,
+    });
+  }
+
+  // RSI divergence (price/RSI swing-point disagreement on 4h)
+  if (rsi.divergence === "BULLISH") {
+    events.push({
+      type: "rsi_divergence_bullish",
+      detail: "Price making lower lows but RSI higher lows — momentum exhausting on downside",
+      at,
+    });
+  } else if (rsi.divergence === "BEARISH") {
+    events.push({
+      type: "rsi_divergence_bearish",
+      detail: "Price making higher highs but RSI lower highs — momentum exhausting on upside",
+      at,
+    });
+  }
+
+  // MFI divergence — the volume-weighted exhaustion signal
+  if (mfi.divergence === "BULLISH") {
+    events.push({
+      type: "mfi_divergence_bullish",
+      detail: "Price making lower lows but MFI higher lows — selling on declining volume",
+      at,
+    });
+  } else if (mfi.divergence === "BEARISH") {
+    events.push({
+      type: "mfi_divergence_bearish",
+      detail: "Price making higher highs but MFI lower highs — rally on declining volume",
+      at,
+    });
+  }
+
+  // Divergence confluence — the primary mean reversion trigger when 2+ indicators agree
+  if (confluence.direction !== "NONE" && confluence.sources.length >= 2) {
+    const srcs = confluence.sources.map((s) => s.indicator).join(", ");
+    const type = confluence.direction === "BULLISH"
+      ? "divergence_confluence_bullish"
+      : "divergence_confluence_bearish";
+    events.push({
+      type,
+      detail: `${confluence.sources.length}-indicator ${confluence.direction.toLowerCase()} divergence confluence `
+        + `(strength ${confluence.strength.toFixed(2)}) — ${srcs}`,
+      at,
+    });
   }
 
   // Structure shift
@@ -1291,7 +1719,9 @@ const BIAS_W_STH = 0.06;
 function computeBias(
   ma: MaContext,
   rsi: RsiContext,
+  mfi: MfiContext,
   cvd: CvdContext,
+  confluence: DivergenceConfluence,
   vol: VolatilityContext,
   vp: VolumeProfileContext | null,
   sth: SthContext,
@@ -1303,17 +1733,23 @@ function computeBias(
   const sma200Pull = clamp(-ma.priceVsSma200Pct / 10, -1, 1) * 0.6;
   const trend = clamp(sma50Pull + sma200Pull, -1, 1);
 
-  // 2. Momentum — RSI distance from 50, non-linear to amplify moderate deviations.
-  //    Oversold (RSI < 50) = bullish setup (positive). Blend 4h (70%) and daily (30%).
-  //    Power curve (^0.6) makes RSI 35 produce 0.50 instead of linear 0.30.
-  const rsiDev4h = (50 - rsi.h4) / 50;       // +1 at RSI=0, -1 at RSI=100
+  // 2. Momentum — RSI + MFI distance from 50, non-linear.
+  //    Oversold (<50) = bullish setup (positive). Blend 4h (70%) and daily (30%).
+  //    MFI weighted slightly above RSI — volume-confirmed momentum is more reliable
+  //    for mean reversion. Daily MFI dominates further because swing signals need
+  //    stronger volume conviction.
+  const rsiDev4h = (50 - rsi.h4) / 50;          // +1 at RSI=0, -1 at RSI=100
   const rsiDevDaily = (50 - rsi.daily) / 50;
-  const rsiLinear = clamp(rsiDev4h * 0.7 + rsiDevDaily * 0.3, -1, 1);
+  const mfiDev4h = (50 - mfi.h4) / 50;
+  const mfiDevDaily = (50 - mfi.daily) / 50;
+  const h4Momentum = rsiDev4h * 0.45 + mfiDev4h * 0.55;
+  const dailyMomentum = rsiDevDaily * 0.40 + mfiDevDaily * 0.60;
+  const rsiLinear = clamp(h4Momentum * 0.7 + dailyMomentum * 0.3, -1, 1);
   const momentum = Math.sign(rsiLinear) * Math.pow(Math.abs(rsiLinear), 0.6);
 
-  // 3. Flow — CVD order flow direction from swing structure + divergence boost.
-  //    Base signal comes from regime direction weighted by magnitude & confidence.
-  //    Divergence layered on top as a reversal amplifier.
+  // 3. Flow — CVD order flow + magnitude-weighted divergence confluence.
+  //    Base signal comes from CVD regime direction weighted by magnitude & confidence.
+  //    Confluence (MFI + RSI + CVD divergences) layered on top as a reversal amplifier.
   let flow = 0;
   const { futures, spot, spotFuturesDivergence } = cvd;
 
@@ -1329,22 +1765,19 @@ function computeBias(
   const spotBase    = windowScore(spot.short) * 0.6 + windowScore(spot.long) * 0.4;
   flow = futuresBase * 0.6 + spotBase * 0.4;
 
-  // Divergence boost — amplifies the base when price and CVD disagree.
-  if (futures.divergence !== "NONE") {
-    const sign = futures.divergence === "BULLISH" ? 1 : -1;
-    const mechMult = futures.divergenceMechanism === "ABSORPTION" ? 1.25
-      : futures.divergenceMechanism === "EXHAUSTION" ? 0.75 : 1.0;
-    flow += sign * 0.3 * mechMult;
-  }
-  if (spot.divergence !== "NONE") {
-    const sign = spot.divergence === "BULLISH" ? 1 : -1;
-    flow += sign * 0.15;
-  }
+  // Divergence confluence boost — magnitude-weighted, replaces independent per-indicator boosts.
+  // strength is already 0-1 with magnitude baked in. Max boost scales to 0.70 to match
+  // the prior maximum combined boost (futures 0.30×1.25 + spot 0.15×1.4 ≈ 0.58 under old system).
+  if (confluence.direction !== "NONE") {
+    const sign = confluence.direction === "BULLISH" ? 1 : -1;
+    flow += sign * confluence.strength * 0.70;
 
-  // Double-divergence boost
-  if (futures.divergence !== "NONE" && spot.divergence !== "NONE" &&
-      futures.divergence === spot.divergence) {
-    flow *= 1.4;
+    // Preserve CVD mechanism nuance: absorption > exhaustion when CVD futures participates
+    const cvdFutInConfluence = confluence.sources.some((s) => s.indicator === "cvd_futures");
+    if (cvdFutInConfluence) {
+      if (futures.divergenceMechanism === "ABSORPTION") flow *= 1.15;
+      else if (futures.divergenceMechanism === "EXHAUSTION") flow *= 0.90;
+    }
   }
 
   // CVD extreme — overbought/oversold spike counters the prevailing direction.
@@ -1440,9 +1873,16 @@ export function analyze(
   const priceVsSma50Pct  = parseFloat(((price / sma50  - 1) * 100).toFixed(2));
   const priceVsSma200Pct = parseFloat(((price / sma200 - 1) * 100).toFixed(2));
 
-  // RSI on both timeframes
+  // RSI on both timeframes + 4h divergence
   const rsiH4    = rsi14(h4Closes);
   const rsiDaily = rsi14(dailyCloses);
+  const rsiDiv   = detectRsiDivergence(h4);
+
+  // MFI (Money Flow Index) — volume-weighted momentum on both timeframes
+  // + 4h divergence for volume-confirmed exhaustion signals.
+  const mfiH4    = mfi14(h4);
+  const mfiDaily = mfi14(daily);
+  const mfiDiv   = detectMfiDivergence(h4);
 
   // ATR-14 on 4h candles — volatility context on the execution timeframe
   const h4Atr = atr14(h4);
@@ -1459,6 +1899,28 @@ export function analyze(
     spot:    spotCvd,
     spotFuturesDivergence: computeSpotFuturesDivergence(spotCvd.short, futuresCvd.short),
   };
+
+  // Magnitudes for CVD divergences (sampled at price pivots, same scale as MFI/RSI)
+  const futuresCvdCurve = buildCvdCurve(snapshot.futuresH4Candles.slice(-CVD_LONG_LOOKBACK));
+  const spotCvdCurve = buildCvdCurve(h4.slice(-CVD_LONG_LOOKBACK));
+  const cvdFutMag = cvdDivergenceMagnitude(
+    snapshot.futuresH4Candles.slice(-CVD_LONG_LOOKBACK),
+    futuresCvdCurve,
+    futuresCvd.divergence,
+  );
+  const cvdSpotMag = cvdDivergenceMagnitude(
+    h4.slice(-CVD_LONG_LOOKBACK),
+    spotCvdCurve,
+    spotCvd.divergence,
+  );
+
+  // Multi-indicator divergence confluence — magnitude-weighted
+  const divergenceConfluence = computeDivergenceConfluence(
+    mfiDiv,
+    rsiDiv,
+    { direction: futuresCvd.divergence, magnitude: cvdFutMag },
+    { direction: spotCvd.divergence, magnitude: cvdSpotMag },
+  );
 
   // Anchored VWAPs — weekly (Monday 00:00 UTC) and monthly (1st 00:00 UTC)
   const now = new Date(snapshot.timestamp);
@@ -1482,7 +1944,8 @@ export function analyze(
     recentCross: cross.recent,
   };
 
-  const rsi: RsiContext = { daily: rsiDaily, h4: rsiH4 };
+  const rsi: RsiContext = { daily: rsiDaily, h4: rsiH4, divergence: rsiDiv.direction };
+  const mfi: MfiContext = { daily: mfiDaily, h4: mfiH4, divergence: mfiDiv.direction };
 
   const regime = determineRegime(price, sma50, sma200, rsiDaily, structure, cvdData.futures.long);
 
@@ -1498,11 +1961,14 @@ export function analyze(
 
   const sth = computeSthProxy(daily, price);
 
-  const events = detectEvents(snapshot, price, sma200, rsi, cross, structure, cvdData, sth, prevState);
+  const events = detectEvents(
+    snapshot, price, sma200, rsi, mfi, cross, structure, cvdData, divergenceConfluence, sth, prevState,
+  );
 
   // Signal staleness — how fresh each key signal is
   const staleness: SignalStaleness = {
     rsiExtreme: rsiExtremeStaleness(h4Closes),
+    mfiExtreme: mfiExtremeStaleness(h4),
     cvdDivergencePeak: cvdDivergencePeakStaleness(snapshot.futuresH4Candles),
     lastPivot: lastPivotAge,
   };
@@ -1519,7 +1985,9 @@ export function analyze(
     price: parseFloat(price.toFixed(2)),
     ma,
     rsi,
+    mfi,
     cvd: cvdData,
+    divergenceConfluence,
     vwap: vwapData,
     structure,
     events,
@@ -1529,7 +1997,7 @@ export function analyze(
     sweep: computeSweepLevels(daily, price),
     staleness,
     sth,
-    bias: computeBias(ma, rsi, cvdData, volatility, volumeProfile, sth),
+    bias: computeBias(ma, rsi, mfi, cvdData, divergenceConfluence, volatility, volumeProfile, sth),
   };
 
   const nextState: HtfState = {

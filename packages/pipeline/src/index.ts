@@ -41,6 +41,7 @@ export {
 export type {
   DerivativesContext,
   DerivativesState,
+  DerivativesEventType,
   PositioningState,
   StressState,
   AnalysisSignals,
@@ -50,16 +51,36 @@ export type {
 } from "./types.js";
 
 // ETFs
-export type { EtfContext, EtfRegime, EtfFlowMetrics } from "./etfs/types.js";
+export type { EtfContext, EtfRegime, EtfFlowMetrics, EtfEventType } from "./etfs/types.js";
 
 // HTF
-export type { HtfContext, HtfRegime, MarketStructure, MaContext, RsiContext } from "./htf/types.js";
+export type {
+  HtfContext,
+  HtfRegime,
+  MarketStructure,
+  MaContext,
+  RsiContext,
+  MfiContext,
+  DivergenceConfluence,
+  HtfEventType,
+} from "./htf/types.js";
 
 // Sentiment
-export type { SentimentContext, SentimentRegime, SentimentMetrics, FearGreedComponents } from "./sentiment/types.js";
+export type {
+  SentimentContext,
+  SentimentRegime,
+  SentimentMetrics,
+  FearGreedComponents,
+  SentimentEventType,
+} from "./sentiment/types.js";
 
 // Exchange Flows
-export type { ExchangeFlowsContext, ExchangeFlowsRegime, ExchangeFlowsMetrics } from "./exchange_flows/types.js";
+export type {
+  ExchangeFlowsContext,
+  ExchangeFlowsRegime,
+  ExchangeFlowsMetrics,
+  ExchangeFlowsEventType,
+} from "./exchange_flows/types.js";
 
 // Orchestrator
 export type { DimensionOutput, AssetBrief } from "./orchestrator/types.js";

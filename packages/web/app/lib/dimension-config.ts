@@ -502,18 +502,29 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
       const vs200 = get(ctx, "ma.priceVsSma200Pct") as number;
       const rsiDaily = get(ctx, "rsi.daily") as number;
       const rsiH4 = get(ctx, "rsi.h4") as number;
+      const rsiDiv = get(ctx, "rsi.divergence") as string;
+      const mfiDaily = get(ctx, "mfi.daily") as number;
+      const mfiH4 = get(ctx, "mfi.h4") as number;
+      const mfiDiv = get(ctx, "mfi.divergence") as string;
       const cross = get(ctx, "ma.crossType") as string;
       const structure = get(ctx, "structure") as string;
       const futDiv = get(ctx, "cvd.futures.divergence") as string;
       const futDivMech = get(ctx, "cvd.futures.divergenceMechanism") as string;
       const spotDiv = get(ctx, "cvd.spot.divergence") as string;
       const spotFutDiv = get(ctx, "cvd.spotFuturesDivergence") as string;
+      const confluenceDir = get(ctx, "divergenceConfluence.direction") as string;
+      const confluenceStrength = get(ctx, "divergenceConfluence.strength") as number;
+      const confluenceSources = (get(ctx, "divergenceConfluence.sources") ?? []) as Array<{
+        indicator: string;
+        magnitude: number;
+      }>;
 
-      const CVD_DIV_SIGNAL: Record<string, MetricSignal | undefined> = {
+      const DIV_SIGNAL: Record<string, MetricSignal | undefined> = {
         BULLISH: "bullish",
         BEARISH: "bearish",
         NONE: undefined,
       };
+      const CVD_DIV_SIGNAL = DIV_SIGNAL;
 
       const SPOT_FUT_SIGNAL: Record<string, MetricSignal> = {
         CONFIRMED_BUYING: "bullish",
@@ -562,6 +573,61 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           value: safe(() => formatNumber(rsiH4, 1)),
           signal: rsiH4 > 70 ? "bearish" : rsiH4 < 30 ? "bullish" : "neutral",
         },
+        ...(rsiDiv && rsiDiv !== "NONE"
+          ? [
+              {
+                label: "RSI Divergence",
+                group: "Momentum",
+                value: rsiDiv,
+                signal: DIV_SIGNAL[rsiDiv],
+                hint:
+                  rsiDiv === "BULLISH"
+                    ? "Price making lower lows but RSI higher lows — downside momentum exhausting"
+                    : "Price making higher highs but RSI lower highs — upside momentum exhausting",
+              } as MetricDef,
+            ]
+          : []),
+        {
+          label: "Daily MFI",
+          group: "Momentum",
+          value: safe(() => formatNumber(mfiDaily, 1)),
+          signal: mfiDaily > 80 ? "bearish" : mfiDaily < 20 ? "bullish" : "neutral",
+          hint: "Money Flow Index — volume-weighted momentum. Extremes (>80 / <20) are tighter than RSI because they require volume confirmation.",
+        },
+        {
+          label: "4H MFI",
+          group: "Momentum",
+          value: safe(() => formatNumber(mfiH4, 1)),
+          signal: mfiH4 > 80 ? "bearish" : mfiH4 < 20 ? "bullish" : "neutral",
+        },
+        ...(mfiDiv && mfiDiv !== "NONE"
+          ? [
+              {
+                label: "MFI Divergence",
+                group: "Momentum",
+                value: mfiDiv,
+                signal: DIV_SIGNAL[mfiDiv],
+                hint:
+                  mfiDiv === "BULLISH"
+                    ? "Price making lower lows but MFI higher lows — selling on declining volume (volume-confirmed exhaustion)"
+                    : "Price making higher highs but MFI lower highs — rally on declining volume (volume-confirmed exhaustion)",
+              } as MetricDef,
+            ]
+          : []),
+        ...(Math.abs(rsiH4 - mfiH4) >= 10
+          ? [
+              {
+                label: "RSI/MFI Gap",
+                group: "Momentum",
+                value: `${(rsiH4 - mfiH4 > 0 ? "+" : "") + formatNumber(rsiH4 - mfiH4, 1)} pts`,
+                signal: "neutral" as MetricSignal,
+                hint:
+                  rsiH4 > mfiH4
+                    ? "RSI elevated while MFI lags — price momentum not backed by volume"
+                    : "MFI elevated while RSI lags — volume flow ahead of price momentum",
+              } as MetricDef,
+            ]
+          : []),
         {
           label: "Weekly VWAP",
           group: "VWAP",
@@ -671,6 +737,39 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
             }
           }),
         },
+        ...(confluenceDir && confluenceDir !== "NONE"
+          ? [
+              {
+                label: "Direction",
+                group: "Divergence Confluence",
+                value: confluenceDir,
+                signal: DIV_SIGNAL[confluenceDir] ?? "neutral",
+                hint: "Multi-indicator divergence — the primary mean reversion trigger. Strength ≥ 0.5 is actionable; ≥ 0.75 is high conviction.",
+              } as MetricDef,
+              {
+                label: "Strength",
+                group: "Divergence Confluence",
+                value: safe(() => formatNumber(confluenceStrength, 2)),
+                signal:
+                  confluenceStrength >= 0.75
+                    ? (DIV_SIGNAL[confluenceDir] ?? "neutral")
+                    : confluenceStrength >= 0.5
+                      ? "neutral"
+                      : "neutral",
+              } as MetricDef,
+              {
+                label: "Sources",
+                group: "Divergence Confluence",
+                value: safe(
+                  () =>
+                    confluenceSources
+                      .map((s) => `${s.indicator.replace("cvd_", "CVD-")} (${formatNumber(s.magnitude, 2)})`)
+                      .join(", ") || "—",
+                ),
+                hint: `${confluenceSources.length} indicator${confluenceSources.length === 1 ? "" : "s"} agreeing. Weights: MFI 1.30, CVD futures 1.10, RSI 0.80, CVD spot 0.70.`,
+              } as MetricDef,
+            ]
+          : []),
         {
           label: "Structure",
           group: "Structure",
@@ -783,6 +882,15 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
                 label: "RSI Extreme Age",
                 group: "Signal Freshness",
                 value: safe(() => `${get(ctx, "staleness.rsiExtreme")} candles ago`),
+              },
+            ]
+          : []),
+        ...(get(ctx, "staleness.mfiExtreme") != null
+          ? [
+              {
+                label: "MFI Extreme Age",
+                group: "Signal Freshness",
+                value: safe(() => `${get(ctx, "staleness.mfiExtreme")} candles ago`),
               },
             ]
           : []),

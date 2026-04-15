@@ -5,30 +5,7 @@ import { MetricRow } from "./MetricRow";
 import { SectionBlock } from "./SectionBlock";
 import { DIMENSIONS } from "../lib/dimension-config";
 import type { MetricDef } from "../lib/dimension-config";
-
-function eventColor(type: string): string {
-  if (
-    type.includes("bullish") ||
-    type.includes("inflow") ||
-    type.includes("reclaim") ||
-    type.includes("golden") ||
-    type.includes("greed") ||
-    type.includes("oversold")
-  )
-    return "var(--green)";
-  if (
-    type.includes("bearish") ||
-    type.includes("outflow") ||
-    type.includes("break") ||
-    type.includes("death") ||
-    type.includes("fear") ||
-    type.includes("overbought") ||
-    type.includes("capitulation") ||
-    type.includes("deteriorating")
-  )
-    return "var(--red)";
-  return "var(--amber)";
-}
+import { eventColorVar, eventLabel } from "../lib/event-display";
 
 function renderMetricGroups(metrics: MetricDef[]) {
   const ungrouped = metrics.filter((m) => !m.group);
@@ -98,13 +75,13 @@ export function DimensionCard({
               key={`${evt.type}-${i}`}
               className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[0.625rem] font-medium"
               style={{
-                color: eventColor(evt.type),
+                color: eventColorVar(evt.type),
                 background: "var(--bg-hover)",
                 border: "1px solid var(--border-subtle)",
               }}
               title={evt.detail}
             >
-              {evt.type.replace(/_/g, " ")}
+              {eventLabel(evt.type)}
             </span>
           ))}
         </div>

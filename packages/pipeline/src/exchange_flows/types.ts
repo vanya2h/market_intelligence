@@ -59,8 +59,10 @@ export interface ExchangeFlowsMetrics {
   topExchanges: { exchange: string; balance: number; changePct7d: number }[];
 }
 
+export type ExchangeFlowsEventType = "heavy_inflow" | "heavy_outflow" | "reserve_low" | "reserve_high";
+
 export interface ExchangeFlowsEvent {
-  type: "heavy_inflow" | "heavy_outflow" | "reserve_low" | "reserve_high";
+  type: ExchangeFlowsEventType;
   detail: string;
   at: string;
 }

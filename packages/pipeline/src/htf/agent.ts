@@ -24,6 +24,15 @@ function contextCacheKey(ctx: HtfContext): string {
     priceVsSma200Bucket: Math.round(ctx.ma.priceVsSma200Pct / 5) * 5,  // 5% buckets
     rsiDailyBucket: Math.round(ctx.rsi.daily / 5) * 5,                 // 5-point buckets
     rsiH4Bucket:    Math.round(ctx.rsi.h4    / 5) * 5,
+    rsiDiv:         ctx.rsi.divergence,
+    // MFI — volume-weighted momentum (5-point buckets like RSI)
+    mfiDailyBucket: Math.round(ctx.mfi.daily / 5) * 5,
+    mfiH4Bucket:    Math.round(ctx.mfi.h4    / 5) * 5,
+    mfiDiv:         ctx.mfi.divergence,
+    // Divergence confluence — mean reversion trigger
+    confluenceDir: ctx.divergenceConfluence.direction,
+    confluenceStrengthBucket: Math.round(ctx.divergenceConfluence.strength * 10) / 10, // 0.1 buckets
+    confluenceSources: ctx.divergenceConfluence.sources.map((s) => s.indicator).sort(),
     // CVD dual-window regimes + divergence for caching
     cvdFutShort:  ctx.cvd.futures.short.regime,
     cvdFutLong:   ctx.cvd.futures.long.regime,
@@ -40,6 +49,7 @@ function contextCacheKey(ctx: HtfContext): string {
     sthDistBucket: Math.round(ctx.sth.priceVsSthPct / 5) * 5,
     // Staleness — bucket to avoid noisy cache misses
     staleRsi: ctx.staleness.rsiExtreme !== null ? Math.min(ctx.staleness.rsiExtreme, 10) : null,
+    staleMfi: ctx.staleness.mfiExtreme !== null ? Math.min(ctx.staleness.mfiExtreme, 10) : null,
     staleCvdDiv: ctx.staleness.cvdDivergencePeak !== null ? Math.min(ctx.staleness.cvdDivergencePeak, 10) : null,
   };
   const hash = crypto
@@ -55,6 +65,8 @@ async function callClaude(ctx: HtfContext): Promise<string> {
     system: `You are a technical analyst specializing in macro crypto market structure. \
 You receive computed HTF (weekly/daily) indicator data and write a concise 2-4 sentence regime interpretation for a market brief.
 Focus on: what the current macro structure means, key levels that matter, and what to watch for next.
+When divergenceConfluence.strength > 0.5, lead with it — multi-indicator exhaustion is the primary mean reversion trigger. \
+Call out RSI/MFI disagreement (one extreme, the other not) as a volume-confirmation mismatch worth flagging.
 Be direct and specific — cite actual values. Do not hedge or pad.`,
     user: `Analyze this ${ctx.asset} HTF technical context:\n\n${JSON.stringify(ctx, null, 2)}`,
     maxTokens: 256,

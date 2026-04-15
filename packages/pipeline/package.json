@@ -26,6 +26,7 @@
     "debug:funding": "tsx src/scripts/debug-funding-pressure.ts",
     "debug:sentiment": "tsx src/scripts/debug-sentiment.ts",
     "debug:htf": "tsx src/scripts/debug-htf.ts",
+    "debug:htf-divergence": "tsx src/scripts/debug-htf-divergence.ts",
     "debug:volatility": "tsx src/scripts/debug-volatility.ts",
     "debug:outcomes": "tsx src/scripts/debug-outcome-checker.ts",
     "debug:quality": "tsx src/scripts/debug-quality-confluence.ts",
