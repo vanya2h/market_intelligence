@@ -14,6 +14,7 @@ import { collect } from "./collector.js";
 import { analyze } from "./analyzer.js";
 import { runAgent } from "./agent.js";
 import type { HtfContext, HtfRegime, HtfState, MarketStructure, MaCrossType } from "./types.js";
+import type { AssetType } from "../types.js";
 
 const STATE_FILE = path.resolve("data", "htf_state.json");
 
@@ -163,7 +164,7 @@ function printBrief(ctx: HtfContext, interpretation: string): void {
 
 // ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-export async function runHtf(asset: "BTC" | "ETH"): Promise<void> {
+export async function runHtf(asset: AssetType): Promise<void> {
   step(1, 4, `Collecting HTF candles (${asset})...`);
   const snapshot = await collect(asset);
 

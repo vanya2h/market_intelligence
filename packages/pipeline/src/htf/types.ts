@@ -4,6 +4,7 @@ import type {
   HtfRegime as PrismaHtfRegime,
   MarketStructure as PrismaMarketStructure,
 } from "../generated/prisma/client.js";
+import type { AssetType } from "../types.js";
 
 export type HtfRegime = PrismaHtfRegime;
 export type MarketStructure = PrismaMarketStructure;
@@ -23,7 +24,7 @@ export interface Candle {
 // Raw data from collector
 export interface HtfSnapshot {
   timestamp: string; // ISO 8601
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   h4Candles: Candle[]; // last ~300 4h candles → SMA 50/200 on 4h, 4h RSI
   dailyCandles: Candle[]; // last ~200 daily candles → daily RSI, market structure, STH proxy
   futuresH4Candles: Candle[]; // last ~750 4h candles from futures → CVD + volume profile
@@ -311,7 +312,7 @@ export interface HtfBias {
 
 // Structured context passed to the LLM agent
 export interface HtfContext {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: HtfRegime;
   since: string;
   durationDays: number;
@@ -345,7 +346,7 @@ export interface HtfContext {
 
 // Persisted state
 export interface HtfState {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: HtfRegime;
   since: string;
   previousRegime: HtfRegime | null;

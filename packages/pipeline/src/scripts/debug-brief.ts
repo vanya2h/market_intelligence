@@ -47,6 +47,7 @@ import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import type { DeltaSummary } from "../orchestrator/delta.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
+import type { AssetType } from "../types.js";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ async function resolveTarget(): Promise<ResolvedIds> {
     return { runId: run?.id ?? null, briefId: brief.id, asset: brief.asset };
   }
 
-  const asset = (args[0]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (args[0]?.toUpperCase() ?? "BTC") as AssetType;
   const run = await prisma.notifyRun.findFirst({
     where: { asset, status: "COMPLETED", briefId: { not: null } },
     orderBy: { createdAt: "desc" },
@@ -898,7 +899,7 @@ async function main() {
       include: { levels: { orderBy: { label: "asc" } }, returns: { orderBy: { hoursAfter: "asc" } } },
     }),
     prisma.brief.findFirst({
-      where: { asset: asset as "BTC" | "ETH", id: { not: briefId } },
+      where: { asset: asset as AssetType, id: { not: briefId } },
       orderBy: { timestamp: "desc" },
       select: {
         id: true,
@@ -973,7 +974,7 @@ async function main() {
   write(
     outDir,
     "13-llm-user-prompt.txt",
-    buildPrompt(asset as "BTC" | "ETH", storedOutputs, promptDecision, storedDelta),
+    buildPrompt(asset as AssetType, storedOutputs, promptDecision, storedDelta),
   );
 
   const contexts: Record<string, unknown> = {};

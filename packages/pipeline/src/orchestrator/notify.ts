@@ -22,6 +22,7 @@ import { synthesizeRich } from "./rich-synthesizer.js";
 import { saveBrief, updateBrief } from "./persist.js";
 import { processTradeIdea } from "./trade-idea/index.js";
 import type { HtfOutput } from "./types.js";
+import type { AssetType } from "../types.js";
 import { postTweet } from "./twitter.js";
 import { synthesizeTweet } from "./twitter-synthesizer.js";
 import { computeDelta } from "./delta.js";
@@ -99,7 +100,7 @@ function note(text: string): void {
 // ─── Stage context ──────────────────────────────────────────────────────────
 
 interface StageCtx {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   artifacts: RunArtifacts;
   telegramEnabled: boolean;
   twitterEnabled: boolean;
@@ -201,7 +202,7 @@ export interface NotifyOptions {
   resume?: string;
 }
 
-export async function runNotify(assets: ("BTC" | "ETH")[], opts: NotifyOptions = {}): Promise<void> {
+export async function runNotify(assets: AssetType[], opts: NotifyOptions = {}): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   const webAppUrl = process.env.WEB_APP_URL;
@@ -266,7 +267,7 @@ export async function showFailedRuns(): Promise<void> {
 // ─── Stage executor ─────────────────────────────────────────────────────────
 
 async function executeStages(
-  asset: "BTC" | "ETH",
+  asset: AssetType,
   runId: string,
   artifacts: RunArtifacts,
   lastCompleted: NotifyStage | null,

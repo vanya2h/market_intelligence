@@ -1,6 +1,7 @@
 // ─── ETF Flows (Dimension 03) ─────────────────────────────────────────────────
 
 import type { EtfRegime as PrismaEtfRegime } from "../generated/prisma/client.js";
+import type { AssetType } from "../types.js";
 
 export type EtfRegime = PrismaEtfRegime;
 
@@ -14,7 +15,7 @@ export interface EtfFlowDay {
 // Raw data from collector
 export interface EtfSnapshot {
   timestamp: string; // ISO 8601
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   flowHistory: EtfFlowDay[];
   totalAumUsd: number;
   gbtcPremiumRate?: number; // % (negative = discount); BTC only
@@ -50,7 +51,7 @@ export interface EtfEvent {
 
 // Structured context passed to the LLM agent
 export interface EtfContext {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: EtfRegime;
   since: string;
   durationDays: number;
@@ -63,7 +64,7 @@ export interface EtfContext {
 
 // Persisted state
 export interface EtfState {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: EtfRegime;
   since: string;
   previousRegime: EtfRegime | null;

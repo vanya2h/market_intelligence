@@ -1,7 +1,7 @@
 // ─── Orchestrator Types ───────────────────────────────────────────────────────
 
 import type { PositioningRegime, StressLevel, OiSignal, EtfRegime, HtfRegime, MarketStructure, SentimentRegime, ExchangeFlowsRegime } from "../generated/prisma/client.js";
-import type { DerivativesContext } from "../types.js";
+import type { AssetType, DerivativesContext } from "../types.js";
 import type { EtfContext } from "../etfs/types.js";
 import type { SentimentContext } from "../sentiment/types.js";
 import type { HtfContext } from "../htf/types.js";
@@ -83,7 +83,7 @@ export const DIMENSION_LABELS: Record<DimensionOutput["dimension"], string> = {
 
 /** Full pipeline output for one asset */
 export interface AssetBrief {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   timestamp: string;
   dimensions: DimensionOutput[];
   brief: string; // synthesized by orchestrator LLM

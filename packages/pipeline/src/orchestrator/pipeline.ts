@@ -38,6 +38,7 @@ import { runAgent as runExchangeFlowsAgent } from "../exchange_flows/agent.js";
 import type { ExchangeFlowsState } from "../exchange_flows/types.js";
 
 import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput, ExchangeFlowsOutput } from "./types.js";
+import type { AssetType } from "../types.js";
 
 // ─── State helpers ───────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ function saveJsonState<T>(file: string, key: string, state: T): void {
 
 // ─── Dimension runners ───────────────────────────────────────────────────────
 
-async function runDerivatives(asset: "BTC" | "ETH"): Promise<DerivativesOutput | null> {
+async function runDerivatives(asset: AssetType): Promise<DerivativesOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} derivatives (${asset})...`);
     const snapshot = await collectDerivatives(asset);
@@ -84,7 +85,7 @@ async function runDerivatives(asset: "BTC" | "ETH"): Promise<DerivativesOutput |
   }
 }
 
-async function runEtfs(asset: "BTC" | "ETH"): Promise<EtfsOutput | null> {
+async function runEtfs(asset: AssetType): Promise<EtfsOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} etfs (${asset})...`);
     const snapshot = await collectEtfs(asset);
@@ -106,7 +107,7 @@ async function runEtfs(asset: "BTC" | "ETH"): Promise<EtfsOutput | null> {
   }
 }
 
-async function runHtf(asset: "BTC" | "ETH"): Promise<HtfOutput | null> {
+async function runHtf(asset: AssetType): Promise<HtfOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} htf (${asset})...`);
     const snapshot = await collectHtf(asset);
@@ -130,7 +131,7 @@ async function runHtf(asset: "BTC" | "ETH"): Promise<HtfOutput | null> {
   }
 }
 
-async function runSentimentDim(asset: "BTC" | "ETH"): Promise<SentimentOutput | null> {
+async function runSentimentDim(asset: AssetType): Promise<SentimentOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} sentiment (${asset})...`);
     const snapshot = await collectSentiment(asset);
@@ -159,7 +160,7 @@ async function runSentimentDim(asset: "BTC" | "ETH"): Promise<SentimentOutput | 
   }
 }
 
-async function runExchangeFlowsDim(asset: "BTC" | "ETH"): Promise<ExchangeFlowsOutput | null> {
+async function runExchangeFlowsDim(asset: AssetType): Promise<ExchangeFlowsOutput | null> {
   try {
     console.log(`      ${chalk.cyan("▸")} exchange flows (${asset})...`);
     const snapshot = await collectExchangeFlows(asset);
@@ -187,7 +188,7 @@ async function runExchangeFlowsDim(asset: "BTC" | "ETH"): Promise<ExchangeFlowsO
  * Run all implemented dimension pipelines in parallel for a given asset.
  * Returns only successful outputs (failed dimensions are logged and skipped).
  */
-export async function runAllDimensions(asset: "BTC" | "ETH"): Promise<DimensionOutput[]> {
+export async function runAllDimensions(asset: AssetType): Promise<DimensionOutput[]> {
   const results = await Promise.all([
     runDerivatives(asset),
     runEtfs(asset),

@@ -20,6 +20,7 @@ import type {
   SentimentOutput,
   ExchangeFlowsOutput,
 } from "../orchestrator/types.js";
+import type { AssetType } from "../types.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ function printSentimentDetail(out: SentimentOutput) {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 Confluence Scoring Debug — ${asset}\n`);
 
   console.log("Running dimension pipelines...");

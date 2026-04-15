@@ -12,6 +12,7 @@
  */
 
 import { SentimentSnapshot, UnbiasConsensusEntry, CrossDimensionInputs } from "./types.js";
+import type { AssetType } from "../types.js";
 import { getCached } from "../storage/cache.js";
 import { collect as collectDerivatives } from "../derivatives_structure/collector.js";
 import { analyze as analyzeDerivatives } from "../derivatives_structure/analyzer.js";
@@ -46,7 +47,7 @@ interface UnbiasConsensusRaw {
   total_opinions: number;
 }
 
-async function fetchConsensus(asset: "BTC" | "ETH"): Promise<UnbiasConsensusEntry[]> {
+async function fetchConsensus(asset: AssetType): Promise<UnbiasConsensusEntry[]> {
   const apiKey = process.env.UNBIAS_API_KEY;
   if (!apiKey) throw new Error("UNBIAS_API_KEY is not set");
 
@@ -93,7 +94,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
   return (all[asset] ?? all) as T;
 }
 
-async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensionInputs> {
+async function fetchCrossDimensions(asset: AssetType): Promise<CrossDimensionInputs> {
   const inputs: CrossDimensionInputs = {
     derivatives: null,
     etfs: null,
@@ -202,7 +203,7 @@ async function fetchCrossDimensions(asset: "BTC" | "ETH"): Promise<CrossDimensio
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<SentimentSnapshot> {
+export async function collect(asset: AssetType = "BTC"): Promise<SentimentSnapshot> {
   console.log(`      Fetching sentiment data (${asset})...`);
 
   // Expert consensus (unbias API) excluded while collecting more data — re-enable later

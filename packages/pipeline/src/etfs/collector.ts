@@ -11,6 +11,7 @@
 
 import { EtfFlowDay, EtfSnapshot } from "./types.js";
 import { getCached } from "../storage/cache.js";
+import type { AssetType } from "../types.js";
 
 const BASE = "https://open-api-v4.coinglass.com";
 
@@ -120,7 +121,7 @@ async function fetchEthTotalAum(): Promise<number> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<EtfSnapshot> {
+export async function collect(asset: AssetType = "BTC"): Promise<EtfSnapshot> {
   console.log(`      Fetching ETF data from CoinGlass v4 (${asset})...`);
 
   if (asset === "ETH") {

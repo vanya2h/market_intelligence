@@ -11,6 +11,7 @@
 
 import { Candle, HtfSnapshot } from "./types.js";
 import { getCached } from "../storage/cache.js";
+import type { AssetType } from "../types.js";
 
 const BINANCE_SPOT    = "https://api.binance.com";
 const BINANCE_FUTURES = "https://fapi.binance.com";
@@ -64,11 +65,11 @@ async function fetchKlines(
   }));
 }
 
-function binanceSymbol(asset: "BTC" | "ETH"): string {
+function binanceSymbol(asset: AssetType): string {
   return `${asset}USDT`;
 }
 
-export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<HtfSnapshot> {
+export async function collect(asset: AssetType = "BTC"): Promise<HtfSnapshot> {
   console.log(`      Fetching OHLCV from Binance (${asset})...`);
   const symbol = binanceSymbol(asset);
 

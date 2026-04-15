@@ -10,7 +10,7 @@
 import "../env.js";
 import { collect } from "../derivatives_structure/collector.js";
 import { analyze } from "../derivatives_structure/analyzer.js";
-import type { DerivativesState, TimestampedValue } from "../types.js";
+import type { AssetType, DerivativesState, TimestampedValue } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -65,7 +65,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 Funding pressure debug — ${asset}\n`);
 
   // 1. Collect derivatives data

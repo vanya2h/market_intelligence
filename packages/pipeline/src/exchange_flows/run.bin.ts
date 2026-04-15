@@ -9,9 +9,10 @@
 
 import chalk from "chalk";
 import { runExchangeFlows } from "./run.js";
+import type { AssetType } from "../types.js";
 
 const asset = process.argv.includes("--asset")
-  ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
+  ? (process.argv[process.argv.indexOf("--asset") + 1] as AssetType)
   : "BTC";
 
 runExchangeFlows(asset).catch((err) => {

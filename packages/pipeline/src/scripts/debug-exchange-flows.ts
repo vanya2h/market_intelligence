@@ -8,6 +8,7 @@ import "../env.js";
 import { collect } from "../exchange_flows/collector.js";
 import { analyze } from "../exchange_flows/analyzer.js";
 import type { ExchangeFlowsState } from "../exchange_flows/types.js";
+import type { AssetType } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -42,7 +43,7 @@ function fmtPct(v: number): string {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 Exchange Flows debug — ${asset}\n`);
 
   // 1. Collect

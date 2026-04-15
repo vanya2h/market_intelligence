@@ -28,6 +28,7 @@ import type {
   TradeIdeaLevel,
   TradeIdeaReturn,
 } from "../../generated/prisma/client.js";
+import type { AssetType } from "../../types.js";
 
 // Time decay constant in hours (~3 days)
 const TAU_HOURS = 72;
@@ -160,7 +161,7 @@ async function checkSingleIdea(idea: IdeaWithLevels): Promise<void> {
 
   // Fetch 4H candles since last check
   const candles = await fetchCandlesSince(
-    idea.asset as "BTC" | "ETH",
+    idea.asset as AssetType,
     "4h",
     lastCheckedTime,
   );

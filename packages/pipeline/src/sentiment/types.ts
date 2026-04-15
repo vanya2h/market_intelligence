@@ -1,6 +1,7 @@
 // ─── Market Sentiment (Dimension 06) ──────────────────────────────────────────
 
 import type { SentimentRegime as PrismaSentimentRegime } from "../generated/prisma/client.js";
+import type { AssetType } from "../types.js";
 
 export type SentimentRegime = PrismaSentimentRegime;
 
@@ -22,7 +23,7 @@ export interface UnbiasConsensusEntry {
 
 export interface SentimentSnapshot {
   timestamp: string;
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   consensus: UnbiasConsensusEntry[];   // latest 7 days (free tier)
   crossDimensions: CrossDimensionInputs;
 }
@@ -115,7 +116,7 @@ export interface SentimentEvent {
 }
 
 export interface SentimentContext {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: SentimentRegime;
   since: string;
   durationDays: number;
@@ -127,7 +128,7 @@ export interface SentimentContext {
 // ─── Persisted state ─────────────────────────────────────────────────────────
 
 export interface SentimentState {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: SentimentRegime;
   since: string;
   previousRegime: SentimentRegime | null;

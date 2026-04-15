@@ -16,9 +16,10 @@ import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import type { HtfOutput } from "../orchestrator/types.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import { prisma } from "../storage/db.js";
+import type { AssetType } from "../types.js";
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n⏳ Running ${asset} dimensions...`);
 
   const [outputs, prevBrief] = await Promise.all([

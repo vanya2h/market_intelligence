@@ -3,8 +3,9 @@ import { Link, useFetcher } from "react-router";
 import { format } from "date-fns";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
+import type { AssetType } from "@market-intel/api";
 
-type Asset = "BTC" | "ETH";
+type Asset = AssetType;
 
 interface BriefHistoryEntry {
   id: string;

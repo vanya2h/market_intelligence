@@ -12,7 +12,7 @@ import { collect } from "./derivatives_structure/collector.js";
 import { analyze } from "./derivatives_structure/analyzer.js";
 import { runAgent } from "./derivatives_structure/agent.js";
 import { appendSnapshot, loadState, saveState } from "./storage/json.js";
-import type { DerivativesContext, OiSignal, PositioningState, StressState } from "./types.js";
+import type { AssetType, DerivativesContext, OiSignal, PositioningState, StressState } from "./types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -161,7 +161,7 @@ function printBrief(ctx: DerivativesContext, interpretation: string): void {
 
 // ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-export async function runDerivatives(asset: "BTC" | "ETH"): Promise<void> {
+export async function runDerivatives(asset: AssetType): Promise<void> {
   step(1, 5, `Collecting ${asset} snapshot...`);
   const snapshot = await collect(asset);
 

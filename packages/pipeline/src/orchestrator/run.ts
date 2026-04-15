@@ -18,6 +18,7 @@ import { saveBrief, updateBrief } from "./persist.js";
 import { processTradeIdea, type TradeDecision } from "./trade-idea/index.js";
 import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
 import { computeDelta } from "./delta.js";
+import type { AssetType } from "../types.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -114,7 +115,7 @@ function printBrief(asset: string, outputs: DimensionOutput[], brief: string): v
 
 // ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-export async function runBrief(assets: ("BTC" | "ETH")[]): Promise<void> {
+export async function runBrief(assets: AssetType[]): Promise<void> {
   for (const asset of assets) {
     const totalSteps = 4;
 

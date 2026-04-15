@@ -15,9 +15,10 @@ import chalk from "chalk";
 import { prisma } from "../storage/db.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import type { DimensionOutput } from "../orchestrator/types.js";
+import type { AssetType } from "../types.js";
 
 const asset = process.argv.includes("--asset")
-  ? (process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH")
+  ? (process.argv[process.argv.indexOf("--asset") + 1] as AssetType)
   : "BTC";
 
 const briefId = process.argv.includes("--id")

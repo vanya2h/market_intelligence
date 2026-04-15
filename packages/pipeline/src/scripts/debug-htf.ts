@@ -17,6 +17,7 @@ import chalk from "chalk";
 import { collect } from "../htf/collector.js";
 import { analyze } from "../htf/analyzer.js";
 import type { HtfContext, HtfState, VolumeProfileResult } from "../htf/types.js";
+import type { AssetType } from "../types.js";
 
 // ─── State loader ─────────────────────────────────────────────────────────────
 
@@ -165,7 +166,7 @@ function printAsciiProfile(vp: VolumeProfileResult, currentPrice: number): void 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
 
   console.log(`\n${chalk.bold("HTF STRUCTURE DEBUG")}  ${chalk.dim(asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(chalk.dim("─".repeat(62)));

@@ -11,6 +11,7 @@
 
 import chalk from "chalk";
 import { runNotify, showFailedRuns } from "./notify.js";
+import type { AssetType } from "../types.js";
 
 if (process.argv.includes("--list-failed")) {
   showFailedRuns().catch((err) => {
@@ -18,8 +19,8 @@ if (process.argv.includes("--list-failed")) {
     process.exit(1);
   });
 } else {
-  const assets: ("BTC" | "ETH")[] = process.argv.includes("--asset")
-    ? [process.argv[process.argv.indexOf("--asset") + 1] as "BTC" | "ETH"]
+  const assets: AssetType[] = process.argv.includes("--asset")
+    ? [process.argv[process.argv.indexOf("--asset") + 1] as AssetType]
     : ["BTC", "ETH"];
 
   const resume = process.argv.includes("--resume")

@@ -14,6 +14,7 @@ import { collect } from "./collector.js";
 import { analyze } from "./analyzer.js";
 import { runAgent } from "./agent.js";
 import type { ExchangeFlowsContext, ExchangeFlowsRegime, ExchangeFlowsState } from "./types.js";
+import type { AssetType } from "../types.js";
 
 const STATE_FILE = path.resolve("data", "exchange_flows_state.json");
 
@@ -167,7 +168,7 @@ function printBrief(ctx: ExchangeFlowsContext, interpretation: string): void {
 
 // ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-export async function runExchangeFlows(asset: "BTC" | "ETH"): Promise<void> {
+export async function runExchangeFlows(asset: AssetType): Promise<void> {
   step(1, 4, `Collecting exchange flow data (${asset})...`);
   const snapshot = await collect(asset);
   note(`${snapshot.balanceHistory.length} balance data points · ${snapshot.currentBalances.length} exchanges`);

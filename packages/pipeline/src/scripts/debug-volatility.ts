@@ -9,6 +9,7 @@ import { collect as collectHtf } from "../htf/collector.js";
 import { analyze as analyzeHtf } from "../htf/analyzer.js";
 import type { HtfState } from "../htf/types.js";
 import type { Candle } from "../htf/types.js";
+import type { AssetType } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -82,7 +83,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 Volatility debug — ${asset}\n`);
 
   // 1. Collect HTF data

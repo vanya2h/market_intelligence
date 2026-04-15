@@ -8,6 +8,7 @@ import "../env.js";
 import { collect as collectSentiment } from "../sentiment/collector.js";
 import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
 import type { SentimentState } from "../sentiment/types.js";
+import type { AssetType } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -42,7 +43,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 Sentiment debug — ${asset}\n`);
 
   // 1. Collect & analyze

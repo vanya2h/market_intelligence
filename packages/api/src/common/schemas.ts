@@ -1,11 +1,12 @@
 import { z } from "zod";
+import type { AssetType } from "../lib/asset.js";
 
 export const AssetParamSchema = z.object({
-  asset: z.enum(["BTC", "ETH", "btc", "eth"]).transform((v) => v.toUpperCase() as "BTC" | "ETH"),
+  asset: z.enum(["BTC", "ETH", "btc", "eth"]).transform((v) => v.toUpperCase() as AssetType),
 });
 
 export const DimensionParamSchema = z.object({
-  asset: z.enum(["BTC", "ETH", "btc", "eth"]).transform((v) => v.toUpperCase() as "BTC" | "ETH"),
+  asset: z.enum(["BTC", "ETH", "btc", "eth"]).transform((v) => v.toUpperCase() as AssetType),
   dimension: z
     .enum(["DERIVATIVES", "ETFS", "HTF", "SENTIMENT", "derivatives", "etfs", "htf", "sentiment"])
     .transform((v) => v.toUpperCase() as "DERIVATIVES" | "ETFS" | "HTF" | "SENTIMENT"),

@@ -11,6 +11,7 @@
 import "../env.js";
 import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import type { AssetType } from "../types.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ async function main() {
   const assetFilter = process.argv[2]?.toUpperCase();
 
   const ideas = await prisma.tradeIdea.findMany({
-    where: assetFilter ? { asset: assetFilter as "BTC" | "ETH" } : undefined,
+    where: assetFilter ? { asset: assetFilter as AssetType } : undefined,
     include: {
       levels: { orderBy: { type: "asc" } },
       returns: { orderBy: { hoursAfter: "asc" } },

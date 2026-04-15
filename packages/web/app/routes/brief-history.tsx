@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { api } from "../server/api.server";
+import type { AssetType } from "@market-intel/api";
 
 interface BriefHistoryEntry {
   id: string;
@@ -8,7 +9,7 @@ interface BriefHistoryEntry {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const asset = (url.searchParams.get("asset") || "BTC").toUpperCase() as "BTC" | "ETH";
+  const asset = (url.searchParams.get("asset") || "BTC").toUpperCase() as AssetType;
 
   const res = await api.api.briefs.history[":asset"].$get({
     param: { asset },

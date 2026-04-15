@@ -16,10 +16,11 @@ import cron from "node-cron";
 import chalk from "chalk";
 import { runNotify } from "./notify.js";
 import { checkOutcomes } from "./trade-idea/outcome-checker.js";
+import type { AssetType } from "../types.js";
 
 const BRIEF_CRON = process.env.BRIEF_CRON ?? "0 0,8,12,15,18,21 * * *";
 const OUTCOME_CRON = process.env.OUTCOME_CRON ?? "0 6,18 * * *"; // 2x/day at 06:00 and 18:00 UTC
-const ASSETS: ("BTC" | "ETH")[] = ["BTC", "ETH"];
+const ASSETS: AssetType[] = ["BTC", "ETH"];
 
 let running = false;
 let runningOutcomes = false;

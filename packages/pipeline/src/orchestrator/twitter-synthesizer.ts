@@ -12,6 +12,7 @@ import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
 import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 import type { DeltaSummary } from "./delta.js";
+import type { AssetType } from "../types.js";
 
 const CACHE_TTL = 1 * 60 * 60 * 1000;
 const MAX_TWEET_LENGTH = 280;
@@ -31,7 +32,7 @@ function buildCacheKey(asset: string, outputs: DimensionOutput[], delta: DeltaSu
   return `twitter-${asset.toLowerCase()}-${hash}`;
 }
 
-export function buildPrompt(asset: "BTC" | "ETH", outputs: DimensionOutput[], delta: DeltaSummary | null): string {
+export function buildPrompt(asset: AssetType, outputs: DimensionOutput[], delta: DeltaSummary | null): string {
   const sections = outputs.map((o) => {
     return `### ${DIMENSION_LABELS[o.dimension]}
 Regime: ${o.regime}
@@ -48,7 +49,7 @@ ${o.interpretation}`;
 ${sections.join("\n\n")}${deltaSection}`;
 }
 
-async function callClaude(asset: "BTC" | "ETH", outputs: DimensionOutput[], briefUrl?: string, delta: DeltaSummary | null = null): Promise<string> {
+async function callClaude(asset: AssetType, outputs: DimensionOutput[], briefUrl?: string, delta: DeltaSummary | null = null): Promise<string> {
   const urlBudget = briefUrl ? briefUrl.length + 2 : 0; // +2 for "\n\n"
   const charLimit = MAX_TWEET_LENGTH - urlBudget - 10; // 10 char safety margin
 
@@ -98,7 +99,7 @@ Clarity rules:
 }
 
 export async function synthesizeTweet(
-  asset: "BTC" | "ETH",
+  asset: AssetType,
   outputs: DimensionOutput[],
   briefUrl?: string,
   delta: DeltaSummary | null = null,

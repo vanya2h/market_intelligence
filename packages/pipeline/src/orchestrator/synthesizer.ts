@@ -22,6 +22,7 @@ import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.
 import type { TradeDecision } from "./trade-idea/index.js";
 import { $Enums } from "../generated/prisma/client.js";
 import type { DeltaSummary } from "./delta.js";
+import type { AssetType } from "../types.js";
 
 const SYNTH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
@@ -51,7 +52,7 @@ State the setup and the single biggest risk.`;
 }
 
 export function buildPrompt(
-  asset: "BTC" | "ETH",
+  asset: AssetType,
   outputs: DimensionOutput[],
   decision: TradeDecision | null,
   delta: DeltaSummary | null = null,
@@ -160,7 +161,7 @@ function buildOneLiner(asset: string, delta: DeltaSummary, outputs: DimensionOut
 }
 
 export async function synthesize(
-  asset: "BTC" | "ETH",
+  asset: AssetType,
   outputs: DimensionOutput[],
   decision: TradeDecision | null = null,
   delta: DeltaSummary | null = null,

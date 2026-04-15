@@ -37,6 +37,9 @@ export {
   LevelType,
 } from "./generated/prisma/client.js";
 
+// Shared asset type
+export type { AssetType } from "./types.js";
+
 // Derivatives
 export type {
   DerivativesContext,

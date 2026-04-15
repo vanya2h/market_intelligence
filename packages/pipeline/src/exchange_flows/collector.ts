@@ -10,6 +10,7 @@
 
 import type { ExchangeFlowsSnapshot, BalancePoint, ExchangeBalance } from "./types.js";
 import { getCached } from "../storage/cache.js";
+import type { AssetType } from "../types.js";
 
 const BASE = "https://open-api-v4.coinglass.com";
 
@@ -58,13 +59,13 @@ interface BalanceListEntry {
 
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
 
-async function fetchBalanceChart(asset: "BTC" | "ETH"): Promise<BalanceChartResponse> {
+async function fetchBalanceChart(asset: AssetType): Promise<BalanceChartResponse> {
   return getCached(`ef-balance-chart-${asset.toLowerCase()}`, TTL_HOURLY, () =>
     cgGet<BalanceChartResponse>("/api/exchange/balance/chart", { symbol: asset })
   );
 }
 
-async function fetchBalanceList(asset: "BTC" | "ETH"): Promise<BalanceListEntry[]> {
+async function fetchBalanceList(asset: AssetType): Promise<BalanceListEntry[]> {
   return getCached(`ef-balance-list-${asset.toLowerCase()}`, TTL_HOURLY, () =>
     cgGet<BalanceListEntry[]>("/api/exchange/balance/list", { symbol: asset })
   );
@@ -108,7 +109,7 @@ function parseBalanceList(raw: BalanceListEntry[]): ExchangeBalance[] {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function collect(asset: "BTC" | "ETH" = "BTC"): Promise<ExchangeFlowsSnapshot> {
+export async function collect(asset: AssetType = "BTC"): Promise<ExchangeFlowsSnapshot> {
   console.log(`      Fetching exchange flow data from CoinGlass v4 (${asset})...`);
 
   const [chart, list] = await Promise.all([

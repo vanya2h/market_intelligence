@@ -1,6 +1,7 @@
 // ─── Exchange Flows & Liquidity (Dimension 04) ──────────────────────────────
 
 import type { ExchangeFlowsRegime as PrismaExchangeFlowsRegime } from "../generated/prisma/client.js";
+import type { AssetType } from "../types.js";
 
 export type ExchangeFlowsRegime = PrismaExchangeFlowsRegime;
 
@@ -23,7 +24,7 @@ export interface ExchangeBalance {
 // Raw data from collector
 export interface ExchangeFlowsSnapshot {
   timestamp: string; // ISO 8601
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   balanceHistory: BalancePoint[]; // sorted oldest → newest
   currentBalances: ExchangeBalance[];
   totalBalance: number; // current aggregate across all exchanges
@@ -69,7 +70,7 @@ export interface ExchangeFlowsEvent {
 
 // Structured context passed to the LLM agent
 export interface ExchangeFlowsContext {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: ExchangeFlowsRegime;
   since: string;
   durationDays: number;
@@ -80,7 +81,7 @@ export interface ExchangeFlowsContext {
 
 // Persisted state
 export interface ExchangeFlowsState {
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   regime: ExchangeFlowsRegime;
   since: string;
   previousRegime: ExchangeFlowsRegime | null;

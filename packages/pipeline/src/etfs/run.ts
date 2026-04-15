@@ -14,6 +14,7 @@ import { collect } from "./collector.js";
 import { analyze } from "./analyzer.js";
 import { runAgent } from "./agent.js";
 import type { EtfContext, EtfRegime, EtfState } from "./types.js";
+import type { AssetType } from "../types.js";
 
 const STATE_FILE = path.resolve("data", "etfs_state.json");
 
@@ -148,7 +149,7 @@ function printBrief(ctx: EtfContext, interpretation: string, latestDay: string):
 
 // ─── Main (reusable) ──────────────────────────────────────────────────────────
 
-export async function runEtfs(asset: "BTC" | "ETH"): Promise<void> {
+export async function runEtfs(asset: AssetType): Promise<void> {
   step(1, 4, `Collecting ETF data (${asset})...`);
   const snapshot = await collect(asset);
   const latestDay = snapshot.flowHistory

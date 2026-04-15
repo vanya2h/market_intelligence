@@ -8,6 +8,7 @@
 import "../env.js";
 import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import type { AssetType } from "../types.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ function bar(value: number, max: number, width: number): string {
 // ─── main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 High-Quality Signal Confluence Analysis — ${asset}\n`);
 
   // Fetch all trade ideas with returns and confluence

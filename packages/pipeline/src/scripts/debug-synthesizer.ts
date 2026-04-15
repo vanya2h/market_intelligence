@@ -32,6 +32,7 @@ import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
+import type { AssetType } from "../types.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -185,7 +186,7 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as "BTC" | "ETH";
+  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
   console.log(`\n🔍 Synthesizer Debug — ${asset}\n`);
 
   // 1. Run dimensions

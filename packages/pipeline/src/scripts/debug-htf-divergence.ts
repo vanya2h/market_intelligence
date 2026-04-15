@@ -26,6 +26,7 @@ import {
   swingLows,
 } from "../htf/analyzer.js";
 import type { Candle, CvdDivergence } from "../htf/types.js";
+import type { AssetType } from "../types.js";
 
 const DIV_LOOKBACK = 14;
 const CVD_LONG_LOOKBACK = 75;
@@ -79,7 +80,7 @@ function divergenceLine(
   console.log(`  ${chalk.white(label.padEnd(20))}${color ? col(direction.padEnd(8)) : direction.padEnd(8)}${magStr}`);
 }
 
-async function runAsset(asset: "BTC" | "ETH"): Promise<void> {
+async function runAsset(asset: AssetType): Promise<void> {
   hdr(`${asset} — HTF Divergence Debug`);
 
   const snapshot = await collect(asset);
@@ -204,8 +205,8 @@ async function runAsset(asset: "BTC" | "ETH"): Promise<void> {
 }
 
 async function main() {
-  const assets = (process.argv.slice(2).filter((a) => a === "BTC" || a === "ETH") as ("BTC" | "ETH")[]);
-  const list: ("BTC" | "ETH")[] = assets.length > 0 ? assets : ["BTC", "ETH"];
+  const assets = (process.argv.slice(2).filter((a) => a === "BTC" || a === "ETH") as AssetType[]);
+  const list: AssetType[] = assets.length > 0 ? assets : ["BTC", "ETH"];
   for (const a of list) {
     await runAsset(a);
   }

@@ -214,7 +214,7 @@ export const TradeIdeasController = createController({
       .route("/", GetPerformanceController.build(factory)),
 });
 
-export async function getTradeIdeaStats(asset: "BTC" | "ETH"): Promise<TradeIdeaStats> {
+export async function getTradeIdeaStats(asset: AssetType): Promise<TradeIdeaStats> {
   const totalIdeas = await prisma.tradeIdea.count({ where: { asset } });
 
   // Group level outcomes by type + label

@@ -39,7 +39,7 @@ export interface AnalysisSignals {
 // Raw data as returned by the collector (mirrors CoinGlass response shape)
 export interface DerivativesSnapshot {
   timestamp: string; // ISO 8601
-  asset: "BTC" | "ETH";
+  asset: AssetType;
   funding: {
     current: number; // e.g. 0.045 (%)
     history1m: TimestampedValue[]; // 8h resolution for last 30 days

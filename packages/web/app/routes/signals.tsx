@@ -7,12 +7,12 @@ import { AssetSelector } from "../components/AssetSelector";
 import { getSignalEffectiveness, getPerformanceMetrics } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { DIMENSION_SHORT_LABELS, type ConfluenceKey } from "../lib/dimensions";
-import type { DimensionEffectiveness, SignalBucket, IdeaSummary, PerformanceMetrics, MonthlyReturn } from "@market-intel/api";
+import type { AssetType, DimensionEffectiveness, SignalBucket, IdeaSummary, PerformanceMetrics, MonthlyReturn } from "@market-intel/api";
 import { Link } from "react-router";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
+  const asset = (url.searchParams.get("asset") || "BTC") as AssetType;
   const [data, performance] = await Promise.all([
     getSignalEffectiveness(asset, api),
     getPerformanceMetrics(asset, api),

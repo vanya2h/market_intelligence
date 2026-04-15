@@ -13,10 +13,11 @@ import { getLatestBriefByAsset } from "../lib/brief";
 import { getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { ComponentProps } from "react";
+import type { AssetType } from "@market-intel/api";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const asset = (url.searchParams.get("asset") || "BTC") as "BTC" | "ETH";
+  const asset = (url.searchParams.get("asset") || "BTC") as AssetType;
 
   const brief = await getLatestBriefByAsset(asset)(api);
   const tradeIdea = brief ? await getTradeIdeaByBriefId(brief.id)(api).catch(() => null) : null;
