@@ -1,7 +1,7 @@
 /**
  * Debug script — isolates the volatility indicator calculation.
  *
- * Usage:  tsx src/scripts/debug-volatility.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-volatility.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
@@ -9,7 +9,7 @@ import { collect as collectHtf } from "../htf/collector.js";
 import { analyze as analyzeHtf } from "../htf/analyzer.js";
 import type { HtfState } from "../htf/types.js";
 import type { Candle } from "../htf/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -83,7 +83,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 Volatility debug — ${asset}\n`);
 
   // 1. Collect HTF data
@@ -98,14 +98,10 @@ async function main() {
   const dailyAtrCurrent = atr14(daily);
   const dailyOlder = daily.slice(0, -30);
   const dailyAtr30dAgo = atr14(dailyOlder);
-  const atrRatio = dailyAtr30dAgo > 0
-    ? parseFloat((dailyAtrCurrent / dailyAtr30dAgo).toFixed(3))
-    : 1;
+  const atrRatio = dailyAtr30dAgo > 0 ? parseFloat((dailyAtrCurrent / dailyAtr30dAgo).toFixed(3)) : 1;
 
   // 3. Bug: what prod currently computes (4h / daily)
-  const buggyRatio = dailyAtr30dAgo > 0
-    ? parseFloat((context.atr / dailyAtr30dAgo).toFixed(3))
-    : 1;
+  const buggyRatio = dailyAtr30dAgo > 0 ? parseFloat((context.atr / dailyAtr30dAgo).toFixed(3)) : 1;
 
   const sma200 = context.ma.priceVsSma200Pct;
 
@@ -138,7 +134,16 @@ async function main() {
     ["Old formula, fixed ratio", atrRatio, oldFixed],
     ["New formula, fixed ratio", atrRatio, newFixed],
   ] as const) {
-    const lbl = score < 25 ? "EXTREME FEAR" : score < 40 ? "FEAR" : score < 60 ? "NEUTRAL" : score < 75 ? "GREED" : "EXTREME GREED";
+    const lbl =
+      score < 25
+        ? "EXTREME FEAR"
+        : score < 40
+          ? "FEAR"
+          : score < 60
+            ? "NEUTRAL"
+            : score < 75
+              ? "GREED"
+              : "EXTREME GREED";
     console.log(`  ${label}`.padEnd(36) + `${ratio}`.padEnd(10) + `${score.toFixed(1)}`.padEnd(10) + lbl);
   }
 

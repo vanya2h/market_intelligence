@@ -19,11 +19,9 @@ import { prisma } from "../storage/db.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import { synthesizeTweet, buildPrompt } from "../orchestrator/twitter-synthesizer.js";
 import type { DimensionOutput } from "../orchestrator/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 
-const asset = process.argv.includes("--asset")
-  ? (process.argv[process.argv.indexOf("--asset") + 1] as AssetType)
-  : "BTC";
+const asset = parseAsset();
 
 const briefId = process.argv.includes("--id")
   ? process.argv[process.argv.indexOf("--id") + 1]

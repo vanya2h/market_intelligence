@@ -5,9 +5,7 @@
  * indicator, the regime decision trace, and an ASCII volume profile.
  *
  * Usage:
- *   tsx src/scripts/debug-htf.ts [BTC|ETH]
- *   pnpm debug:htf BTC
- *   pnpm debug:htf ETH
+ *   tsx src/scripts/debug-htf.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
@@ -17,7 +15,7 @@ import chalk from "chalk";
 import { collect } from "../htf/collector.js";
 import { analyze } from "../htf/analyzer.js";
 import type { HtfContext, HtfState, VolumeProfileResult } from "../htf/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 
 // ─── State loader ─────────────────────────────────────────────────────────────
 
@@ -166,7 +164,7 @@ function printAsciiProfile(vp: VolumeProfileResult, currentPrice: number): void 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
 
   console.log(`\n${chalk.bold("HTF STRUCTURE DEBUG")}  ${chalk.dim(asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(chalk.dim("─".repeat(62)));
@@ -271,7 +269,9 @@ async function main() {
   row(
     "Extreme",
     fc.extreme.state !== "NONE"
-      ? chalk.yellow.bold(`${fc.extreme.state}  pctile=${fc.extreme.changePctile}  ext=${fc.extreme.extensionPct.toFixed(1)}%`)
+      ? chalk.yellow.bold(
+          `${fc.extreme.state}  pctile=${fc.extreme.changePctile}  ext=${fc.extreme.extensionPct.toFixed(1)}%`,
+        )
       : chalk.dim(`none  (pctile=${fc.extreme.changePctile}  ext=${fc.extreme.extensionPct.toFixed(1)}%)`),
   );
 
@@ -296,7 +296,10 @@ async function main() {
         const v = vals[i]!;
         let ok = true;
         for (let j = 1; j <= lb; j++) {
-          if (vals[i - j]! >= v || vals[i + j]! >= v) { ok = false; break; }
+          if (vals[i - j]! >= v || vals[i + j]! >= v) {
+            ok = false;
+            break;
+          }
         }
         if (ok) r.push({ index: i, value: v });
       }
@@ -308,7 +311,10 @@ async function main() {
         const v = vals[i]!;
         let ok = true;
         for (let j = 1; j <= lb; j++) {
-          if (vals[i - j]! <= v || vals[i + j]! <= v) { ok = false; break; }
+          if (vals[i - j]! <= v || vals[i + j]! <= v) {
+            ok = false;
+            break;
+          }
         }
         if (ok) r.push({ index: i, value: v });
       }
@@ -322,15 +328,17 @@ async function main() {
       }
       return null;
     };
-    const priceHighs = futuresLong.map(c => c.high);
-    const priceLows  = futuresLong.map(c => c.low);
+    const priceHighs = futuresLong.map((c) => c.high);
+    const priceLows = futuresLong.map((c) => c.low);
     const pH = swH(priceHighs, LOOKBACK);
-    const pL = swL(priceLows,  LOOKBACK);
-    const cH = swH(cvdCurve,   LOOKBACK);
-    const cL = swL(cvdCurve,   LOOKBACK);
+    const pL = swL(priceLows, LOOKBACK);
+    const cH = swH(cvdCurve, LOOKBACK);
+    const cL = swL(cvdCurve, LOOKBACK);
 
     hdr("Divergence Debug — Futures pivots (long window)");
-    console.log(`  ${chalk.dim(`LOOKBACK=${LOOKBACK}  MIN_DIST=${MIN_PIVOT_DISTANCE}  MIN_SWING=${MIN_PRICE_SWING_PCT}%`)}`);
+    console.log(
+      `  ${chalk.dim(`LOOKBACK=${LOOKBACK}  MIN_DIST=${MIN_PIVOT_DISTANCE}  MIN_SWING=${MIN_PRICE_SWING_PCT}%`)}`,
+    );
     console.log(`  Price swing highs (${pH.length} total, last 5):`);
     for (const p of pH.slice(-5)) {
       const candle = futuresLong[p.index]!;
@@ -360,19 +368,25 @@ async function main() {
     if (pHPair && pLPair && cHPair && cLPair) {
       const priceMid = (pHPair[1].value + pLPair[1].value) / 2;
       const minSwing = priceMid * (MIN_PRICE_SWING_PCT / 100);
-      const priceHH = pHPair[1].value > pHPair[0].value &&
-        Math.abs(pHPair[1].value - pHPair[0].value) >= minSwing;
-      const cvdHH   = cHPair[1].value > cHPair[0].value;
-      const priceLL = pLPair[1].value < pLPair[0].value &&
-        Math.abs(pLPair[1].value - pLPair[0].value) >= minSwing;
-      const cvdLL   = cLPair[1].value < cLPair[0].value;
+      const priceHH = pHPair[1].value > pHPair[0].value && Math.abs(pHPair[1].value - pHPair[0].value) >= minSwing;
+      const cvdHH = cHPair[1].value > cHPair[0].value;
+      const priceLL = pLPair[1].value < pLPair[0].value && Math.abs(pLPair[1].value - pLPair[0].value) >= minSwing;
+      const cvdLL = cLPair[1].value < cLPair[0].value;
       const priceDiffH = Math.abs(pHPair[1].value - pHPair[0].value);
       const priceDiffL = Math.abs(pLPair[1].value - pLPair[0].value);
       console.log(`\n  Decision (minSwing=${fmt$(minSwing)}):`);
-      console.log(`    priceHH=${priceHH} (${fmt$(pHPair[0].value)} → ${fmt$(pHPair[1].value)}, diff=${fmt$(priceDiffH)}, dist=${pHPair[1].index - pHPair[0].index}c)`);
-      console.log(`    cvdHH  =${cvdHH}   (${cHPair[0].value.toFixed(2)} → ${cHPair[1].value.toFixed(2)}, dist=${cHPair[1].index - cHPair[0].index}c)`);
-      console.log(`    priceLL=${priceLL} (${fmt$(pLPair[0].value)} → ${fmt$(pLPair[1].value)}, diff=${fmt$(priceDiffL)}, dist=${pLPair[1].index - pLPair[0].index}c)`);
-      console.log(`    cvdLL  =${cvdLL}   (${cLPair[0].value.toFixed(2)} → ${cLPair[1].value.toFixed(2)}, dist=${cLPair[1].index - cLPair[0].index}c)`);
+      console.log(
+        `    priceHH=${priceHH} (${fmt$(pHPair[0].value)} → ${fmt$(pHPair[1].value)}, diff=${fmt$(priceDiffH)}, dist=${pHPair[1].index - pHPair[0].index}c)`,
+      );
+      console.log(
+        `    cvdHH  =${cvdHH}   (${cHPair[0].value.toFixed(2)} → ${cHPair[1].value.toFixed(2)}, dist=${cHPair[1].index - cHPair[0].index}c)`,
+      );
+      console.log(
+        `    priceLL=${priceLL} (${fmt$(pLPair[0].value)} → ${fmt$(pLPair[1].value)}, diff=${fmt$(priceDiffL)}, dist=${pLPair[1].index - pLPair[0].index}c)`,
+      );
+      console.log(
+        `    cvdLL  =${cvdLL}   (${cLPair[0].value.toFixed(2)} → ${cLPair[1].value.toFixed(2)}, dist=${cLPair[1].index - cLPair[0].index}c)`,
+      );
 
       if (cvdHH && !priceHH) console.log(`    → BEARISH ABSORPTION`);
       else if (cvdLL && !priceLL) console.log(`    → BULLISH ABSORPTION`);
@@ -380,7 +394,9 @@ async function main() {
       else if (priceLL && !cvdLL) console.log(`    → BULLISH EXHAUSTION`);
       else console.log(`    → NONE`);
     } else {
-      console.log(`\n  Not enough spaced pivots for divergence (pH=${!!pHPair} pL=${!!pLPair} cH=${!!cHPair} cL=${!!cLPair})`);
+      console.log(
+        `\n  Not enough spaced pivots for divergence (pH=${!!pHPair} pL=${!!pLPair} cH=${!!cHPair} cL=${!!cLPair})`,
+      );
     }
   }
 
@@ -424,17 +440,17 @@ async function main() {
   // ── STH Realized Price proxy ──────────────────────────────────────────────────
   hdr("STH Realized Price (155d VWAP proxy)");
   const sthAbove = ctx.price > ctx.sth.price;
-  row(
-    "STH cost basis",
-    `${chalk.white(fmt$(ctx.sth.price))}  price ${fmtPct(ctx.sth.priceVsSthPct)}`,
-  );
+  row("STH cost basis", `${chalk.white(fmt$(ctx.sth.price))}  price ${fmtPct(ctx.sth.priceVsSthPct)}`);
   row(
     "Position",
     sthAbove
       ? chalk.green("ABOVE  (STH holders in profit — latent sell pressure fades as support)")
       : chalk.red("BELOW  (STH holders underwater — strong mean-reversion target overhead)"),
   );
-  row("Gravity bias", `${(b.sthGravity >= 0 ? chalk.green : chalk.red)((b.sthGravity >= 0 ? "+" : "") + b.sthGravity.toFixed(3))}`);
+  row(
+    "Gravity bias",
+    `${(b.sthGravity >= 0 ? chalk.green : chalk.red)((b.sthGravity >= 0 ? "+" : "") + b.sthGravity.toFixed(3))}`,
+  );
 
   // ── Volatility / ATR ──────────────────────────────────────────────────────────
   hdr("Volatility / ATR");

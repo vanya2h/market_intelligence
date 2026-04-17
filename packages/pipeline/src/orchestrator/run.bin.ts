@@ -10,9 +10,10 @@
 import chalk from "chalk";
 import { runBrief } from "./run.js";
 import type { AssetType } from "../types.js";
+import { parseAsset } from "../scripts/utils.js";
 
 const assets: AssetType[] = process.argv.includes("--asset")
-  ? [process.argv[process.argv.indexOf("--asset") + 1] as AssetType]
+  ? [parseAsset()]
   : ["BTC", "ETH"];
 
 runBrief(assets).catch((err) => {

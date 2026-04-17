@@ -8,7 +8,7 @@
  * 4. The synthesized brief output
  * 5. Data gap analysis — what's missing or weak in the input
  *
- * Usage:  tsx src/scripts/debug-synthesizer.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-synthesizer.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
@@ -32,7 +32,7 @@ import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -174,9 +174,7 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
       .filter((d) => d.score < 0)
       .sort((a, b) => a.score - b.score);
     for (const o of opposing.slice(0, 2)) {
-      gaps.push(
-        `${chalk.yellow("OPPOSING")} Trade: ${o.dim} scores ${o.score} — actively opposing the direction`,
-      );
+      gaps.push(`${chalk.yellow("OPPOSING")} Trade: ${o.dim} scores ${o.score} — actively opposing the direction`);
     }
   }
 
@@ -186,7 +184,7 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 Synthesizer Debug — ${asset}\n`);
 
   // 1. Run dimensions
@@ -228,9 +226,7 @@ async function main() {
     for (const s of scored) {
       const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
       const parts = dims.map((d) => `${d}=${scoreStr(s.confluence[d])}`).join("  ");
-      console.log(
-        `  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${scoreStr(s.confluence.total)}`,
-      );
+      console.log(`  ${chalk.bold(s.direction.padEnd(6))} ${parts}  total=${scoreStr(s.confluence.total)}`);
     }
 
     const sorted = [...scored].sort((a, b) => b.confluence.total - a.confluence.total);

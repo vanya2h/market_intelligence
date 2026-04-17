@@ -2,13 +2,13 @@
  * Analyze high-quality trade ideas (|quality| >= 3) to identify which
  * confluence dimensions contribute most to successful signal generation.
  *
- * Usage:  tsx src/scripts/debug-quality-confluence.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-quality-confluence.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
 import { prisma } from "../storage/db.js";
 import chalk from "chalk";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ function bar(value: number, max: number, width: number): string {
 // ─── main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 High-Quality Signal Confluence Analysis — ${asset}\n`);
 
   // Fetch all trade ideas with returns and confluence

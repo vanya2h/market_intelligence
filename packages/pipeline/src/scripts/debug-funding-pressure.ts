@@ -4,13 +4,14 @@
  * Shows the full funding distribution, thresholds, and how many
  * consecutive extreme-side cycles are counted with/without OI gating.
  *
- * Usage:  tsx src/scripts/debug-funding-pressure.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-funding-pressure.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
 import { collect } from "../derivatives_structure/collector.js";
 import { analyze } from "../derivatives_structure/analyzer.js";
-import type { AssetType, DerivativesState, TimestampedValue } from "../types.js";
+import type { DerivativesState, TimestampedValue } from "../types.js";
+import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -22,9 +23,7 @@ function pct(v: number): string {
 
 function median(sorted: number[]): number {
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1]! + sorted[mid]!) / 2
-    : sorted[mid]!;
+  return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 }
 
 function percentileValue(sorted: number[], p: number): number {
@@ -65,7 +64,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 Funding pressure debug — ${asset}\n`);
 
   // 1. Collect derivatives data
@@ -119,9 +118,7 @@ async function main() {
     console.log(`  → Latest cycle is NOT extreme. Pressure = 0`);
   } else {
     const side = aboveUpper ? "LONG" : "SHORT";
-    const isOnSide = side === "LONG"
-      ? (v: number) => v > med
-      : (v: number) => v < med;
+    const isOnSide = side === "LONG" ? (v: number) => v > med : (v: number) => v < med;
 
     // Count without OI gate (raw cycles)
     let rawCycles = 0;
@@ -133,8 +130,10 @@ async function main() {
     const effectiveCycles = oiZ > 0.5 ? rawCycles : 0;
 
     console.log(`  Side                    : ${side}`);
-    console.log(`  Continuation test       : ${side === "LONG" ? `> median (${med.toFixed(4)})` : `< median (${med.toFixed(4)})`}`);
-    console.log(`  Raw consecutive cycles  : ${rawCycles} (${(rawCycles * 8)}h)`);
+    console.log(
+      `  Continuation test       : ${side === "LONG" ? `> median (${med.toFixed(4)})` : `< median (${med.toFixed(4)})`}`,
+    );
+    console.log(`  Raw consecutive cycles  : ${rawCycles} (${rawCycles * 8}h)`);
     console.log(`  OI gate applied         : ${oiZ > 0.5 ? `NO (OI elevated)` : `YES → zeroed out`}`);
     console.log(`  Final pressure cycles   : ${effectiveCycles}`);
 
@@ -146,10 +145,15 @@ async function main() {
       const ts = new Date(entry.timestamp).toISOString().slice(5, 16).replace("T", " ");
       const bar = "█".repeat(Math.min(40, Math.round(Math.abs(v) * 1000)));
       const marker =
-        v > q75 ? " ◀ EXTREME LONG" :
-        v < q25 ? " ◀ EXTREME SHORT" :
-        v > med ? " ▸ above median" :
-        v < med ? " ▸ below median" : "";
+        v > q75
+          ? " ◀ EXTREME LONG"
+          : v < q25
+            ? " ◀ EXTREME SHORT"
+            : v > med
+              ? " ▸ above median"
+              : v < med
+                ? " ▸ below median"
+                : "";
       const color = v > med ? "\x1b[32m" : "\x1b[31m";
       console.log(`  ${ts}  ${color}${v >= 0 ? "+" : ""}${v.toFixed(4)}%\x1b[0m  ${color}${bar}\x1b[0m${marker}`);
     }

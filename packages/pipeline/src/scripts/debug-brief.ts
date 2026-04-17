@@ -48,6 +48,7 @@ import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import type { DeltaSummary } from "../orchestrator/delta.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import type { AssetType } from "../types.js";
+import { parseAssetType } from "../models.js";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ async function resolveTarget(): Promise<ResolvedIds> {
     return { runId: run?.id ?? null, briefId: brief.id, asset: brief.asset };
   }
 
-  const asset = (args[0]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAssetType(args[0]?.toUpperCase() ?? "BTC");
   const run = await prisma.notifyRun.findFirst({
     where: { asset, status: "COMPLETED", briefId: { not: null } },
     orderBy: { createdAt: "desc" },

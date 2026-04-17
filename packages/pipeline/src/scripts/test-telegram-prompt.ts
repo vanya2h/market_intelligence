@@ -1,7 +1,7 @@
 /**
  * One-off test — re-synthesizes Telegram brief bypassing cache.
  * Shows previous brief alongside for delta comparison.
- * Usage: tsx src/scripts/test-telegram-prompt.ts [BTC|ETH]
+ * Usage: tsx src/scripts/test-telegram-prompt.ts --asset [BTC|ETH]
  */
 import "../env.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
@@ -16,10 +16,10 @@ import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import type { HtfOutput } from "../orchestrator/types.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import { prisma } from "../storage/db.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n⏳ Running ${asset} dimensions...`);
 
   const [outputs, prevBrief] = await Promise.all([

@@ -1,14 +1,14 @@
 /**
  * Debug script — full sentiment / composite Fear & Greed breakdown.
  *
- * Usage:  tsx src/scripts/debug-sentiment.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-sentiment.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
 import { collect as collectSentiment } from "../sentiment/collector.js";
 import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
 import type { SentimentState } from "../sentiment/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -43,7 +43,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 Sentiment debug — ${asset}\n`);
 
   // 1. Collect & analyze
@@ -81,7 +81,8 @@ async function main() {
     const liqBearish = 100 - d.liqPercentile1m;
     const liqBullish = d.liqPercentile1m;
     const liqScore = liqBullish * (1 - longBias) + liqBearish * longBias;
-    const raw = d.fundingPercentile1m * 0.35 + d.cbPremiumPercentile1m * 0.25 + d.oiPercentile1m * 0.25 + liqScore * 0.15;
+    const raw =
+      d.fundingPercentile1m * 0.35 + d.cbPremiumPercentile1m * 0.25 + d.oiPercentile1m * 0.25 + liqScore * 0.15;
     console.log(`  Sub-scores:`);
     console.log(`    Funding  (35%)        : ${(d.fundingPercentile1m * 0.35).toFixed(1)}`);
     console.log(`    CB prem  (25%)        : ${(d.cbPremiumPercentile1m * 0.25).toFixed(1)}`);
@@ -170,7 +171,9 @@ async function main() {
     console.log(`    Z-score               : ${m.zScore.toFixed(2)}`);
     console.log(`    7d delta              : ${m.consensusDelta7d > 0 ? "+" : ""}${m.consensusDelta7d.toFixed(1)}`);
     console.log(`    Analysts              : ${m.totalAnalysts} (${Math.round(m.bullishRatio * 100)}% bullish)`);
-    console.log(`    Opinions              : ${latest.totalOpinions} (${latest.bullishOpinions}B / ${latest.bearishOpinions}Be)`);
+    console.log(
+      `    Opinions              : ${latest.totalOpinions} (${latest.bullishOpinions}B / ${latest.bearishOpinions}Be)`,
+    );
   } else {
     console.log(`  ⚠ No consensus data`);
   }
@@ -178,10 +181,10 @@ async function main() {
   // ─── Weighted contribution table ───
   console.log("\n─── Weighted contributions ───────────────────────");
   const weights = {
-    positioning: 0.50,
-    institutionalFlows: 0.30,
+    positioning: 0.5,
+    institutionalFlows: 0.3,
     exchangeFlows: 0,
-    trend: 0.20,
+    trend: 0.2,
     expertConsensus: 0,
   };
   const components = [
@@ -201,14 +204,15 @@ async function main() {
     total += contrib;
     const wPct = `${(weight * 100).toFixed(0)}%`;
     console.log(
-      `  ${name}`.padEnd(24) +
-      `${score.toFixed(1)}`.padEnd(10) +
-      `${wPct}`.padEnd(10) +
-      `${contrib.toFixed(2)}`
+      `  ${name}`.padEnd(24) + `${score.toFixed(1)}`.padEnd(10) + `${wPct}`.padEnd(10) + `${contrib.toFixed(2)}`,
     );
   }
   console.log("  " + "─".repeat(54));
-  console.log(`  ${"TOTAL".padEnd(22)}${clamp(Math.round(total * 10) / 10).toFixed(1).padEnd(10)}${"100%".padEnd(10)}${total.toFixed(2)}`);
+  console.log(
+    `  ${"TOTAL".padEnd(22)}${clamp(Math.round(total * 10) / 10)
+      .toFixed(1)
+      .padEnd(10)}${"100%".padEnd(10)}${total.toFixed(2)}`,
+  );
 
   // ─── Divergence ───
   if (m.divergence) {

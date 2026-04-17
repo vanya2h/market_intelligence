@@ -9,11 +9,9 @@
 
 import chalk from "chalk";
 import { runHtf } from "./run.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "../scripts/utils.js";
 
-const asset = process.argv.includes("--asset")
-  ? (process.argv[process.argv.indexOf("--asset") + 1] as AssetType)
-  : "BTC";
+const asset = parseAsset();
 
 runHtf(asset).catch((err) => {
   console.error(chalk.red.bold("Fatal error:"), err);

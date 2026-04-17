@@ -9,9 +9,9 @@
 
 import chalk from "chalk";
 import { runDerivatives } from "./run.js";
-import type { AssetType } from "./types.js";
+import { parseAssetType } from "./models.js";
 
-const asset = (process.argv.find((a) => a === "ETH") ? "ETH" : "BTC") as AssetType;
+const asset = parseAssetType(process.argv.find((a) => a === "ETH") ? "ETH" : "BTC");
 
 runDerivatives(asset).catch((err) => {
   console.error(chalk.red.bold("Fatal error:"), err);

@@ -1,14 +1,14 @@
 /**
  * Debug script — isolates the institutional flows (ETF) indicator calculation.
  *
- * Usage:  tsx src/scripts/debug-etf.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-etf.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
 import { collect as collectEtfs } from "../etfs/collector.js";
 import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
 import type { EtfState } from "../etfs/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -73,7 +73,7 @@ function loadDimState<T>(file: string, asset: string): T | null {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 ETF / Institutional Flows debug — ${asset}\n`);
 
   // 1. Collect & analyze
@@ -96,9 +96,11 @@ async function main() {
   console.log("─── Flow history (last 10 days) ──────────────────");
   const recent = snapshot.flowHistory.slice(-10);
   for (const day of recent) {
-    const bar = day.flowUsd >= 0
-      ? " ".repeat(20) + "█".repeat(Math.min(30, Math.round(Math.abs(day.flowUsd) / 50e6)))
-      : " ".repeat(Math.max(0, 20 - Math.round(Math.abs(day.flowUsd) / 50e6))) + "█".repeat(Math.min(20, Math.round(Math.abs(day.flowUsd) / 50e6)));
+    const bar =
+      day.flowUsd >= 0
+        ? " ".repeat(20) + "█".repeat(Math.min(30, Math.round(Math.abs(day.flowUsd) / 50e6)))
+        : " ".repeat(Math.max(0, 20 - Math.round(Math.abs(day.flowUsd) / 50e6))) +
+          "█".repeat(Math.min(20, Math.round(Math.abs(day.flowUsd) / 50e6)));
     console.log(`  ${day.date}  ${fmtUsd(day.flowUsd).padStart(10)}  ${bar}`);
   }
 
@@ -141,7 +143,7 @@ async function main() {
   console.log(`  ──────────────────────────────`);
   console.log(`  Final score             : ${total.toFixed(1)}  → ${label(total)}`);
   console.log(`  Weight in composite     : 30%`);
-  console.log(`  Contribution to index   : ${(total * 0.30).toFixed(2)} pts\n`);
+  console.log(`  Contribution to index   : ${(total * 0.3).toFixed(2)} pts\n`);
 }
 
 main().catch((err) => {

@@ -2,25 +2,27 @@
   "name": "market-intel",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.29.3",
   "scripts": {
-    "derivatives": "pnpm --filter @market-intel/pipeline derivatives",
-    "etfs": "pnpm --filter @market-intel/pipeline etfs",
-    "htf": "pnpm --filter @market-intel/pipeline htf",
-    "sentiment": "pnpm --filter @market-intel/pipeline sentiment",
     "brief": "pnpm --filter @market-intel/pipeline brief",
-    "notify": "pnpm --filter @market-intel/pipeline notify",
+    "build": "turbo build",
     "db:generate": "pnpm --filter @market-intel/pipeline db:generate",
     "db:migrate": "pnpm --filter @market-intel/pipeline db:migrate",
+    "derivatives": "pnpm --filter @market-intel/pipeline derivatives",
     "dev:api": "pnpm --filter @market-intel/api dev",
     "dev:web": "pnpm --filter @market-intel/web dev",
-    "typecheck": "turbo typecheck",
-    "build": "turbo build"
+    "etfs": "pnpm --filter @market-intel/pipeline etfs",
+    "htf": "pnpm --filter @market-intel/pipeline htf",
+    "notify": "pnpm --filter @market-intel/pipeline notify",
+    "sentiment": "pnpm --filter @market-intel/pipeline sentiment",
+    "sort-pkg": "sort-package-json \"package.json\" \"packages/*/package.json\"",
+    "typecheck": "turbo typecheck"
   },
   "devDependencies": {
     "@vanya2h/typescript-config": "^0.3.0",
+    "sort-package-json": "^3.6.1",
     "turbo": "^2.5.0"
   },
+  "packageManager": "pnpm@10.29.3",
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",

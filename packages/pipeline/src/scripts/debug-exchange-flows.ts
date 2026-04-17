@@ -1,14 +1,14 @@
 /**
  * Debug script — inspects raw exchange flow data and analyzer output.
  *
- * Usage:  tsx src/scripts/debug-exchange-flows.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-exchange-flows.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
 import { collect } from "../exchange_flows/collector.js";
 import { analyze } from "../exchange_flows/analyzer.js";
 import type { ExchangeFlowsState } from "../exchange_flows/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -43,7 +43,7 @@ function fmtPct(v: number): string {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 Exchange Flows debug — ${asset}\n`);
 
   // 1. Collect
@@ -70,8 +70,12 @@ async function main() {
 
     console.log("\n─── Balance history ──────────────────────────────");
     console.log(`  Total span              : ${span.toFixed(1)} days (${history.length} points)`);
-    console.log(`  First                   : ${new Date(first.timestamp).toISOString().slice(0, 10)}  ${fmtAsset(first.totalBalance, asset)}`);
-    console.log(`  Last                    : ${new Date(last.timestamp).toISOString().slice(0, 10)}  ${fmtAsset(last.totalBalance, asset)}`);
+    console.log(
+      `  First                   : ${new Date(first.timestamp).toISOString().slice(0, 10)}  ${fmtAsset(first.totalBalance, asset)}`,
+    );
+    console.log(
+      `  Last                    : ${new Date(last.timestamp).toISOString().slice(0, 10)}  ${fmtAsset(last.totalBalance, asset)}`,
+    );
     console.log(`  30d window              : ${history30d.length} points`);
     console.log(`  30d min                 : ${fmtAsset(min, asset)}`);
     console.log(`  30d max                 : ${fmtAsset(max, asset)}`);
@@ -82,7 +86,7 @@ async function main() {
     const recent = history.slice(-7);
     for (let i = 0; i < recent.length; i++) {
       const p = recent[i]!;
-      const prev = i > 0 ? recent[i - 1]! : history[history.length - 8] ?? p;
+      const prev = i > 0 ? recent[i - 1]! : (history[history.length - 8] ?? p);
       const delta = p.totalBalance - prev.totalBalance;
       const date = new Date(p.timestamp).toISOString().slice(0, 10);
       console.log(`    ${date}  ${fmtAsset(p.totalBalance, asset).padEnd(20)}  Δ ${fmtAsset(delta, asset)}`);
@@ -97,7 +101,7 @@ async function main() {
   console.log("  " + "─".repeat(66));
   for (const ex of top10) {
     console.log(
-      `  ${ex.exchange.padEnd(18)}${fmtAsset(ex.balance, asset).padEnd(18)}${fmtPct(ex.change1dPct).padEnd(10)}${fmtPct(ex.change7dPct).padEnd(10)}${fmtPct(ex.change30dPct)}`
+      `  ${ex.exchange.padEnd(18)}${fmtAsset(ex.balance, asset).padEnd(18)}${fmtPct(ex.change1dPct).padEnd(10)}${fmtPct(ex.change7dPct).padEnd(10)}${fmtPct(ex.change30dPct)}`,
     );
   }
 
@@ -143,12 +147,24 @@ async function main() {
 
   // 6. Regime decision trace
   console.log("\n─── Regime decision trace ────────────────────────");
-  console.log(`  flowPercentile1m >= 95 && todaySigma >= 2  → HEAVY_INFLOW?    ${m.flowPercentile1m >= 95 && m.todaySigma >= 2 ? "YES ✓" : `NO  (p=${m.flowPercentile1m}, σ=${m.todaySigma.toFixed(2)})`}`);
-  console.log(`  flowPercentile1m <= 5  && todaySigma <= -2 → HEAVY_OUTFLOW?   ${m.flowPercentile1m <= 5 && m.todaySigma <= -2 ? "YES ✓" : `NO  (p=${m.flowPercentile1m}, σ=${m.todaySigma.toFixed(2)})`}`);
-  console.log(`  netFlow7d < 0 && trend FALLING             → ACCUMULATION?    ${m.netFlow7d < 0 && m.balanceTrend === "FALLING" ? "YES ✓" : `NO  (7d=${fmtAsset(m.netFlow7d, asset)}, trend=${m.balanceTrend})`}`);
-  console.log(`  netFlow7d > 0 && trend RISING              → DISTRIBUTION?    ${m.netFlow7d > 0 && m.balanceTrend === "RISING" ? "YES ✓" : `NO  (7d=${fmtAsset(m.netFlow7d, asset)}, trend=${m.balanceTrend})`}`);
-  console.log(`  isAt30dLow && netFlow30d < 0               → ACCUMULATION?    ${m.isAt30dLow && m.netFlow30d < 0 ? "YES ✓" : `NO  (low=${m.isAt30dLow}, 30d=${fmtAsset(m.netFlow30d, asset)})`}`);
-  console.log(`  isAt30dHigh && netFlow30d > 0              → DISTRIBUTION?    ${m.isAt30dHigh && m.netFlow30d > 0 ? "YES ✓" : `NO  (high=${m.isAt30dHigh}, 30d=${fmtAsset(m.netFlow30d, asset)})`}`);
+  console.log(
+    `  flowPercentile1m >= 95 && todaySigma >= 2  → HEAVY_INFLOW?    ${m.flowPercentile1m >= 95 && m.todaySigma >= 2 ? "YES ✓" : `NO  (p=${m.flowPercentile1m}, σ=${m.todaySigma.toFixed(2)})`}`,
+  );
+  console.log(
+    `  flowPercentile1m <= 5  && todaySigma <= -2 → HEAVY_OUTFLOW?   ${m.flowPercentile1m <= 5 && m.todaySigma <= -2 ? "YES ✓" : `NO  (p=${m.flowPercentile1m}, σ=${m.todaySigma.toFixed(2)})`}`,
+  );
+  console.log(
+    `  netFlow7d < 0 && trend FALLING             → ACCUMULATION?    ${m.netFlow7d < 0 && m.balanceTrend === "FALLING" ? "YES ✓" : `NO  (7d=${fmtAsset(m.netFlow7d, asset)}, trend=${m.balanceTrend})`}`,
+  );
+  console.log(
+    `  netFlow7d > 0 && trend RISING              → DISTRIBUTION?    ${m.netFlow7d > 0 && m.balanceTrend === "RISING" ? "YES ✓" : `NO  (7d=${fmtAsset(m.netFlow7d, asset)}, trend=${m.balanceTrend})`}`,
+  );
+  console.log(
+    `  isAt30dLow && netFlow30d < 0               → ACCUMULATION?    ${m.isAt30dLow && m.netFlow30d < 0 ? "YES ✓" : `NO  (low=${m.isAt30dLow}, 30d=${fmtAsset(m.netFlow30d, asset)})`}`,
+  );
+  console.log(
+    `  isAt30dHigh && netFlow30d > 0              → DISTRIBUTION?    ${m.isAt30dHigh && m.netFlow30d > 0 ? "YES ✓" : `NO  (high=${m.isAt30dHigh}, 30d=${fmtAsset(m.netFlow30d, asset)})`}`,
+  );
   console.log(`  → Final regime: ${context.regime}`);
 
   console.log();

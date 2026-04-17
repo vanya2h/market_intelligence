@@ -4,7 +4,7 @@
  * Runs all dimension pipelines against live data, then shows the full
  * scoring breakdown for each direction (LONG / SHORT / FLAT).
  *
- * Usage:  tsx src/scripts/debug-confluence.ts [BTC|ETH]
+ * Usage:  tsx src/scripts/debug-confluence.ts --asset [BTC|ETH]
  */
 
 import "../env.js";
@@ -20,7 +20,7 @@ import type {
   SentimentOutput,
   ExchangeFlowsOutput,
 } from "../orchestrator/types.js";
-import type { AssetType } from "../types.js";
+import { parseAsset } from "./utils.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -151,7 +151,7 @@ function printSentimentDetail(out: SentimentOutput) {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const asset = (process.argv[2]?.toUpperCase() ?? "BTC") as AssetType;
+  const asset = parseAsset();
   console.log(`\n🔍 Confluence Scoring Debug — ${asset}\n`);
 
   console.log("Running dimension pipelines...");
@@ -205,9 +205,7 @@ async function main() {
 
     console.log();
     const totalLabel = scoreStr(confluence.total);
-    console.log(
-      `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalLabel.padStart(12)} / 100`,
-    );
+    console.log(`    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalLabel.padStart(12)} / 100`);
   }
 
   // Directional bias
