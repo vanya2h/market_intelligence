@@ -3,7 +3,7 @@ import type { OhlcvCandle } from "@market-intel/api";
 import { SectionBlock } from "./SectionBlock";
 import { UsdValue } from "./UsdValue";
 import { InlineLink } from "./InlineLink";
-import { ConfluenceBadges, ConfluenceBreakdown } from "./ConfluenceBadges";
+import { ConfluenceBreakdown } from "./ConfluenceBadges";
 import { LevelStatus } from "./LevelStatus";
 import { ReturnsCurve } from "./ReturnsCurve";
 import { CandleReturnChart } from "./CandleReturnChart";
@@ -43,15 +43,7 @@ function sizeColor(pct: number): string {
   return "var(--text-muted)";
 }
 
-export function TradeIdeaSection({
-  tradeIdea,
-  candles = [],
-  compact,
-}: {
-  tradeIdea: TradeIdea;
-  candles?: OhlcvCandle[];
-  compact?: boolean;
-}) {
+export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: TradeIdea; candles?: OhlcvCandle[]}) {
   const dir = directionStyle(tradeIdea.direction);
   const age = formatAge(tradeIdea.createdAt);
   const totalLevels = tradeIdea.levels.length;
@@ -104,7 +96,11 @@ export function TradeIdeaSection({
                 background: "var(--bg-hover)",
                 border: `1px solid color-mix(in srgb, ${sizeColor(sizePct)} 25%, transparent)`,
               }}
-              title={sizingInfo?.convictionMultiplier ? `${sizingInfo.convictionMultiplier}x conviction multiplier` : undefined}
+              title={
+                sizingInfo?.convictionMultiplier
+                  ? `${sizingInfo.convictionMultiplier}x conviction multiplier`
+                  : undefined
+              }
             >
               {sizePct}% notional
             </span>
@@ -189,55 +185,49 @@ export function TradeIdeaSection({
       {/* Confluence */}
       {tradeIdea.confluence && (
         <div className="mb-4">
-          {compact ? (
-            <ConfluenceBadges confluence={tradeIdea.confluence} />
-          ) : (
-            <div
-              className="rounded-md p-3"
-              style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
-            >
-              <div
-                className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Confluence Scoring
-              </div>
-              <ConfluenceBreakdown confluence={tradeIdea.confluence} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Levels + chart */}
-      <div className={compact ? "" : "grid gap-4 md:grid-cols-[13.75rem_1fr]"}>
-        <LevelStatus levels={tradeIdea.levels} entryPrice={tradeIdea.entryPrice} direction={tradeIdea.direction} />
-        {!compact && (
           <div
             className="rounded-md p-3"
-            style={{
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-subtle)",
-            }}
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
           >
             <div
               className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
               style={{ color: "var(--text-muted)" }}
             >
-              Returns Curve
+              Confluence Scoring
             </div>
-            {candles.length > 0 ? (
-              <CandleReturnChart
-                candles={candles}
-                levels={tradeIdea.levels}
-                entryPrice={tradeIdea.entryPrice}
-                direction={tradeIdea.direction}
-                createdAt={tradeIdea.createdAt}
-              />
-            ) : (
-              <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
-            )}
+            <ConfluenceBreakdown confluence={tradeIdea.confluence} />
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Levels + chart */}
+      <div className="grid gap-4 md:grid-cols-[13.75rem_1fr]">
+        <LevelStatus levels={tradeIdea.levels} entryPrice={tradeIdea.entryPrice} direction={tradeIdea.direction} />
+        <div
+          className="rounded-md p-3"
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-subtle)",
+          }}
+        >
+          <div
+            className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Returns Curve
+          </div>
+          {candles.length > 0 ? (
+            <CandleReturnChart
+              candles={candles}
+              levels={tradeIdea.levels}
+              entryPrice={tradeIdea.entryPrice}
+              direction={tradeIdea.direction}
+              createdAt={tradeIdea.createdAt}
+            />
+          ) : (
+            <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
+          )}
+        </div>
       </div>
 
       <LearnLink />

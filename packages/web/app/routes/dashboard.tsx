@@ -10,7 +10,7 @@ import { TradeIdeaSection } from "../components/TradeIdeaSection";
 import { StickyFooter } from "../components/StickyFooter";
 
 import { getLatestBriefByAsset } from "../lib/brief";
-import { getTradeIdeaByBriefId } from "../lib/trade-idea";
+import { getTradeIdeaByBriefId, getCandles } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { ComponentProps } from "react";
 import type { AssetType } from "@market-intel/api";
@@ -21,14 +21,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const brief = await getLatestBriefByAsset(asset)(api);
   const tradeIdea = brief ? await getTradeIdeaByBriefId(brief.id)(api).catch(() => null) : null;
+  const candles = tradeIdea
+    ? await getCandles(tradeIdea.asset, tradeIdea.createdAt.getTime(), api).catch(() => [])
+    : [];
 
-  return { asset, brief, tradeIdea };
+  return { asset, brief, tradeIdea, candles };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Dashboard() {
-  const { asset, brief, tradeIdea } = useLoaderData<LoaderData>();
+  const { asset, brief, tradeIdea, candles } = useLoaderData<LoaderData>();
 
   if (!brief) {
     return (
@@ -82,7 +85,7 @@ export default function Dashboard() {
             {/* Trade idea section */}
             {tradeIdea && (
               <Row>
-                <TradeIdeaSection tradeIdea={tradeIdea} compact />
+                <TradeIdeaSection tradeIdea={tradeIdea} candles={candles} />
               </Row>
             )}
 
