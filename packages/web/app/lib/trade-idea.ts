@@ -1,5 +1,5 @@
 import { parseTradeIdea } from "@market-intel/api";
-import type { AssetType, SignalEffectiveness, PerformanceMetrics } from "@market-intel/api";
+import type { AssetType, OhlcvCandle, SignalEffectiveness, PerformanceMetrics } from "@market-intel/api";
 import { parseResponse } from "hono/client";
 import type { Api } from "@market-intel/api/client";
 
@@ -10,6 +10,13 @@ export function getTradeIdeaByBriefId(briefId: string) {
     );
     return parseTradeIdea(raw);
   };
+}
+
+export async function getCandles(asset: AssetType, since: number, api: Api): Promise<OhlcvCandle[]> {
+  const result = await parseResponse(
+    api.api.candles[":asset"].$get({ param: { asset }, query: { since: String(since) } }),
+  );
+  return result.candles;
 }
 
 export async function getSignalEffectiveness(asset: AssetType, api: Api): Promise<SignalEffectiveness> {

@@ -1,7 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
-import { format } from "date-fns";
-import { RelativeTime } from "../components/RelativeTime";
 import { BriefSection } from "../components/BriefSection";
 import { AppHeader } from "../components/AppHeader";
 import { BriefSidebar } from "../components/BriefSidebar";
@@ -9,11 +7,8 @@ import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { DimensionTabs } from "../components/DimensionTabs";
 import { TradeIdeaSection } from "../components/TradeIdeaSection";
 import { StickyFooter } from "../components/StickyFooter";
-import { UsdValue } from "../components/UsdValue";
-import { Tooltip } from "../components/Tooltip";
-import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { getBriefById } from "../lib/brief";
-import { getTradeIdeaByBriefId } from "../lib/trade-idea";
+import { getTradeIdeaByBriefId, getCandles } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { ComponentProps } from "react";
 
@@ -28,13 +23,17 @@ export async function loader({ params }: LoaderFunctionArgs) {
     getTradeIdeaByBriefId(id)(api).catch(() => null),
   ]);
 
-  return { brief, tradeIdea };
+  const candles = tradeIdea
+    ? await getCandles(tradeIdea.asset, tradeIdea.createdAt.getTime(), api).catch(() => [])
+    : [];
+
+  return { brief, tradeIdea, candles };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function BriefPage() {
-  const { brief, tradeIdea } = useLoaderData<LoaderData>();
+  const { brief, tradeIdea, candles } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -59,7 +58,7 @@ export default function BriefPage() {
             {/* Trade idea section */}
             {tradeIdea && (
               <Row>
-                <TradeIdeaSection tradeIdea={tradeIdea} />
+                <TradeIdeaSection tradeIdea={tradeIdea} candles={candles} />
               </Row>
             )}
 

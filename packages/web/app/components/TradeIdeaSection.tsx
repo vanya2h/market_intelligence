@@ -1,10 +1,12 @@
 import type { TradeIdea } from "@market-intel/api";
+import type { OhlcvCandle } from "@market-intel/api";
 import { SectionBlock } from "./SectionBlock";
 import { UsdValue } from "./UsdValue";
 import { InlineLink } from "./InlineLink";
 import { ConfluenceBadges, ConfluenceBreakdown } from "./ConfluenceBadges";
 import { LevelStatus } from "./LevelStatus";
 import { ReturnsCurve } from "./ReturnsCurve";
+import { CandleReturnChart } from "./CandleReturnChart";
 
 function LearnLink() {
   return (
@@ -41,7 +43,15 @@ function sizeColor(pct: number): string {
   return "var(--text-muted)";
 }
 
-export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea; compact?: boolean }) {
+export function TradeIdeaSection({
+  tradeIdea,
+  candles = [],
+  compact,
+}: {
+  tradeIdea: TradeIdea;
+  candles?: OhlcvCandle[];
+  compact?: boolean;
+}) {
   const dir = directionStyle(tradeIdea.direction);
   const age = formatAge(tradeIdea.createdAt);
   const totalLevels = tradeIdea.levels.length;
@@ -215,7 +225,17 @@ export function TradeIdeaSection({ tradeIdea, compact }: { tradeIdea: TradeIdea;
             >
               Returns Curve
             </div>
-            <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
+            {candles.length > 0 ? (
+              <CandleReturnChart
+                candles={candles}
+                levels={tradeIdea.levels}
+                entryPrice={tradeIdea.entryPrice}
+                direction={tradeIdea.direction}
+                createdAt={tradeIdea.createdAt}
+              />
+            ) : (
+              <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
+            )}
           </div>
         )}
       </div>
