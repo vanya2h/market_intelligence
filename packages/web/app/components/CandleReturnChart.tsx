@@ -16,10 +16,11 @@ function buildReturnPoints(
 ) {
   const sign = direction === "SHORT" ? -1 : 1;
   const entryTime = createdAt.getTime();
-  return candles.map((c) => ({
+  const points = candles.map((c) => ({
     hoursAfter: Math.round(((c.time + 900_000 - entryTime) / 3_600_000) * 10) / 10,
     returnPct: sign * ((c.close - entryPrice) / entryPrice) * 100,
   }));
+  return [{ hoursAfter: 0, returnPct: 0 }, ...points];
 }
 
 export function CandleReturnChart({
