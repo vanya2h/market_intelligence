@@ -205,3 +205,31 @@ export interface PerformanceMetrics {
   /** Average position size multiplier */
   avgSize: number;
 }
+
+// ─── Strategy curves ───────────────────────────────────────────────────────
+
+export interface StrategyPoint {
+  /** ISO timestamp of exit (resolvedAt of whichever level triggered) */
+  resolvedAt: string;
+  /** Running cumulative % return for this strategy */
+  cumulativeReturn: number;
+  /** Per-idea contribution to return */
+  ideaReturn: number;
+  outcome: "WIN" | "LOSS";
+}
+
+export interface Strategy {
+  /** Human-readable name, e.g. "Strategy 1" */
+  name: string;
+  /** Pairing label, e.g. "T1:S1" */
+  label: string;
+  points: StrategyPoint[];
+  totalIdeas: number;
+  wins: number;
+  winRate: number | null;
+  totalReturn: number;
+}
+
+export interface StrategyCurvesData {
+  strategies: Strategy[];
+}

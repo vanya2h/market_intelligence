@@ -16,7 +16,6 @@ import { AssetParamSchema } from "../common/schemas.js";
 
 const BINANCE_SPOT = "https://api.binance.com";
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const FETCH_LIMIT = 1000; // ~10 days of 15m candles
 
 export interface OhlcvCandle {
   time: number;
@@ -29,11 +28,16 @@ export interface OhlcvCandle {
 
 type BinanceKline = [number, string, string, string, string, string, ...unknown[]];
 
-async function fetchBinanceCandles(asset: string): Promise<OhlcvCandle[]> {
+async function fetchBinanceCandles(
+  asset: string,
+  interval: string,
+  since: number,
+): Promise<OhlcvCandle[]> {
   const url = new URL(`${BINANCE_SPOT}/api/v3/klines`);
   url.searchParams.set("symbol", `${asset}USDT`);
-  url.searchParams.set("interval", "15m");
-  url.searchParams.set("limit", String(FETCH_LIMIT));
+  url.searchParams.set("interval", interval);
+  url.searchParams.set("startTime", String(since));
+  url.searchParams.set("limit", "1000");
 
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`Binance klines error: ${res.status}`);
@@ -51,6 +55,7 @@ async function fetchBinanceCandles(asset: string): Promise<OhlcvCandle[]> {
 
 const SinceQuerySchema = z.object({
   since: z.coerce.number().int().positive(),
+  interval: z.enum(["15m", "1h", "4h", "1d"]).optional().default("15m"),
 });
 
 const route = describeRoute({
@@ -75,15 +80,14 @@ export const CandlesController = createController({
         validator("query", SinceQuerySchema),
         async (c) => {
           const { asset } = c.req.valid("param");
-          const { since } = c.req.valid("query");
+          const { since, interval } = c.req.valid("query");
 
           try {
-            const all = await getCached(
-              `candles:15m:${asset.toLowerCase()}`,
+            const candles = await getCached(
+              `candles:${interval}:${asset.toLowerCase()}:${since}`,
               CACHE_TTL_MS,
-              () => fetchBinanceCandles(asset),
+              () => fetchBinanceCandles(asset, interval, since),
             );
-            const candles = all.filter((c) => c.time >= since);
             return c.json({ candles });
           } catch {
             return c.json({ error: "Failed to fetch candles" }, 502);

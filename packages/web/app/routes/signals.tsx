@@ -4,26 +4,29 @@ import { AppHeader } from "../components/AppHeader";
 import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
 import { AssetSelector } from "../components/AssetSelector";
-import { getSignalEffectiveness, getPerformanceMetrics } from "../lib/trade-idea";
+import { getSignalEffectiveness, getPerformanceMetrics, getStrategyCurves } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 import { DIMENSION_SHORT_LABELS, type ConfluenceKey } from "../lib/dimensions";
-import type { AssetType, DimensionEffectiveness, SignalBucket, IdeaSummary, PerformanceMetrics, MonthlyReturn } from "@market-intel/api";
+import type { AssetType, DimensionEffectiveness, SignalBucket, IdeaSummary, PerformanceMetrics, MonthlyReturn, StrategyCurvesData } from "@market-intel/api";
+import { StrategyEquityCurve } from "../components/StrategyEquityCurve";
 import { Link } from "react-router";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as AssetType;
-  const [data, performance] = await Promise.all([
+  const [data, performance, strategyCurves] = await Promise.all([
     getSignalEffectiveness(asset, api),
     getPerformanceMetrics(asset, api),
+    getStrategyCurves(asset, api),
   ]);
-  return { asset, data, performance };
+
+  return { asset, data, performance, strategyCurves };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Signals() {
-  const { asset, data, performance } = useLoaderData<LoaderData>();
+  const { asset, data, performance, strategyCurves } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -53,7 +56,12 @@ export default function Signals() {
           </div>
 
           {/* Performance metrics */}
-          {performance.totalIdeas > 0 && <PerformanceSection performance={performance} />}
+          {performance.totalIdeas > 0 && (
+            <PerformanceSection
+              performance={performance}
+              strategyCurves={strategyCurves}
+            />
+          )}
 
           {/* Sample size banner */}
           <SampleSizeBanner totalIdeas={data.totalIdeas} totalWithReturns={data.totalWithReturns} />
@@ -93,7 +101,13 @@ export default function Signals() {
 
 // ─── Performance metrics ────────────────────────────────────────────────────
 
-function PerformanceSection({ performance: p }: { performance: PerformanceMetrics }) {
+function PerformanceSection({
+  performance: p,
+  strategyCurves,
+}: {
+  performance: PerformanceMetrics;
+  strategyCurves: StrategyCurvesData;
+}) {
   const pnlColor = p.totalPnl >= 0 ? "var(--green)" : "var(--red)";
   const sharpeColor = p.sharpe === null ? "var(--text-muted)" : p.sharpe >= 1 ? "var(--green)" : p.sharpe >= 0 ? "var(--text-secondary)" : "var(--red)";
 
@@ -115,6 +129,16 @@ function PerformanceSection({ performance: p }: { performance: PerformanceMetric
         <StatCell label="Avg Size" value={`${p.avgSize.toFixed(2)}×`} color="var(--text-secondary)" />
         <StatCell label="Ideas" value={String(p.totalIdeas)} color="var(--text-secondary)" />
       </div>
+
+      {/* Strategy equity curves */}
+      {strategyCurves.strategies.length > 0 && (
+        <div className="flex flex-col gap-2" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "1rem" }}>
+          <span className="text-[0.6875rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Strategy Curves
+          </span>
+          <StrategyEquityCurve strategyCurves={strategyCurves} />
+        </div>
+      )}
 
       {/* Monthly breakdown */}
       {p.months.length > 0 && <MonthlyTable months={p.months} />}

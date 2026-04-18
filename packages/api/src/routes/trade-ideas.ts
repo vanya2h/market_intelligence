@@ -19,6 +19,9 @@ import {
   IdeaSummary,
   MonthlyReturn,
   PerformanceMetrics,
+  StrategyPoint,
+  Strategy,
+  StrategyCurvesData,
 } from "../lib/trade-ideas.js";
 import { AssetType } from "../lib/asset.js";
 
@@ -199,6 +202,34 @@ export const GetPerformanceController = createController({
       }),
 });
 
+// ─── GET /performance/strategy-curves/:asset ────────────────────────────────
+
+const strategyCurvesRoute = describeRoute({
+  summary: "Get strategy equity curves",
+  description:
+    "Per-level strategy cumulative return curves — compares T1/T2/T3 targets and S1–S4 stop strategies",
+  tags: ["Trade Ideas"],
+  responses: {
+    200: { description: "Strategy curves data" },
+  },
+});
+
+export const GetStrategyCurvesController = createController({
+  build: (factory) =>
+    factory
+      .createApp()
+      .get(
+        "/performance/strategy-curves/:asset",
+        strategyCurvesRoute,
+        validator("param", AssetParamSchema),
+        async (c) => {
+          const { asset } = c.req.valid("param");
+          const data = await getStrategyCurves(asset);
+          return c.json(data);
+        },
+      ),
+});
+
 // ─── Composite controller ────────────────────────────────────────────────────
 
 export const TradeIdeasController = createController({
@@ -211,7 +242,8 @@ export const TradeIdeasController = createController({
       .route("/", GetConfluenceStatsController.build(factory))
       .route("/", GetTradeIdeaByBriefController.build(factory))
       .route("/", GetSignalEffectivenessController.build(factory))
-      .route("/", GetPerformanceController.build(factory)),
+      .route("/", GetPerformanceController.build(factory))
+      .route("/", GetStrategyCurvesController.build(factory)),
 });
 
 export async function getTradeIdeaStats(asset: AssetType): Promise<TradeIdeaStats> {
@@ -466,10 +498,20 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
       pairs.map((p) => p.velocity),
     );
 
-    return { dimension: dim, buckets, sampleSize: pairs.length, correlation };
+    return {
+      dimension: dim,
+      buckets,
+      sampleSize: pairs.length,
+      correlation,
+    };
   });
 
-  return { dimensions, ideas: ideaSummaries, totalIdeas: ideas.length, totalWithReturns: scored.length };
+  return {
+    dimensions,
+    ideas: ideaSummaries,
+    totalIdeas: ideas.length,
+    totalWithReturns: scored.length,
+  };
 }
 
 // ─── Performance metrics ───────────────────────────────────────────────────
@@ -480,6 +522,20 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
  */
 function sizeMultiplier(conviction: number): number {
   return 2.0 * Math.pow(Math.max(conviction, 0), 1.5);
+}
+
+/**
+ * Normalise a raw confluence total before feeding it into sizeMultiplier.
+ *
+ * Three data generations exist in the DB:
+ *   - Apr 6–10: IC weights summed to 4 → total ∈ -400..+400
+ *   - Apr 11+:  weights sum to 1        → total ∈ -1..+1   ← expected by sizeMultiplier
+ *
+ * Heuristic (same threshold used by the backfill script): any |total| > 1.5
+ * is legacy and must be divided by 400 to land on the current scale.
+ */
+function normalizeConviction(total: number): number {
+  return Math.abs(total) > 1.5 ? total / 400 : total;
 }
 
 /**
@@ -501,9 +557,9 @@ async function getPerformanceMetrics(asset: AssetType): Promise<PerformanceMetri
 
   for (const idea of ideas) {
     if (idea.returns.length === 0) continue;
-    const conf = idea.confluence as ConfluenceJson & { total?: number } | null;
+    const conf = idea.confluence as (ConfluenceJson & { total?: number }) | null;
     const total = conf?.total ?? 0;
-    const size = sizeMultiplier(total);
+    const size = sizeMultiplier(normalizeConviction(total));
 
     // Peak return: snapshot with highest |qualityAtPoint|
     const peak = idea.returns.reduce((best, r) =>
@@ -571,4 +627,120 @@ async function getPerformanceMetrics(asset: AssetType): Promise<PerformanceMetri
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// ─── Strategy curves ─────────────────────────────────────────────────────────
+
+/**
+ * Builds three paired strategy equity curves:
+ *   Strategy 1 → T1 target + S1 stop
+ *   Strategy 2 → T2 target + S2 stop
+ *   Strategy 3 → T3 target + S3 stop
+ *
+ * For each idea the exit is whichever of the two paired levels resolves first.
+ * Return = sign × (exitPrice − entry) / entry × 100.
+ * Points are sorted by resolvedAt and cumulated in order.
+ */
+async function getStrategyCurves(asset: AssetType): Promise<StrategyCurvesData> {
+  const ideas = await prisma.tradeIdea.findMany({
+    where: { asset },
+    include: { levels: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // All permutations of target × stop levels
+  const PAIRINGS = (["T1", "T2", "T3"] as const).flatMap((t) =>
+    (["S1", "S2", "S3"] as const).map((s) => ({
+      name: `${t}:${s}`,
+      targetLabel: t,
+      stopLabel: s,
+    })),
+  );
+
+  type RawPoint = Omit<StrategyPoint, "cumulativeReturn">;
+
+  function buildCurve(rawPoints: RawPoint[]): StrategyPoint[] {
+    rawPoints.sort((a, b) => a.resolvedAt.localeCompare(b.resolvedAt));
+    let cum = 0;
+    return rawPoints.map((p) => {
+      cum += p.ideaReturn;
+      return { ...p, cumulativeReturn: round2(cum) };
+    });
+  }
+
+  const strategies: Strategy[] = PAIRINGS.map(({ name, targetLabel, stopLabel }) => {
+    // Derive the 0-based index from the label suffix ("T1"→0, "T2"→1, "T3"→2 / "S1"→0 …)
+    const targetIdx = parseInt(targetLabel.slice(1), 10) - 1;
+    const stopIdx = parseInt(stopLabel.slice(1), 10) - 1;
+
+    const rawPoints: RawPoint[] = [];
+    let wins = 0;
+
+    for (const idea of ideas) {
+      const sign = idea.direction === "SHORT" ? -1 : 1;
+
+      // Try label match first; fall back to positional (by distance from entry)
+      // so that ideas created before the T/S labeling scheme are still included.
+      const byDist = (a: { price: number }, b: { price: number }) =>
+        Math.abs(a.price - idea.entryPrice) - Math.abs(b.price - idea.entryPrice);
+
+      const targetLevels = idea.levels
+        .filter((l) => l.type === "TARGET")
+        .sort(byDist);
+      const stopLevels = idea.levels
+        .filter((l) => l.type === "INVALIDATION")
+        .sort(byDist);
+
+      const target =
+        idea.levels.find((l) => l.label === targetLabel && l.type === "TARGET") ??
+        targetLevels[targetIdx];
+      const stop =
+        idea.levels.find((l) => l.label === stopLabel && l.type === "INVALIDATION") ??
+        stopLevels[stopIdx];
+
+      if (!target || !stop) continue;
+
+      let exitLevel: typeof target | typeof stop | null = null;
+      let exitTime = Infinity;
+
+      if (target.outcome !== "OPEN" && target.resolvedAt) {
+        const t = target.resolvedAt.getTime();
+        if (t < exitTime) { exitTime = t; exitLevel = target; }
+      }
+      if (stop.outcome !== "OPEN" && stop.resolvedAt) {
+        const t = stop.resolvedAt.getTime();
+        if (t < exitTime) { exitTime = t; exitLevel = stop; }
+      }
+
+      if (!exitLevel) continue;
+
+      const conf = idea.confluence as (ConfluenceJson & { total?: number }) | null;
+      const size = sizeMultiplier(normalizeConviction(conf?.total ?? 0));
+      const rawReturn = (sign * (exitLevel.price - idea.entryPrice)) / idea.entryPrice * 100;
+      const returnPct = round2(rawReturn * size);
+      const outcome = exitLevel.type === "TARGET" ? "WIN" : "LOSS";
+      if (outcome === "WIN") wins++;
+
+      rawPoints.push({
+        resolvedAt: exitLevel.resolvedAt!.toISOString(),
+        ideaReturn: returnPct,
+        outcome,
+      });
+    }
+
+    const points = buildCurve(rawPoints);
+    const totalReturn = points.length > 0 ? points[points.length - 1]!.cumulativeReturn : 0;
+
+    return {
+      name,
+      label: name, // e.g. "T1:S1"
+      points,
+      totalIdeas: points.length,
+      wins,
+      winRate: points.length > 0 ? round2(wins / points.length) : null,
+      totalReturn,
+    };
+  });
+
+  return { strategies };
 }

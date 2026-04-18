@@ -1,5 +1,5 @@
 import { parseTradeIdea } from "@market-intel/api";
-import type { AssetType, OhlcvCandle, SignalEffectiveness, PerformanceMetrics } from "@market-intel/api";
+import type { AssetType, OhlcvCandle, SignalEffectiveness, PerformanceMetrics, StrategyCurvesData } from "@market-intel/api";
 import { parseResponse } from "hono/client";
 import type { Api } from "@market-intel/api/client";
 
@@ -29,4 +29,17 @@ export async function getPerformanceMetrics(asset: AssetType, api: Api): Promise
   return parseResponse(
     api.api.trades.performance[":asset"].$get({ param: { asset } }),
   );
+}
+
+export async function getStrategyCurves(asset: AssetType, api: Api): Promise<StrategyCurvesData> {
+  return parseResponse(
+    api.api.trades.performance["strategy-curves"][":asset"].$get({ param: { asset } }),
+  );
+}
+
+export async function getHourlyCandles(asset: AssetType, since: number, api: Api): Promise<OhlcvCandle[]> {
+  const result = await parseResponse(
+    api.api.candles[":asset"].$get({ param: { asset }, query: { since: String(since), interval: "1h" } }),
+  );
+  return result.candles;
 }
