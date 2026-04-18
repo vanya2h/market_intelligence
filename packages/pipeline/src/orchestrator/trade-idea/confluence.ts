@@ -254,11 +254,19 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction, htfCtx?
 //   - Streak exhaustion: long streaks increase reversal probability (contrarian)
 //   - Regime gives base direction
 //   - Reversal ratio measures conviction of the reversal
+//   - Streak saturation: long-running streaks that have already overshot the prior
+//     streak carry diminishing information value — market has priced in the flows
 
 const ETF_W_SIGMA = 0.35;
 const ETF_W_REVERSAL_CONFIRM = 0.3;
 const ETF_W_REVERSAL = 0.2;
 const ETF_W_REGIME = 0.15;
+
+// Streak saturation — dampen sigma when the current streak is long AND has already
+// reversed 2x+ the prior streak. After day 5+ and ratio 2x+, each additional day
+// of flows in the same direction carries less surprise / information content.
+const ETF_SATURATION_START_DAYS = 4;
+const ETF_SATURATION_START_RATIO = 2;
 
 /**
  * Minimum prior-streak magnitude (in multiples of sigma30d) to consider
@@ -277,6 +285,19 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
   //    Raw score is LONG-biased (positive sigma = agrees with LONG).
   //    Extra bonus when sigma contradicts the prevailing regime (reversal signal).
   let sigmaScore = clamp(flow.todaySigma * 50, -100, 100);
+
+  // Streak saturation: when the current directional streak has been running long
+  // AND has already overshot the prior streak by 2x+, each additional day carries
+  // diminishing information — the market has priced in these flows.
+  //   Days factor:  4 days → 1.0, 10 days → 0.0
+  //   Ratio factor: 2x → 1.0, 7x → 0.0 (floor 0.15)
+  //   Combined via geometric mean to require BOTH conditions simultaneously.
+  const streakDays = Math.max(flow.consecutiveInflowDays, flow.consecutiveOutflowDays);
+  if (streakDays >= ETF_SATURATION_START_DAYS && flow.reversalRatio > ETF_SATURATION_START_RATIO) {
+    const daysFactor = Math.max(0, 1 - (streakDays - ETF_SATURATION_START_DAYS) / 6);
+    const ratioFactor = Math.max(0.15, 1 - (flow.reversalRatio - ETF_SATURATION_START_RATIO) / 5);
+    sigmaScore = sigmaScore * Math.sqrt(daysFactor * ratioFactor);
+  }
 
   // Regime-contradiction bonus: outflow regime + high positive sigma = reversal
   const regimeContradicts =
@@ -436,6 +457,22 @@ function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
+// ─── Fire Function ────────────────────────────────────────────────────────────
+// When any single dimension fires at extreme conviction (|score| >= threshold),
+// the IC-derived weights may suppress it to near-zero (e.g., HTF with negative IC
+// gets floor weight 6%). The fire function prevents full cancellation by blending
+// the weighted average toward the dominant signal.
+//
+// Formula: total = (1 - α) × weighted_avg + α × dominant_score
+// At α = 0.5: even if IC weights fully oppose the fire dimension, it still
+// contributes half of its raw score to the total.
+//
+// Threshold 0.80 = clearly extreme conviction (not just a moderate lean).
+// Alpha 0.50 = dominant signal gets equal footing with the full IC-weighted rest.
+
+const FIRE_THRESHOLD = 0.80;
+const FIRE_ALPHA = 0.5;
+
 /**
  * Compute confluence scores for all dimensions in a given direction.
  *
@@ -445,6 +482,10 @@ function round3(n: number): number {
  * The total is the weighted average across dimensions: Σ(score_i × weight_i),
  * where IC-based weights sum to 1 (so total ∈ [-1, +1] regardless of how many
  * dimensions exist).
+ *
+ * When any dimension fires at extreme conviction (|score| >= FIRE_THRESHOLD),
+ * the total blends toward that dominant signal to prevent full cancellation by
+ * IC weighting.
  *
  * Equal weights (0.25 each by default) are used when calibration data is
  * insufficient.
@@ -468,11 +509,22 @@ export function computeConfluence(
   const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0) / 100;
 
   // Weighted average — weights sum to 1, so total ∈ [-1, +1].
-  const total =
+  const weightedTotal =
     derivatives * weights.derivatives +
     etfScore * weights.etfs +
     htfScore * weights.htf +
     exchangeFlows * weights.exchangeFlows;
+
+  // Fire function: find the dimension with the highest absolute conviction.
+  // If it exceeds FIRE_THRESHOLD, blend the weighted average toward that signal.
+  // This prevents IC weights from silencing a dimension that is screaming extreme.
+  const dimScores = [derivatives, etfScore, htfScore, exchangeFlows];
+  const maxAbsScore = Math.max(...dimScores.map(Math.abs));
+  let total = weightedTotal;
+  if (maxAbsScore >= FIRE_THRESHOLD) {
+    const dominantScore = dimScores.find((s) => Math.abs(s) === maxAbsScore) ?? 0;
+    total = (1 - FIRE_ALPHA) * weightedTotal + FIRE_ALPHA * dominantScore;
+  }
 
   return {
     derivatives: round3(derivatives),
