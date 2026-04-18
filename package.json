@@ -14,14 +14,21 @@
     "htf": "pnpm --filter @market-intel/pipeline htf",
     "notify": "pnpm --filter @market-intel/pipeline notify",
     "sentiment": "pnpm --filter @market-intel/pipeline sentiment",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
     "sort-pkg": "sort-package-json \"package.json\" \"packages/*/package.json\"",
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
+    "@vanya2h/eslint-config": "latest",
+    "@vanya2h/prettier-config": "latest",
     "@vanya2h/typescript-config": "^0.3.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
     "sort-package-json": "^3.6.1",
     "turbo": "^2.5.0"
   },
+  "prettier": "@vanya2h/prettier-config",
   "packageManager": "pnpm@10.29.3",
   "pnpm": {
     "onlyBuiltDependencies": [

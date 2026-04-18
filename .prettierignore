@@ -1,0 +1,6 @@
+node_modules
+dist
+build
+.turbo
+packages/pipeline/src/generated
+packages/pipeline/prisma/migrations

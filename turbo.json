@@ -14,6 +14,10 @@
     },
     "db:generate": {
       "cache": false
+    },
+    "lint": {},
+    "lint:fix": {
+      "cache": false
     }
   }
 }
