@@ -10,8 +10,8 @@
  *   - Low significance   → deterministic one-liner (no LLM call)
  */
 
-import { prisma } from "../storage/db.js";
 import type { $Enums } from "../generated/prisma/client.js";
+import { prisma } from "../storage/db.js";
 import type { DimensionOutput } from "./types.js";
 
 // ─── Thresholds ──────────────────────────────────────────────────────────────
@@ -239,10 +239,7 @@ async function loadBriefContextsById(briefId: string): Promise<PreviousBriefCont
 }
 
 /** Load the last N brief contexts for sigma computation */
-async function loadHistoricalContexts(
-  asset: $Enums.Asset,
-  limit: number,
-): Promise<PreviousBriefContexts[]> {
+async function loadHistoricalContexts(asset: $Enums.Asset, limit: number): Promise<PreviousBriefContexts[]> {
   const briefs = await prisma.brief.findMany({
     where: { asset },
     orderBy: { timestamp: "desc" },
@@ -372,12 +369,10 @@ function buildChangeSummary(dimensions: DimensionDelta[]): string {
     }
     const significant = dim.topMovers.filter((m) => m.zScore > LOW_THRESHOLD);
     if (significant.length > 0) {
-      const parts = significant
-        .slice(0, 3)
-        .map((m) => {
-          const dir = m.delta > 0 ? "↑" : "↓";
-          return `${m.label} ${dir} (z=${m.zScore.toFixed(1)})`;
-        });
+      const parts = significant.slice(0, 3).map((m) => {
+        const dir = m.delta > 0 ? "↑" : "↓";
+        return `${m.label} ${dir} (z=${m.zScore.toFixed(1)})`;
+      });
       lines.push(`${dim.dimension}: ${parts.join(", ")}`);
     }
   }
@@ -392,15 +387,27 @@ function buildTopTension(dimensions: DimensionDelta[], outputs: DimensionOutput[
 
   // Collect all regime sentiments
   const bullishRegimes = new Set([
-    "CROWDED_LONG", "STRONG_INFLOW", "REVERSAL_TO_INFLOW",
-    "MACRO_BULLISH", "BULL_EXTENDED", "RECLAIMING",
-    "GREED", "EXTREME_GREED", "CONSENSUS_BULLISH",
+    "CROWDED_LONG",
+    "STRONG_INFLOW",
+    "REVERSAL_TO_INFLOW",
+    "MACRO_BULLISH",
+    "BULL_EXTENDED",
+    "RECLAIMING",
+    "GREED",
+    "EXTREME_GREED",
+    "CONSENSUS_BULLISH",
     "ACCUMULATION",
   ]);
   const bearishRegimes = new Set([
-    "CROWDED_SHORT", "STRONG_OUTFLOW", "REVERSAL_TO_OUTFLOW",
-    "MACRO_BEARISH", "BEAR_EXTENDED", "DISTRIBUTION",
-    "FEAR", "EXTREME_FEAR", "CONSENSUS_BEARISH",
+    "CROWDED_SHORT",
+    "STRONG_OUTFLOW",
+    "REVERSAL_TO_OUTFLOW",
+    "MACRO_BEARISH",
+    "BEAR_EXTENDED",
+    "DISTRIBUTION",
+    "FEAR",
+    "EXTREME_FEAR",
+    "CONSENSUS_BEARISH",
     "HEAVY_INFLOW", // exchange inflows = bearish (selling pressure)
   ]);
 
@@ -456,9 +463,7 @@ export async function computeDelta(
 ): Promise<DeltaSummary> {
   // Load previous brief contexts + historical contexts for sigma (parallel)
   const [prevContexts, history] = await Promise.all([
-    opts.previousBriefId
-      ? loadBriefContextsById(opts.previousBriefId)
-      : loadPreviousBriefContexts(asset),
+    opts.previousBriefId ? loadBriefContextsById(opts.previousBriefId) : loadPreviousBriefContexts(asset),
     loadHistoricalContexts(asset, HISTORY_DEPTH),
   ]);
 
@@ -490,18 +495,9 @@ export async function computeDelta(
     // state across analytical runs, not across briefs).
     const regimePath = REGIME_PATH[output.dimension];
     const currRegime = getStringByPath(currentCtx, regimePath) ?? "";
-    const prevRegime = prevCtx
-      ? getStringByPath(prevCtx, regimePath)
-      : null;
+    const prevRegime = prevCtx ? getStringByPath(prevCtx, regimePath) : null;
 
-    const dimDelta = computeDimensionDelta(
-      output.dimension,
-      currentCtx,
-      prevCtx,
-      sigmas,
-      currRegime,
-      prevRegime,
-    );
+    const dimDelta = computeDimensionDelta(output.dimension, currentCtx, prevCtx, sigmas, currRegime, prevRegime);
 
     dimensions.push(dimDelta);
 
@@ -515,8 +511,7 @@ export async function computeDelta(
     }
   }
 
-  const tier: SignificanceTier =
-    maxZ > HIGH_THRESHOLD ? "high" : maxZ > LOW_THRESHOLD ? "medium" : "low";
+  const tier: SignificanceTier = maxZ > HIGH_THRESHOLD ? "high" : maxZ > LOW_THRESHOLD ? "medium" : "low";
 
   return {
     tier,

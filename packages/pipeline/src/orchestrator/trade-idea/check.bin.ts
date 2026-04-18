@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * CLI entry point for the outcome checker.
  *
@@ -6,9 +5,9 @@
  *   pnpm check-outcomes
  */
 
-import "../../env.js";
 import chalk from "chalk";
 import { checkOutcomes } from "./outcome-checker.js";
+import "../../env.js";
 
 console.log(chalk.bold.cyan("\n  Trade Idea Outcome Checker\n"));
 

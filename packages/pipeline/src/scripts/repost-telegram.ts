@@ -4,12 +4,12 @@
  *
  * Usage: tsx src/scripts/repost-telegram.ts <runId> [<runId2> ...]
  */
-import "../env.js";
 import chalk from "chalk";
+import { callLlm } from "../llm.js";
 import { loadRun } from "../orchestrator/notify-run.js";
 import { synthesize } from "../orchestrator/synthesizer.js";
-import { callLlm } from "../llm.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
+import "../env.js";
 
 const TELEGRAM_API = "https://api.telegram.org";
 const MAX_MESSAGE_LENGTH = 4096;
@@ -90,7 +90,9 @@ async function main() {
       maxTokens: 350,
     });
     if (res.stopReason !== "end_turn") {
-      console.warn(chalk.yellow(`  ⚠ Response truncated (stop_reason: ${res.stopReason}) — consider increasing maxTokens`));
+      console.warn(
+        chalk.yellow(`  ⚠ Response truncated (stop_reason: ${res.stopReason}) — consider increasing maxTokens`),
+      );
     }
     const briefText = res.text;
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);

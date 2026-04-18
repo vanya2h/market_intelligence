@@ -10,10 +10,10 @@
  */
 
 import crypto from "node:crypto";
-import { getCached } from "../storage/cache.js";
-import { callLlm } from "../llm.js";
-import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 import { $Enums } from "../generated/prisma/client.js";
+import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
+import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 const RICH_CACHE_TTL = 1 * 60 * 60 * 1000;
 

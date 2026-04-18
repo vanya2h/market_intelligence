@@ -5,11 +5,11 @@
  * levels linked to its parent brief.
  */
 
-import { prisma } from "../../storage/db.js";
 import type { $Enums, Prisma } from "../../generated/prisma/client.js";
+import { prisma } from "../../storage/db.js";
+import type { DirectionalBias } from "./bias.js";
 import type { Direction, LevelResult } from "./composite-target.js";
 import type { Confluence } from "./confluence.js";
-import type { DirectionalBias } from "./bias.js";
 import type { DimensionWeights } from "./ic-weights.js";
 import type { PositionSize } from "./sizing.js";
 

@@ -8,9 +8,9 @@
  * Usage:  tsx src/scripts/analyze-pnl.ts
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import { prisma } from "../storage/db.js";
+import "../env.js";
 
 interface Confluence {
   derivatives: number;
@@ -78,8 +78,12 @@ async function main() {
     const oldPnLs = assetIdeas.map((i) => oldMultiplier(i.conf.total) * i.peakReturn);
     const newPnLs = assetIdeas.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
 
-    console.log(`    Old sizing: total PnL=${sum(oldPnLs).toFixed(2)}  avg=${avg(oldPnLs).toFixed(2)}  sharpe≈${(avg(oldPnLs) / std(oldPnLs)).toFixed(2)}`);
-    console.log(`    New sizing: total PnL=${sum(newPnLs).toFixed(2)}  avg=${avg(newPnLs).toFixed(2)}  sharpe≈${(avg(newPnLs) / std(newPnLs)).toFixed(2)}`);
+    console.log(
+      `    Old sizing: total PnL=${sum(oldPnLs).toFixed(2)}  avg=${avg(oldPnLs).toFixed(2)}  sharpe≈${(avg(oldPnLs) / std(oldPnLs)).toFixed(2)}`,
+    );
+    console.log(
+      `    New sizing: total PnL=${sum(newPnLs).toFixed(2)}  avg=${avg(newPnLs).toFixed(2)}  sharpe≈${(avg(newPnLs) / std(newPnLs)).toFixed(2)}`,
+    );
 
     // Breakdown by direction
     for (const dir of ["LONG", "SHORT"] as const) {
@@ -89,7 +93,9 @@ async function main() {
       const oldDir = dirIdeas.map((i) => oldMultiplier(i.conf.total) * i.peakReturn);
       const newDir = dirIdeas.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
 
-      console.log(`    ${dir.padEnd(6)} old=${sum(oldDir).toFixed(2).padStart(8)}  new=${sum(newDir).toFixed(2).padStart(8)}  n=${dirIdeas.length}`);
+      console.log(
+        `    ${dir.padEnd(6)} old=${sum(oldDir).toFixed(2).padStart(8)}  new=${sum(newDir).toFixed(2).padStart(8)}  n=${dirIdeas.length}`,
+      );
     }
   }
 
@@ -183,7 +189,9 @@ async function main() {
 
       console.log(
         `    ${b.label.padEnd(14)} n=${String(inBucket.length).padEnd(4)} ` +
-          `avgRet=${avg(inBucket.map((i) => i.peakReturn)).toFixed(2).padStart(6)}%  ` +
+          `avgRet=${avg(inBucket.map((i) => i.peakReturn))
+            .toFixed(2)
+            .padStart(6)}%  ` +
           `old=${sum(oldPnL).toFixed(2).padStart(8)}  ` +
           `new=${sum(newPnL).toFixed(2).padStart(8)}`,
       );
@@ -191,7 +199,9 @@ async function main() {
 
     const totalOld = sum(shorts.map((i) => oldMultiplier(i.conf.total) * i.peakReturn));
     const totalNew = sum(shorts.map((i) => newMultiplier(i.conf.total) * i.peakReturn));
-    console.log(`\n    ${chalk.bold("Total SHORT PnL:")}  old=${totalOld.toFixed(2)}  new=${totalNew.toFixed(2)}  Δ=${(totalNew - totalOld).toFixed(2)}`);
+    console.log(
+      `\n    ${chalk.bold("Total SHORT PnL:")}  old=${totalOld.toFixed(2)}  new=${totalNew.toFixed(2)}  Δ=${(totalNew - totalOld).toFixed(2)}`,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -204,9 +214,12 @@ async function main() {
 
     console.log(`\n  ${chalk.underline(asset)}\n`);
 
-    let cumOld = 0, cumNew = 0;
+    let cumOld = 0,
+      cumNew = 0;
     let weekStart = assetIdeas[0]?.createdAt;
-    let weekOld = 0, weekNew = 0, weekCount = 0;
+    let weekOld = 0,
+      weekNew = 0,
+      weekCount = 0;
 
     for (const idea of assetIdeas) {
       const oldPnL = oldMultiplier(idea.conf.total) * idea.peakReturn;
@@ -243,7 +256,9 @@ async function main() {
       );
     }
 
-    console.log(`\n    ${chalk.bold("Final:")}  old=${cumOld.toFixed(1)}  new=${cumNew.toFixed(1)}  Δ=${(cumNew - cumOld).toFixed(1)}`);
+    console.log(
+      `\n    ${chalk.bold("Final:")}  old=${cumOld.toFixed(1)}  new=${cumNew.toFixed(1)}  Δ=${(cumNew - cumOld).toFixed(1)}`,
+    );
   }
 
   console.log(`\n${"═".repeat(70)}\n`);

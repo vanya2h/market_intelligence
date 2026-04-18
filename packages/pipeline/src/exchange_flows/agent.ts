@@ -7,9 +7,9 @@
  */
 
 import crypto from "node:crypto";
-import type { ExchangeFlowsContext } from "./types.js";
-import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
+import type { ExchangeFlowsContext } from "./types.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -26,11 +26,7 @@ function contextCacheKey(ctx: ExchangeFlowsContext): string {
     isAt30dHigh: ctx.metrics.isAt30dHigh,
     events: ctx.events.map((e) => e.type).sort(),
   };
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(fingerprint))
-    .digest("hex")
-    .slice(0, 12);
+  const hash = crypto.createHash("sha256").update(JSON.stringify(fingerprint)).digest("hex").slice(0, 12);
   return `agent-ef-${ctx.asset.toLowerCase()}-${hash}`;
 }
 

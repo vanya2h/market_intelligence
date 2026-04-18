@@ -1,7 +1,7 @@
 import type { Brief, TradeIdea } from "@market-intel/api";
 import { OpportunityGauge } from "./OpportunityGauge";
-import { SectionBlock } from "./SectionBlock";
 import { RegimeOverview } from "./RegimeOverview";
+import { SectionBlock } from "./SectionBlock";
 
 export function MobileBriefSummary({ brief, tradeIdea }: { brief: Brief; tradeIdea: TradeIdea | null }) {
   return (

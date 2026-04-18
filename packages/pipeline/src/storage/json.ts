@@ -8,8 +8,8 @@
  *   previousStress → previous StressState
  */
 
-import { prisma } from "./db.js";
 import type { AssetType, DerivativesSnapshot, DerivativesState, PositioningState } from "../types.js";
+import { prisma } from "./db.js";
 
 const MAX_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -23,10 +23,7 @@ export async function loadHistory(asset: AssetType): Promise<DerivativesSnapshot
   return rows.map((r) => r.data as unknown as DerivativesSnapshot);
 }
 
-export async function appendSnapshot(
-  asset: AssetType,
-  snapshot: DerivativesSnapshot,
-): Promise<DerivativesSnapshot[]> {
+export async function appendSnapshot(asset: AssetType, snapshot: DerivativesSnapshot): Promise<DerivativesSnapshot[]> {
   await prisma.dimensionSnapshot.create({
     data: {
       asset,
@@ -72,18 +69,18 @@ export async function saveState(asset: AssetType, state: DerivativesState): Prom
   await prisma.dimensionState.upsert({
     where: { asset_dimension: { asset, dimension: "DERIVATIVES" } },
     update: {
-      regime:         state.positioning,
-      stress:         state.stress,
-      since:          new Date(state.since),
+      regime: state.positioning,
+      stress: state.stress,
+      since: new Date(state.since),
       previousRegime: state.previousPositioning,
       previousStress: state.previousStress,
     },
     create: {
       asset,
-      dimension:      "DERIVATIVES",
-      regime:         state.positioning,
-      stress:         state.stress,
-      since:          new Date(state.since),
+      dimension: "DERIVATIVES",
+      regime: state.positioning,
+      stress: state.stress,
+      since: new Date(state.since),
       previousRegime: state.previousPositioning,
       previousStress: state.previousStress,
     },

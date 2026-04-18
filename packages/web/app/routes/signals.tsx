@@ -1,15 +1,23 @@
+import type {
+  AssetType,
+  DimensionEffectiveness,
+  IdeaSummary,
+  MonthlyReturn,
+  PerformanceMetrics,
+  SignalBucket,
+  StrategyCurvesData,
+} from "@market-intel/api";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
+import { Link } from "react-router";
 import { AppHeader } from "../components/AppHeader";
+import { AssetSelector } from "../components/AssetSelector";
 import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
-import { AssetSelector } from "../components/AssetSelector";
-import { getSignalEffectiveness, getPerformanceMetrics, getStrategyCurves } from "../lib/trade-idea";
-import { api } from "../server/api.server";
-import { DIMENSION_SHORT_LABELS, type ConfluenceKey } from "../lib/dimensions";
-import type { AssetType, DimensionEffectiveness, SignalBucket, IdeaSummary, PerformanceMetrics, MonthlyReturn, StrategyCurvesData } from "@market-intel/api";
 import { StrategyEquityCurve } from "../components/StrategyEquityCurve";
-import { Link } from "react-router";
+import { type ConfluenceKey, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
+import { getPerformanceMetrics, getSignalEffectiveness, getStrategyCurves } from "../lib/trade-idea";
+import { api } from "../server/api.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -57,10 +65,7 @@ export default function Signals() {
 
           {/* Performance metrics */}
           {performance.totalIdeas > 0 && (
-            <PerformanceSection
-              performance={performance}
-              strategyCurves={strategyCurves}
-            />
+            <PerformanceSection performance={performance} strategyCurves={strategyCurves} />
           )}
 
           {/* Sample size banner */}
@@ -109,7 +114,14 @@ function PerformanceSection({
   strategyCurves: StrategyCurvesData;
 }) {
   const pnlColor = p.totalPnl >= 0 ? "var(--green)" : "var(--red)";
-  const sharpeColor = p.sharpe === null ? "var(--text-muted)" : p.sharpe >= 1 ? "var(--green)" : p.sharpe >= 0 ? "var(--text-secondary)" : "var(--red)";
+  const sharpeColor =
+    p.sharpe === null
+      ? "var(--text-muted)"
+      : p.sharpe >= 1
+        ? "var(--green)"
+        : p.sharpe >= 0
+          ? "var(--text-secondary)"
+          : "var(--red)";
 
   return (
     <div
@@ -122,18 +134,32 @@ function PerformanceSection({
 
       {/* Summary stats row */}
       <div className="flex flex-wrap gap-6">
-        <StatCell label="Cumulative PnL" value={`${p.totalPnl >= 0 ? "+" : ""}${p.totalPnl.toFixed(1)}`} color={pnlColor} />
+        <StatCell
+          label="Cumulative PnL"
+          value={`${p.totalPnl >= 0 ? "+" : ""}${p.totalPnl.toFixed(1)}`}
+          color={pnlColor}
+        />
         <StatCell label="Sharpe (ann.)" value={p.sharpe !== null ? p.sharpe.toFixed(2) : "—"} color={sharpeColor} />
         <StatCell label="Win Rate" value={`${(p.winRate * 100).toFixed(0)}%`} color="var(--text-primary)" />
-        <StatCell label="Avg PnL / Idea" value={`${p.avgPnlPerIdea >= 0 ? "+" : ""}${p.avgPnlPerIdea.toFixed(2)}`} color={p.avgPnlPerIdea >= 0 ? "var(--green)" : "var(--red)"} />
+        <StatCell
+          label="Avg PnL / Idea"
+          value={`${p.avgPnlPerIdea >= 0 ? "+" : ""}${p.avgPnlPerIdea.toFixed(2)}`}
+          color={p.avgPnlPerIdea >= 0 ? "var(--green)" : "var(--red)"}
+        />
         <StatCell label="Avg Size" value={`${p.avgSize.toFixed(2)}×`} color="var(--text-secondary)" />
         <StatCell label="Ideas" value={String(p.totalIdeas)} color="var(--text-secondary)" />
       </div>
 
       {/* Strategy equity curves */}
       {strategyCurves.strategies.length > 0 && (
-        <div className="flex flex-col gap-2" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "1rem" }}>
-          <span className="text-[0.6875rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <div
+          className="flex flex-col gap-2"
+          style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "1rem" }}
+        >
+          <span
+            className="text-[0.6875rem] font-medium uppercase tracking-wider"
+            style={{ color: "var(--text-muted)" }}
+          >
             Strategy Curves
           </span>
           <StrategyEquityCurve strategyCurves={strategyCurves} />
@@ -144,7 +170,8 @@ function PerformanceSection({
       {p.months.length > 0 && <MonthlyTable months={p.months} />}
 
       <p className="text-[0.5625rem]" style={{ color: "var(--text-muted)" }}>
-        PnL = conviction multiplier × peak return. Size scales with conviction (2.0 × conv^1.5). Zero conviction = zero size.
+        PnL = conviction multiplier × peak return. Size scales with conviction (2.0 × conv^1.5). Zero conviction = zero
+        size.
       </p>
     </div>
   );
@@ -208,16 +235,21 @@ function MonthlyTable({ months }: { months: MonthlyReturn[] }) {
               />
             </div>
             <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: pnlColor }}>
-              {m.pnl >= 0 ? "+" : ""}{m.pnl.toFixed(1)}
+              {m.pnl >= 0 ? "+" : ""}
+              {m.pnl.toFixed(1)}
             </span>
-            <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: "var(--text-secondary)" }}>
+            <span
+              className="text-right font-mono-jb tabular-nums text-[0.625rem]"
+              style={{ color: "var(--text-secondary)" }}
+            >
               {(m.winRate * 100).toFixed(0)}%
             </span>
             <span
               className="text-right font-mono-jb tabular-nums text-[0.625rem]"
               style={{ color: m.avgReturn >= 0 ? "var(--green)" : "var(--red)" }}
             >
-              {m.avgReturn >= 0 ? "+" : ""}{m.avgReturn.toFixed(2)}%
+              {m.avgReturn >= 0 ? "+" : ""}
+              {m.avgReturn.toFixed(2)}%
             </span>
           </div>
         );
@@ -437,10 +469,7 @@ function IdeaHeatmap({ ideas }: { ideas: IdeaSummary[] }) {
       className="rounded-md p-4"
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
     >
-      <h2
-        className="text-[0.6875rem] font-medium uppercase tracking-wider mb-3"
-        style={{ color: "var(--text-muted)" }}
-      >
+      <h2 className="text-[0.6875rem] font-medium uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
         Trade Idea History
       </h2>
 
@@ -510,12 +539,14 @@ function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) 
   const timeStr = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
   const dirLabel = idea.direction === "LONG" ? "\u25b2" : idea.direction === "SHORT" ? "\u25bc" : "\u2014";
-  const returnStr = idea.peakReturnPct !== null ? `${idea.peakReturnPct > 0 ? "+" : ""}${idea.peakReturnPct.toFixed(1)}%` : "";
-  const timeToStr = idea.peakHoursAfter !== null
-    ? idea.peakHoursAfter < 24
-      ? `${idea.peakHoursAfter}h`
-      : `${Math.floor(idea.peakHoursAfter / 24)}d`
-    : "";
+  const returnStr =
+    idea.peakReturnPct !== null ? `${idea.peakReturnPct > 0 ? "+" : ""}${idea.peakReturnPct.toFixed(1)}%` : "";
+  const timeToStr =
+    idea.peakHoursAfter !== null
+      ? idea.peakHoursAfter < 24
+        ? `${idea.peakHoursAfter}h`
+        : `${Math.floor(idea.peakHoursAfter / 24)}d`
+      : "";
   const qualityStr = q !== null ? `q=${q.toFixed(2)}` : "";
 
   const tooltip = [
@@ -537,11 +568,7 @@ function HeatmapCell({ idea, maxAbsQ }: { idea: IdeaSummary; maxAbsQ: number }) 
       style={{
         background: baseColor,
         border: `1px solid ${borderColor}`,
-        color: !hasData
-          ? "var(--text-muted)"
-          : isPositive
-            ? "var(--green)"
-            : "var(--red)",
+        color: !hasData ? "var(--text-muted)" : isPositive ? "var(--green)" : "var(--red)",
       }}
     >
       {cellLabel}

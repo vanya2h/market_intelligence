@@ -5,8 +5,8 @@
  * (inside useEffect) to avoid SSR issues since Arrow.js needs the DOM.
  */
 
-import { useEffect, useRef } from "react";
 import type { RichBlock } from "@market-intel/pipeline";
+import { useEffect, useRef } from "react";
 
 export function RichBriefRenderer({ blocks }: { blocks: RichBlock[] }) {
   const containerRef = useRef<HTMLDivElement>(null);

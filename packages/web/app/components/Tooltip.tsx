@@ -33,11 +33,7 @@ export function Tooltip({ children, content, side = "top", delayDuration = 200 }
             }}
           >
             {content}
-            <TooltipPrimitive.Arrow
-              style={{ fill: "var(--bg-surface)" }}
-              width={10}
-              height={5}
-            />
+            <TooltipPrimitive.Arrow style={{ fill: "var(--bg-surface)" }} width={10} height={5} />
           </TooltipPrimitive.Content>
         </TooltipPrimitive.Portal>
       </TooltipPrimitive.Root>

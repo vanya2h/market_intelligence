@@ -1,11 +1,11 @@
 import type { Regime } from "@market-intel/api";
-import { MarkdownContent } from "./MarkdownContent";
-import { RegimeBadge } from "./RegimeBadge";
-import { MetricRow } from "./MetricRow";
-import { SectionBlock } from "./SectionBlock";
-import { DIMENSIONS } from "../lib/dimension-config";
 import type { MetricDef } from "../lib/dimension-config";
+import { DIMENSIONS } from "../lib/dimension-config";
 import { eventColorVar, eventLabel } from "../lib/event-display";
+import { MarkdownContent } from "./MarkdownContent";
+import { MetricRow } from "./MetricRow";
+import { RegimeBadge } from "./RegimeBadge";
+import { SectionBlock } from "./SectionBlock";
 
 function renderMetricGroups(metrics: MetricDef[]) {
   const ungrouped = metrics.filter((m) => !m.group);

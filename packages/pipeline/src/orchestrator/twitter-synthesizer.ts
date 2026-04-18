@@ -8,11 +8,11 @@
  */
 
 import crypto from "node:crypto";
-import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
-import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
-import type { DeltaSummary } from "./delta.js";
+import { getCached } from "../storage/cache.js";
 import type { AssetType } from "../types.js";
+import type { DeltaSummary } from "./delta.js";
+import { DIMENSION_LABELS, type DimensionOutput } from "./types.js";
 
 const CACHE_TTL = 1 * 60 * 60 * 1000;
 const MAX_TWEET_LENGTH = 280;
@@ -49,7 +49,12 @@ ${o.interpretation}`;
 ${sections.join("\n\n")}${deltaSection}`;
 }
 
-async function callClaude(asset: AssetType, outputs: DimensionOutput[], briefUrl?: string, delta: DeltaSummary | null = null): Promise<string> {
+async function callClaude(
+  asset: AssetType,
+  outputs: DimensionOutput[],
+  briefUrl?: string,
+  delta: DeltaSummary | null = null,
+): Promise<string> {
   const urlBudget = briefUrl ? briefUrl.length + 2 : 0; // +2 for "\n\n"
   const charLimit = MAX_TWEET_LENGTH - urlBudget - 10; // 10 char safety margin
 
@@ -91,9 +96,7 @@ Clarity rules:
       truncated.lastIndexOf(" • "),
       truncated.lastIndexOf("\n"),
     );
-    tweet = lastBreak > charLimit * 0.5
-      ? truncated.slice(0, lastBreak + 1).trimEnd()
-      : truncated + "…";
+    tweet = lastBreak > charLimit * 0.5 ? truncated.slice(0, lastBreak + 1).trimEnd() : truncated + "…";
   }
   return tweet;
 }

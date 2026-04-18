@@ -1,8 +1,8 @@
-import { InfoCircledIcon } from "@radix-ui/react-icons";
 import type { Brief } from "@market-intel/api";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { DIMENSION_LABELS, DIMENSIONS } from "../lib/dimensions";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";
 import { Tooltip } from "./Tooltip";
-import { DIMENSION_LABELS, DIMENSIONS } from "../lib/dimensions";
 
 export const REGIME_DESCRIPTIONS: Record<string, Record<string, string>> = {
   DERIVATIVES: {

@@ -8,10 +8,10 @@
  * Usage:  tsx src/scripts/debug-outcome-checker.ts [BTC|ETH]
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import { prisma } from "../storage/db.js";
 import type { AssetType } from "../types.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -144,9 +144,7 @@ async function main() {
     console.log(`  Levels:`);
     for (const level of idea.levels) {
       const typeIcon = level.type === "TARGET" ? "🎯" : "🛑";
-      const resolvedInfo = level.resolvedAt
-        ? `  resolved=${level.resolvedAt.toISOString().slice(0, 16)}`
-        : "";
+      const resolvedInfo = level.resolvedAt ? `  resolved=${level.resolvedAt.toISOString().slice(0, 16)}` : "";
       const qualityInfo = level.qualityScore != null ? `  quality=${level.qualityScore.toFixed(3)}` : "";
 
       console.log(
@@ -157,15 +155,11 @@ async function main() {
 
       // Verify quality score if resolved
       if (level.resolvedAt && level.qualityScore != null) {
-        const hoursToResolve = Math.round(
-          (level.resolvedAt.getTime() - idea.createdAt.getTime()) / (1000 * 60 * 60),
-        );
+        const hoursToResolve = Math.round((level.resolvedAt.getTime() - idea.createdAt.getTime()) / (1000 * 60 * 60));
         const returnPctAtResolve = ((level.price - idea.entryPrice) / idea.entryPrice) * 100;
         const directedReturn = idea.direction === "SHORT" ? -returnPctAtResolve : returnPctAtResolve;
         const expected = expectedQuality(
-          level.outcome === "LOSS" && idea.direction === "FLAT"
-            ? -Math.abs(directedReturn)
-            : directedReturn,
+          level.outcome === "LOSS" && idea.direction === "FLAT" ? -Math.abs(directedReturn) : directedReturn,
           hoursToResolve,
         );
         const diff = Math.abs(expected - level.qualityScore);
@@ -177,11 +171,7 @@ async function main() {
                 `hoursToResolve=${hoursToResolve}, returnPct≈${directedReturn.toFixed(2)}%)`,
             ),
           );
-          console.log(
-            chalk.dim(
-              `        Note: expected is approximate — actual uses candle close, not level price`,
-            ),
-          );
+          console.log(chalk.dim(`        Note: expected is approximate — actual uses candle close, not level price`));
         }
       }
     }
@@ -193,17 +183,21 @@ async function main() {
 
       const first = idea.returns[0]!;
       const last = idea.returns[idea.returns.length - 1]!;
-      const maxReturn = idea.returns.reduce((best, r) =>
-        Math.abs(r.returnPct) > Math.abs(best.returnPct) ? r : best,
-      );
-      const minReturn = idea.returns.reduce((worst, r) =>
-        r.returnPct < worst.returnPct ? r : worst,
-      );
+      const maxReturn = idea.returns.reduce((best, r) => (Math.abs(r.returnPct) > Math.abs(best.returnPct) ? r : best));
+      const minReturn = idea.returns.reduce((worst, r) => (r.returnPct < worst.returnPct ? r : worst));
 
-      console.log(`    First  : t=${fmtHours(first.hoursAfter).padEnd(6)} return=${fmtPct(first.returnPct).padEnd(8)} price=${fmtPrice(first.price)}`);
-      console.log(`    Last   : t=${fmtHours(last.hoursAfter).padEnd(6)} return=${fmtPct(last.returnPct).padEnd(8)} price=${fmtPrice(last.price)}`);
-      console.log(`    Peak   : t=${fmtHours(maxReturn.hoursAfter).padEnd(6)} return=${fmtPct(maxReturn.returnPct).padEnd(8)} price=${fmtPrice(maxReturn.price)}`);
-      console.log(`    Trough : t=${fmtHours(minReturn.hoursAfter).padEnd(6)} return=${fmtPct(minReturn.returnPct).padEnd(8)} price=${fmtPrice(minReturn.price)}`);
+      console.log(
+        `    First  : t=${fmtHours(first.hoursAfter).padEnd(6)} return=${fmtPct(first.returnPct).padEnd(8)} price=${fmtPrice(first.price)}`,
+      );
+      console.log(
+        `    Last   : t=${fmtHours(last.hoursAfter).padEnd(6)} return=${fmtPct(last.returnPct).padEnd(8)} price=${fmtPrice(last.price)}`,
+      );
+      console.log(
+        `    Peak   : t=${fmtHours(maxReturn.hoursAfter).padEnd(6)} return=${fmtPct(maxReturn.returnPct).padEnd(8)} price=${fmtPrice(maxReturn.price)}`,
+      );
+      console.log(
+        `    Trough : t=${fmtHours(minReturn.hoursAfter).padEnd(6)} return=${fmtPct(minReturn.returnPct).padEnd(8)} price=${fmtPrice(minReturn.price)}`,
+      );
 
       // Mini ASCII chart of returns
       console.log();

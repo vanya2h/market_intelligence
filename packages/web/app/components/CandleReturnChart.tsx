@@ -1,16 +1,16 @@
-import { useEffect, useRef } from "react";
-import {
-  createChart,
-  createSeriesMarkers,
-  CandlestickSeries,
-  LineSeries,
-  LineStyle,
-  ColorType,
-  CrosshairMode,
-} from "lightweight-charts";
-import type { Time } from "lightweight-charts";
 import type { OhlcvCandle } from "@market-intel/api";
 import type { TradeIdeaLevel } from "@market-intel/api";
+import type { Time } from "lightweight-charts";
+import {
+  CandlestickSeries,
+  ColorType,
+  createChart,
+  createSeriesMarkers,
+  CrosshairMode,
+  LineSeries,
+  LineStyle,
+} from "lightweight-charts";
+import { useEffect, useRef } from "react";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -218,10 +218,7 @@ export function CandleReturnChart({
       <div ref={candleRef} style={{ height: "180px" }} />
 
       {/* Return pane */}
-      <div
-        ref={returnRef}
-        style={{ height: "80px", borderTop: "1px solid var(--border-subtle)", marginTop: "1px" }}
-      />
+      <div ref={returnRef} style={{ height: "80px", borderTop: "1px solid var(--border-subtle)", marginTop: "1px" }} />
 
       {/* Resolved level badges */}
       {resolvedLevels.length > 0 && (

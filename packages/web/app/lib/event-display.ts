@@ -18,46 +18,46 @@ export interface EventDisplay {
  */
 export const EVENT_DISPLAY: Record<DimensionEventType, EventDisplay> = {
   // ─── Derivatives ─────────────────────────────────────────────────────────
-  oi_spike:       { color: "green" },
-  oi_drop:        { color: "red" },
-  funding_flip:   { color: "amber" },
-  liq_spike:      { color: "amber" },
-  ls_extreme:     { color: "amber" },
+  oi_spike: { color: "green" },
+  oi_drop: { color: "red" },
+  funding_flip: { color: "amber" },
+  liq_spike: { color: "amber" },
+  ls_extreme: { color: "amber" },
 
   // ─── ETFs ────────────────────────────────────────────────────────────────
-  sigma_inflow:   { color: "green" },
-  sigma_outflow:  { color: "red" },
-  gbtc_discount:  { color: "red" },
-  gbtc_premium:   { color: "green" },
+  sigma_inflow: { color: "green" },
+  sigma_outflow: { color: "red" },
+  gbtc_discount: { color: "red" },
+  gbtc_premium: { color: "green" },
 
   // ─── HTF: Moving averages / price structure ─────────────────────────────
-  golden_cross:    { color: "green" },
-  death_cross:     { color: "red" },
-  dma200_reclaim:  { color: "green" },
-  dma200_break:    { color: "red" },
+  golden_cross: { color: "green" },
+  death_cross: { color: "red" },
+  dma200_reclaim: { color: "green" },
+  dma200_break: { color: "red" },
 
   // ─── HTF: RSI ────────────────────────────────────────────────────────────
-  rsi_daily_overbought:    { color: "red" },
-  rsi_daily_oversold:      { color: "green" },
-  rsi_divergence_bullish:  { color: "green" },
-  rsi_divergence_bearish:  { color: "red" },
+  rsi_daily_overbought: { color: "red" },
+  rsi_daily_oversold: { color: "green" },
+  rsi_divergence_bullish: { color: "green" },
+  rsi_divergence_bearish: { color: "red" },
 
   // ─── HTF: MFI (volume-weighted momentum) ────────────────────────────────
-  mfi_overbought:          { color: "red" },
-  mfi_oversold:            { color: "green" },
-  mfi_divergence_bullish:  { color: "green" },
-  mfi_divergence_bearish:  { color: "red" },
+  mfi_overbought: { color: "red" },
+  mfi_oversold: { color: "green" },
+  mfi_divergence_bullish: { color: "green" },
+  mfi_divergence_bearish: { color: "red" },
 
   // ─── HTF: Market structure ─────────────────────────────────────────────
   structure_shift_bullish: { color: "green" },
   structure_shift_bearish: { color: "red" },
 
   // ─── HTF: CVD ───────────────────────────────────────────────────────────
-  cvd_divergence_bullish:  { color: "green" },
-  cvd_divergence_bearish:  { color: "red" },
-  cvd_suspect_bounce:      { color: "red" },
-  cvd_overbought:          { color: "red" },
-  cvd_oversold:            { color: "green" },
+  cvd_divergence_bullish: { color: "green" },
+  cvd_divergence_bearish: { color: "red" },
+  cvd_suspect_bounce: { color: "red" },
+  cvd_overbought: { color: "red" },
+  cvd_oversold: { color: "green" },
 
   // ─── HTF: Multi-indicator divergence (mean reversion trigger) ─────────
   divergence_confluence_bullish: { color: "green", title: "confluence bullish" },
@@ -65,22 +65,22 @@ export const EVENT_DISPLAY: Record<DimensionEventType, EventDisplay> = {
 
   // ─── HTF: STH cost basis ───────────────────────────────────────────────
   sth_reclaim: { color: "green" },
-  sth_break:   { color: "red" },
+  sth_break: { color: "red" },
 
   // ─── Sentiment ──────────────────────────────────────────────────────────
-  extreme_fear:                   { color: "green" },
-  extreme_greed:                  { color: "red" },
-  consensus_bullish:              { color: "green" },
-  consensus_bearish:              { color: "red" },
-  consensus_deteriorating:        { color: "red" },
+  extreme_fear: { color: "green" },
+  extreme_greed: { color: "red" },
+  consensus_bullish: { color: "green" },
+  consensus_bearish: { color: "red" },
+  consensus_deteriorating: { color: "red" },
   consensus_deteriorating_severe: { color: "red" },
-  sentiment_divergence:           { color: "amber" },
+  sentiment_divergence: { color: "amber" },
 
   // ─── Exchange flows ─────────────────────────────────────────────────────
-  heavy_inflow:  { color: "red" },   // coins TO exchanges = supply for sale = bearish
+  heavy_inflow: { color: "red" }, // coins TO exchanges = supply for sale = bearish
   heavy_outflow: { color: "green" }, // coins OFF exchanges = holders accumulating = bullish
-  reserve_low:   { color: "green" },
-  reserve_high:  { color: "red" },
+  reserve_low: { color: "green" },
+  reserve_high: { color: "red" },
 };
 
 const COLOR_VAR: Record<EventColor, string> = {

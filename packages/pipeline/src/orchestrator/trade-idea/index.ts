@@ -16,12 +16,12 @@ import chalk from "chalk";
 import type { $Enums } from "../../generated/prisma/client.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { DimensionOutput } from "../types.js";
+import { computeBias, type DirectionalBias } from "./bias.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
 import { computeConfluence, type Confluence } from "./confluence.js";
-import { computeBias, type DirectionalBias } from "./bias.js";
 import { computeDimensionWeights, DIMENSION_KEYS, type DimensionWeights } from "./ic-weights.js";
-import { computePositionSize, type PositionSize } from "./sizing.js";
 import { saveTradeIdea } from "./persist.js";
+import { computePositionSize, type PositionSize } from "./sizing.js";
 
 /** Result of the mechanical trade decision — passed to the synthesizer */
 export interface TradeDecision {
@@ -84,7 +84,11 @@ export async function processTradeIdea(
   // Compute position size from conviction + current volatility
   const sizing = computePositionSize(chosen.confluence.total, htfContext);
 
-  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, chosen.direction, chosen.confluence.total);
+  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(
+    htfContext,
+    chosen.direction,
+    chosen.confluence.total,
+  );
 
   const id = await saveTradeIdea({
     briefId,

@@ -11,9 +11,7 @@
  *   pnpm debug:htf-divergence ETH
  */
 
-import "../env.js";
 import chalk from "chalk";
-import { collect } from "../htf/collector.js";
 import {
   buildCvdCurve,
   computeDivergenceConfluence,
@@ -25,8 +23,10 @@ import {
   swingHighs,
   swingLows,
 } from "../htf/analyzer.js";
+import { collect } from "../htf/collector.js";
 import type { Candle, CvdDivergence } from "../htf/types.js";
 import type { AssetType } from "../types.js";
+import "../env.js";
 
 const DIV_LOOKBACK = 14;
 const CVD_LONG_LOOKBACK = 75;
@@ -66,16 +66,8 @@ function printPivots(
   }
 }
 
-function divergenceLine(
-  label: string,
-  direction: string,
-  magnitude: number,
-  color = true,
-): void {
-  const col =
-    direction === "BULLISH" ? chalk.green :
-    direction === "BEARISH" ? chalk.red :
-    chalk.dim;
+function divergenceLine(label: string, direction: string, magnitude: number, color = true): void {
+  const col = direction === "BULLISH" ? chalk.green : direction === "BEARISH" ? chalk.red : chalk.dim;
   const magStr = magnitude > 0 ? `  magnitude ${magnitude.toFixed(3)}` : "";
   console.log(`  ${chalk.white(label.padEnd(20))}${color ? col(direction.padEnd(8)) : direction.padEnd(8)}${magStr}`);
 }
@@ -90,7 +82,9 @@ async function runAsset(asset: AssetType): Promise<void> {
   const currentTime = h4.at(-1)!.time;
 
   console.log(`  ${chalk.dim("timestamp")}       ${fmtTime(currentTime)}`);
-  console.log(`  ${chalk.dim("price")}           $${currentPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}`);
+  console.log(
+    `  ${chalk.dim("price")}           $${currentPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+  );
   console.log(`  ${chalk.dim("4h candles")}      ${h4.length}`);
 
   // ─── RSI + MFI current values + curves ─────────────────────────────────────
@@ -104,15 +98,21 @@ async function runAsset(asset: AssetType): Promise<void> {
   const disagreement = Math.abs(rsiNow - mfiNow);
   if (disagreement >= 10) {
     console.log(
-      `  ${chalk.yellow("⚠ RSI/MFI disagreement:")} ${disagreement.toFixed(1)} points — `
-      + `volume ${mfiNow > rsiNow ? "ahead of" : "behind"} price momentum`,
+      `  ${chalk.yellow("⚠ RSI/MFI disagreement:")} ${disagreement.toFixed(1)} points — ` +
+        `volume ${mfiNow > rsiNow ? "ahead of" : "behind"} price momentum`,
     );
   }
 
   // ─── Swing pivots on price ────────────────────────────────────────────────
   sub("Price swing pivots (4h, lookback=14)");
-  const priceHighs = swingHighs(h4.map((c) => c.high), DIV_LOOKBACK);
-  const priceLows = swingLows(h4.map((c) => c.low), DIV_LOOKBACK);
+  const priceHighs = swingHighs(
+    h4.map((c) => c.high),
+    DIV_LOOKBACK,
+  );
+  const priceLows = swingLows(
+    h4.map((c) => c.low),
+    DIV_LOOKBACK,
+  );
   printPivots("price swing HIGHS", priceHighs, h4Times, true);
   printPivots("price swing LOWS", priceLows, h4Times, true);
 
@@ -181,16 +181,20 @@ async function runAsset(asset: AssetType): Promise<void> {
   );
 
   const dirColor =
-    confluence.direction === "BULLISH" ? chalk.green.bold :
-    confluence.direction === "BEARISH" ? chalk.red.bold :
-    chalk.dim;
+    confluence.direction === "BULLISH"
+      ? chalk.green.bold
+      : confluence.direction === "BEARISH"
+        ? chalk.red.bold
+        : chalk.dim;
   console.log(`  ${chalk.white("direction")}        ${dirColor(confluence.direction)}`);
   console.log(`  ${chalk.white("strength")}         ${confluence.strength.toFixed(3)}`);
   console.log(`  ${chalk.white("sources")}          ${confluence.sources.length} contributing`);
   for (const s of confluence.sources) {
     const w = ({ mfi: 1.3, cvd_futures: 1.1, rsi: 0.8, cvd_spot: 0.7 } as const)[s.indicator];
     const weighted = (s.magnitude * w).toFixed(3);
-    console.log(`    · ${chalk.cyan(s.indicator.padEnd(12))}  mag ${s.magnitude.toFixed(3)}  ×  w ${w}  =  ${weighted}`);
+    console.log(
+      `    · ${chalk.cyan(s.indicator.padEnd(12))}  mag ${s.magnitude.toFixed(3)}  ×  w ${w}  =  ${weighted}`,
+    );
   }
 
   // ─── TradingView verification hints ───────────────────────────────────────
@@ -205,7 +209,7 @@ async function runAsset(asset: AssetType): Promise<void> {
 }
 
 async function main() {
-  const assets = (process.argv.slice(2).filter((a) => a === "BTC" || a === "ETH") as AssetType[]);
+  const assets = process.argv.slice(2).filter((a) => a === "BTC" || a === "ETH") as AssetType[];
   const list: AssetType[] = assets.length > 0 ? assets : ["BTC", "ETH"];
   for (const a of list) {
     await runAsset(a);

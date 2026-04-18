@@ -1,6 +1,6 @@
+import { AssetType } from "@market-intel/api";
 import type { LoaderFunctionArgs } from "react-router";
 import { api } from "../server/api.server";
-import { AssetType } from "@market-intel/api";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const asset = params.asset;

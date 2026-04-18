@@ -5,8 +5,8 @@
  */
 
 import type { Prisma } from "@market-intel/pipeline";
-import type { AssetType } from "./asset.js";
 import type { Jsonify } from "../common/json.js";
+import type { AssetType } from "./asset.js";
 
 export const tradeIdeaInclude = {
   levels: {

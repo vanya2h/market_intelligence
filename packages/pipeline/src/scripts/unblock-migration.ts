@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * One-off unblock for Prisma's migration advisory lock (72707369) when it's
  * orphaned on a PgBouncer-pooled backend. Re-checks the lock, terminates any
@@ -7,8 +6,8 @@
  * This is a destructive action (kills PG backend connections) and should only
  * be run when the long-term `directUrl` fix isn't yet in place.
  */
-import "../env.js";
 import { prisma } from "../storage/db.js";
+import "../env.js";
 
 const PRISMA_MIGRATE_LOCK = 72707369n;
 

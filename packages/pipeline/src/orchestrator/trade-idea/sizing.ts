@@ -67,20 +67,13 @@ export function computePositionSize(conviction: number, htfContext: HtfContext):
 
   // 4. Compression bonus: coiled spring after displacement = higher setup quality
   const compressionBonus =
-    htfContext.volatility.compressionAfterMove && htfContext.volatility.atrPercentile <= 10
-      ? 0.25
-      : 0;
+    htfContext.volatility.compressionAfterMove && htfContext.volatility.atrPercentile <= 10 ? 0.25 : 0;
 
   const convictionMultiplier = Math.round((base + compressionBonus) * 100) / 100;
 
   // 5. Final size (clamped, 1 decimal)
   const positionSizePct =
-    Math.round(
-      Math.min(
-        Math.max(baseAllocationPct * convictionMultiplier, 0),
-        MAX_POSITION_PCT,
-      ) * 10,
-    ) / 10;
+    Math.round(Math.min(Math.max(baseAllocationPct * convictionMultiplier, 0), MAX_POSITION_PCT) * 10) / 10;
 
   return {
     positionSizePct,

@@ -3,20 +3,20 @@
  * Shows previous brief alongside for delta comparison.
  * Usage: tsx src/scripts/test-telegram-prompt.ts --asset [BTC|ETH]
  */
-import "../env.js";
+import { callLlm } from "../llm.js";
+import { computeDelta } from "../orchestrator/delta.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import { callLlm } from "../llm.js";
-import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
-import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
+import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
+import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import type { HtfOutput } from "../orchestrator/types.js";
-import { computeDelta } from "../orchestrator/delta.js";
 import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 async function main() {
   const asset = parseAsset();

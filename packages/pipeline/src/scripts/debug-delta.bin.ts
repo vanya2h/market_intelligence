@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Debug script — Delta Analysis
  *
@@ -10,22 +9,18 @@
  *   pnpm tsx src/orchestrator/debug-delta.bin.ts --asset ETH
  */
 
-import "../env.js";
 import chalk from "chalk";
-import { prisma } from "../storage/db.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import type { DimensionOutput } from "../orchestrator/types.js";
+import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 const asset = parseAsset();
 
-const briefId = process.argv.includes("--id")
-  ? process.argv[process.argv.indexOf("--id") + 1]
-  : undefined;
+const briefId = process.argv.includes("--id") ? process.argv[process.argv.indexOf("--id") + 1] : undefined;
 
-const prevId = process.argv.includes("--prev")
-  ? process.argv[process.argv.indexOf("--prev") + 1]
-  : undefined;
+const prevId = process.argv.includes("--prev") ? process.argv[process.argv.indexOf("--prev") + 1] : undefined;
 
 async function main(): Promise<void> {
   console.log(chalk.bold(`\nDelta debug for ${asset}\n`));

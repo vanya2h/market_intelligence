@@ -1,6 +1,6 @@
 import { AssetType, Brief, parseBrief } from "@market-intel/api";
-import { parseResponse } from "hono/client";
 import type { Api } from "@market-intel/api/client";
+import { parseResponse } from "hono/client";
 
 export function getLatestBriefByAsset(asset: AssetType) {
   return async (api: Api): Promise<Brief> => {

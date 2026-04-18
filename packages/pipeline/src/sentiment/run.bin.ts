@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * CLI entry point for the sentiment dimension.
  *
@@ -8,8 +7,8 @@
  */
 
 import chalk from "chalk";
-import { runSentiment } from "./run.js";
 import { parseAsset } from "../scripts/utils.js";
+import { runSentiment } from "./run.js";
 
 const asset = parseAsset();
 

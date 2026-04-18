@@ -1,4 +1,4 @@
-import type { TradeIdeaLevel, TradeDirection } from "@market-intel/api";
+import type { TradeDirection, TradeIdeaLevel } from "@market-intel/api";
 import { UsdValue } from "./UsdValue";
 
 function outcomeIcon(outcome: string): string {
@@ -52,11 +52,7 @@ export function LevelStatus({
         // Insert entry price divider at the right position
         const prevLevel = sorted[i - 1];
         const showEntry =
-          direction !== "FLAT" &&
-          i > 0 &&
-          prevLevel &&
-          prevLevel.price >= entryPrice &&
-          level.price < entryPrice;
+          direction !== "FLAT" && i > 0 && prevLevel && prevLevel.price >= entryPrice && level.price < entryPrice;
 
         return (
           <div key={`${level.type}-${level.label}`}>
@@ -69,7 +65,10 @@ export function LevelStatus({
                   color: "var(--text-primary)",
                 }}
               >
-                <span className="text-[0.5625rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                <span
+                  className="text-[0.5625rem] font-medium uppercase tracking-wider"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Entry
                 </span>
                 <span className="grow" />
@@ -105,15 +104,13 @@ export function LevelStatus({
                 <UsdValue value={level.price} style={{ color: "var(--text-primary)", fontSize: "0.6875rem" }} />
               ) : (
                 <span className="font-mono-jb tabular-nums" style={{ color: "var(--text-primary)" }}>
-                  {"\u00B1"}{level.price.toFixed(0)}
+                  {"\u00B1"}
+                  {level.price.toFixed(0)}
                 </span>
               )}
 
               {/* Outcome */}
-              <span
-                className="ml-1 font-mono-jb font-bold"
-                style={{ color: outcomeColor(level.outcome) }}
-              >
+              <span className="ml-1 font-mono-jb font-bold" style={{ color: outcomeColor(level.outcome) }}>
                 {outcomeIcon(level.outcome)}
               </span>
             </div>
@@ -130,7 +127,10 @@ export function LevelStatus({
             color: "var(--text-primary)",
           }}
         >
-          <span className="text-[0.5625rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          <span
+            className="text-[0.5625rem] font-medium uppercase tracking-wider"
+            style={{ color: "var(--text-muted)" }}
+          >
             Entry
           </span>
           <span className="grow" />

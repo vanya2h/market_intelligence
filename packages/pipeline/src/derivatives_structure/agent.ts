@@ -6,9 +6,9 @@
  */
 
 import crypto from "node:crypto";
-import { DerivativesContext } from "../types.js";
-import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
+import { DerivativesContext } from "../types.js";
 
 // 24h — content-hash invalidates before this if market state changes
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -24,17 +24,13 @@ function contextCacheKey(ctx: DerivativesContext): string {
     oiSignal: ctx.oiSignal,
     previousPositioning: ctx.previousPositioning,
     previousStress: ctx.previousStress,
-    fundingPct1m:  Math.round(ctx.signals.fundingPct1m / 5) * 5,
-    liqPct1m:      Math.round(ctx.signals.liqPct1m / 10) * 10,
-    oiChange24h:   Math.round(ctx.signals.oiChange24h * 100) / 100,
-    liqBias:       ctx.liquidations.bias,
-    events:        ctx.events.map((e) => e.type).sort(),
+    fundingPct1m: Math.round(ctx.signals.fundingPct1m / 5) * 5,
+    liqPct1m: Math.round(ctx.signals.liqPct1m / 10) * 10,
+    oiChange24h: Math.round(ctx.signals.oiChange24h * 100) / 100,
+    liqBias: ctx.liquidations.bias,
+    events: ctx.events.map((e) => e.type).sort(),
   };
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(fingerprint))
-    .digest("hex")
-    .slice(0, 12);
+  const hash = crypto.createHash("sha256").update(JSON.stringify(fingerprint)).digest("hex").slice(0, 12);
   return `agent-derivatives-${ctx.asset.toLowerCase()}-${hash}`;
 }
 

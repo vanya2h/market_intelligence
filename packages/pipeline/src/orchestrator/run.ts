@@ -9,16 +9,16 @@
  *   pnpm brief --asset ETH
  */
 
-import "../env.js";
 import chalk from "chalk";
-import { runAllDimensions } from "./pipeline.js";
-import { synthesize } from "./synthesizer.js";
-import { synthesizeRich } from "./rich-synthesizer.js";
-import { saveBrief, updateBrief } from "./persist.js";
-import { processTradeIdea, type TradeDecision } from "./trade-idea/index.js";
-import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
-import { computeDelta } from "./delta.js";
 import type { AssetType } from "../types.js";
+import { processTradeIdea, type TradeDecision } from "./trade-idea/index.js";
+import { computeDelta } from "./delta.js";
+import { saveBrief, updateBrief } from "./persist.js";
+import { runAllDimensions } from "./pipeline.js";
+import { synthesizeRich } from "./rich-synthesizer.js";
+import { synthesize } from "./synthesizer.js";
+import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
+import "../env.js";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -35,7 +35,12 @@ function regimeTag(regime: string): string {
   if (lower.includes("bullish") || lower.includes("inflow") || lower.includes("greed")) {
     return chalk.green.bold(regime);
   }
-  if (lower.includes("bearish") || lower.includes("outflow") || lower.includes("fear") || lower.includes("capitulation")) {
+  if (
+    lower.includes("bearish") ||
+    lower.includes("outflow") ||
+    lower.includes("fear") ||
+    lower.includes("capitulation")
+  ) {
     return chalk.red.bold(regime);
   }
   if (lower.includes("divergence") || lower.includes("heating") || lower.includes("squeeze")) {
@@ -80,9 +85,7 @@ function wordWrap(text: string, indent: string, maxWidth: number): void {
 function printDimensionSummary(outputs: DimensionOutput[]): void {
   const pad = (s: string) => s.padEnd(30);
   for (const o of outputs) {
-    console.log(
-      `      ${chalk.dim(pad(DIMENSION_LABELS[o.dimension]))} ${regimeTag(o.regime)}`
-    );
+    console.log(`      ${chalk.dim(pad(DIMENSION_LABELS[o.dimension]))} ${regimeTag(o.regime)}`);
   }
 }
 
@@ -91,18 +94,14 @@ function printBrief(asset: string, outputs: DimensionOutput[], brief: string): v
   const thinSep = chalk.dim("─".repeat(62));
 
   console.log(`\n${sep}`);
-  console.log(
-    `  ${chalk.bold.white("MARKET BRIEF")}  ${chalk.dim(asset)}  ${chalk.dim(new Date().toUTCString())}`
-  );
+  console.log(`  ${chalk.bold.white("MARKET BRIEF")}  ${chalk.dim(asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(sep);
 
   // Dimension regime summary
   console.log(`\n  ${chalk.dim("── Dimension Regimes ────────────────────────────")}`);
   for (const o of outputs) {
     const pad = (s: string) => s.padEnd(28);
-    console.log(
-      `  ${chalk.dim(pad(DIMENSION_LABELS[o.dimension]))} ${regimeTag(o.regime)}`
-    );
+    console.log(`  ${chalk.dim(pad(DIMENSION_LABELS[o.dimension]))} ${regimeTag(o.regime)}`);
   }
 
   // Synthesized brief
@@ -132,7 +131,9 @@ export async function runBrief(assets: AssetType[]): Promise<void> {
     // (same context data) and all deltas come out as zero.
     step(2, totalSteps, "Computing delta...");
     const deltaSummary = await computeDelta(asset, outputs);
-    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
+    note(
+      `delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`,
+    );
 
     step(3, totalSteps, "Computing trade idea & synthesizing market brief...");
     const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");

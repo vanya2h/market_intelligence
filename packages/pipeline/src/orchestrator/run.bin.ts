@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * CLI entry point for the brief pipeline.
  *
@@ -8,13 +7,11 @@
  */
 
 import chalk from "chalk";
-import { runBrief } from "./run.js";
-import type { AssetType } from "../types.js";
 import { parseAsset } from "../scripts/utils.js";
+import type { AssetType } from "../types.js";
+import { runBrief } from "./run.js";
 
-const assets: AssetType[] = process.argv.includes("--asset")
-  ? [parseAsset()]
-  : ["BTC", "ETH"];
+const assets: AssetType[] = process.argv.includes("--asset") ? [parseAsset()] : ["BTC", "ETH"];
 
 runBrief(assets).catch((err) => {
   console.error(chalk.red.bold("Fatal error:"), err);

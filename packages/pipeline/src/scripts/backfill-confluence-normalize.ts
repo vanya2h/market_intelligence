@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Backfill — Normalize confluence JSON in trade_ideas to the -1..+1 shape.
  *
@@ -20,10 +19,10 @@
  * (in apply mode).
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
-import { normalizeConfluenceShape } from "../orchestrator/trade-idea/normalize.js";
 import type { Prisma } from "../generated/prisma/client.js";
+import { normalizeConfluenceShape } from "../orchestrator/trade-idea/normalize.js";
+import { prisma } from "../storage/db.js";
+import "../env.js";
 
 interface Counts {
   total: number;
@@ -42,9 +41,7 @@ async function main(): Promise<void> {
   const force = process.argv.includes("--force");
   const verbose = process.argv.includes("--verbose") || dryRun;
 
-  console.log(
-    `\n${dryRun ? "DRY-RUN" : "APPLY"}${force ? " (FORCE)" : ""}: confluence backfill (legacy → -1..+1)\n`,
-  );
+  console.log(`\n${dryRun ? "DRY-RUN" : "APPLY"}${force ? " (FORCE)" : ""}: confluence backfill (legacy → -1..+1)\n`);
 
   const ideas = await prisma.tradeIdea.findMany({
     orderBy: { createdAt: "asc" },

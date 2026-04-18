@@ -4,26 +4,26 @@
  * Endpoints for querying trade ideas, their returns curves, and aggregate stats.
  */
 
-import { z } from "zod";
-import { describeRoute, validator } from "hono-openapi";
 import { prisma } from "@market-intel/pipeline";
+import { describeRoute, validator } from "hono-openapi";
+import { z } from "zod";
 import { createController } from "../common/controller.js";
 import { AssetParamSchema, PaginationQuerySchema } from "../common/schemas.js";
+import { AssetType } from "../lib/asset.js";
 import {
-  tradeIdeaInclude,
-  TradeIdeaLevelStats,
-  TradeIdeaStats,
-  SignalBucket,
   DimensionEffectiveness,
-  SignalEffectiveness,
   IdeaSummary,
   MonthlyReturn,
   PerformanceMetrics,
-  StrategyPoint,
+  SignalBucket,
+  SignalEffectiveness,
   Strategy,
   StrategyCurvesData,
+  StrategyPoint,
+  tradeIdeaInclude,
+  TradeIdeaLevelStats,
+  TradeIdeaStats,
 } from "../lib/trade-ideas.js";
-import { AssetType } from "../lib/asset.js";
 
 // ─── GET /latest/:asset ──────────────────────────────────────────────────────
 
@@ -206,8 +206,7 @@ export const GetPerformanceController = createController({
 
 const strategyCurvesRoute = describeRoute({
   summary: "Get strategy equity curves",
-  description:
-    "Per-level strategy cumulative return curves — compares T1/T2/T3 targets and S1–S4 stop strategies",
+  description: "Per-level strategy cumulative return curves — compares T1/T2/T3 targets and S1–S4 stop strategies",
   tags: ["Trade Ideas"],
   responses: {
     200: { description: "Strategy curves data" },
@@ -684,19 +683,11 @@ async function getStrategyCurves(asset: AssetType): Promise<StrategyCurvesData> 
       const byDist = (a: { price: number }, b: { price: number }) =>
         Math.abs(a.price - idea.entryPrice) - Math.abs(b.price - idea.entryPrice);
 
-      const targetLevels = idea.levels
-        .filter((l) => l.type === "TARGET")
-        .sort(byDist);
-      const stopLevels = idea.levels
-        .filter((l) => l.type === "INVALIDATION")
-        .sort(byDist);
+      const targetLevels = idea.levels.filter((l) => l.type === "TARGET").sort(byDist);
+      const stopLevels = idea.levels.filter((l) => l.type === "INVALIDATION").sort(byDist);
 
-      const target =
-        idea.levels.find((l) => l.label === targetLabel && l.type === "TARGET") ??
-        targetLevels[targetIdx];
-      const stop =
-        idea.levels.find((l) => l.label === stopLabel && l.type === "INVALIDATION") ??
-        stopLevels[stopIdx];
+      const target = idea.levels.find((l) => l.label === targetLabel && l.type === "TARGET") ?? targetLevels[targetIdx];
+      const stop = idea.levels.find((l) => l.label === stopLabel && l.type === "INVALIDATION") ?? stopLevels[stopIdx];
 
       if (!target || !stop) continue;
 
@@ -705,18 +696,24 @@ async function getStrategyCurves(asset: AssetType): Promise<StrategyCurvesData> 
 
       if (target.outcome !== "OPEN" && target.resolvedAt) {
         const t = target.resolvedAt.getTime();
-        if (t < exitTime) { exitTime = t; exitLevel = target; }
+        if (t < exitTime) {
+          exitTime = t;
+          exitLevel = target;
+        }
       }
       if (stop.outcome !== "OPEN" && stop.resolvedAt) {
         const t = stop.resolvedAt.getTime();
-        if (t < exitTime) { exitTime = t; exitLevel = stop; }
+        if (t < exitTime) {
+          exitTime = t;
+          exitLevel = stop;
+        }
       }
 
       if (!exitLevel) continue;
 
       const conf = idea.confluence as (ConfluenceJson & { total?: number }) | null;
       const size = sizeMultiplier(normalizeConviction(conf?.total ?? 0));
-      const rawReturn = (sign * (exitLevel.price - idea.entryPrice)) / idea.entryPrice * 100;
+      const rawReturn = ((sign * (exitLevel.price - idea.entryPrice)) / idea.entryPrice) * 100;
       const returnPct = round2(rawReturn * size);
       const outcome = exitLevel.type === "TARGET" ? "WIN" : "LOSS";
       if (outcome === "WIN") wins++;

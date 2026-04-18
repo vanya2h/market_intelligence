@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { describeRoute, resolver } from "hono-openapi";
+import { z } from "zod";
 import { createController } from "../common/controller.js";
 
 const HealthSchema = z.object({

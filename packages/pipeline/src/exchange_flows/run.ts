@@ -6,15 +6,15 @@
  *   pnpm exchange-flows --asset ETH
  */
 
-import "../env.js";
 import fs from "node:fs";
 import path from "node:path";
 import chalk, { type ChalkInstance } from "chalk";
-import { collect } from "./collector.js";
-import { analyze } from "./analyzer.js";
-import { runAgent } from "./agent.js";
-import type { ExchangeFlowsContext, ExchangeFlowsRegime, ExchangeFlowsState } from "./types.js";
 import type { AssetType } from "../types.js";
+import { runAgent } from "./agent.js";
+import { analyze } from "./analyzer.js";
+import { collect } from "./collector.js";
+import type { ExchangeFlowsContext, ExchangeFlowsRegime, ExchangeFlowsState } from "./types.js";
+import "../env.js";
 
 const STATE_FILE = path.resolve("data", "exchange_flows_state.json");
 

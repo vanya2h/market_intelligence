@@ -1,11 +1,11 @@
-import { describeRoute, resolver, validator } from "hono-openapi";
 import { prisma } from "@market-intel/pipeline";
+import { describeRoute, resolver, validator } from "hono-openapi";
 import { createController } from "../common/controller.js";
 import {
   AssetParamSchema,
   DimensionParamSchema,
-  DimensionStateSchema,
   DimensionSnapshotSchema,
+  DimensionStateSchema,
   PaginationQuerySchema,
 } from "../common/schemas.js";
 
@@ -27,24 +27,18 @@ const statesRoute = describeRoute({
 
 export const GetDimensionStatesController = createController({
   build: (factory) =>
-    factory.createApp().get(
-      "/states/:asset",
-      statesRoute,
-      validator("param", AssetParamSchema),
-      async (c) => {
-        const { asset } = c.req.valid("param");
-        const states = await prisma.dimensionState.findMany({
-          where: { asset },
-        });
-        return c.json(states);
-      },
-    ),
+    factory.createApp().get("/states/:asset", statesRoute, validator("param", AssetParamSchema), async (c) => {
+      const { asset } = c.req.valid("param");
+      const states = await prisma.dimensionState.findMany({
+        where: { asset },
+      });
+      return c.json(states);
+    }),
 });
 
 const snapshotsRoute = describeRoute({
   summary: "Get dimension snapshots",
-  description:
-    "Returns historical snapshots for a specific dimension and asset",
+  description: "Returns historical snapshots for a specific dimension and asset",
   tags: ["Dimensions"],
   responses: {
     200: {
@@ -60,22 +54,24 @@ const snapshotsRoute = describeRoute({
 
 export const GetDimensionSnapshotsController = createController({
   build: (factory) =>
-    factory.createApp().get(
-      "/snapshots/:asset/:dimension",
-      snapshotsRoute,
-      validator("param", DimensionParamSchema),
-      validator("query", PaginationQuerySchema),
-      async (c) => {
-        const { asset, dimension } = c.req.valid("param");
-        const { take } = c.req.valid("query");
-        const snapshots = await prisma.dimensionSnapshot.findMany({
-          where: { asset, dimension },
-          orderBy: { timestamp: "desc" },
-          take,
-        });
-        return c.json(snapshots.reverse());
-      },
-    ),
+    factory
+      .createApp()
+      .get(
+        "/snapshots/:asset/:dimension",
+        snapshotsRoute,
+        validator("param", DimensionParamSchema),
+        validator("query", PaginationQuerySchema),
+        async (c) => {
+          const { asset, dimension } = c.req.valid("param");
+          const { take } = c.req.valid("query");
+          const snapshots = await prisma.dimensionSnapshot.findMany({
+            where: { asset, dimension },
+            orderBy: { timestamp: "desc" },
+            take,
+          });
+          return c.json(snapshots.reverse());
+        },
+      ),
 });
 
 export const DimensionsController = createController({

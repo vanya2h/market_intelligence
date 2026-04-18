@@ -15,15 +15,7 @@
  *   GBTC premium_rate > +3%                            → gbtc_premium
  */
 
-import {
-  EtfSnapshot,
-  EtfContext,
-  EtfRegime,
-  EtfState,
-  EtfFlowDay,
-  EtfFlowMetrics,
-  EtfEvent,
-} from "./types.js";
+import { EtfContext, EtfEvent, EtfFlowDay, EtfFlowMetrics, EtfRegime, EtfSnapshot, EtfState } from "./types.js";
 
 // ─── Flow metrics ─────────────────────────────────────────────────────────────
 
@@ -36,17 +28,24 @@ function last30Days(history: EtfFlowDay[], now: Date): EtfFlowDay[] {
 function computeFlowMetrics(history: EtfFlowDay[]): EtfFlowMetrics {
   if (history.length === 0) {
     return {
-      today: 0, d3Sum: 0, d7Sum: 0, d30Sum: 0,
-      consecutiveOutflowDays: 0, consecutiveInflowDays: 0,
-      mean30d: 0, sigma30d: 0, todaySigma: 0, percentile1m: 50,
-      priorStreakFlow: 0, reversalFlow: 0, reversalRatio: 0,
+      today: 0,
+      d3Sum: 0,
+      d7Sum: 0,
+      d30Sum: 0,
+      consecutiveOutflowDays: 0,
+      consecutiveInflowDays: 0,
+      mean30d: 0,
+      sigma30d: 0,
+      todaySigma: 0,
+      percentile1m: 50,
+      priorStreakFlow: 0,
+      reversalFlow: 0,
+      reversalRatio: 0,
     };
   }
 
   // Skip days with zero flow — data hasn't arrived yet (ETF data published after US market close)
-  const sorted = [...history]
-    .filter((d) => d.flowUsd !== 0)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...history].filter((d) => d.flowUsd !== 0).sort((a, b) => a.date.localeCompare(b.date));
   const today = sorted.at(-1)!.flowUsd;
   const d3Sum = sorted.slice(-3).reduce((s, d) => s + d.flowUsd, 0);
   const d7Sum = sorted.slice(-7).reduce((s, d) => s + d.flowUsd, 0);
@@ -96,15 +95,23 @@ function computeFlowMetrics(history: EtfFlowDay[]): EtfFlowMetrics {
     }
   }
 
-  const reversalRatio = Math.abs(priorStreakFlow) > 0
-    ? parseFloat((Math.abs(reversalFlow) / Math.abs(priorStreakFlow)).toFixed(3))
-    : 0;
+  const reversalRatio =
+    Math.abs(priorStreakFlow) > 0 ? parseFloat((Math.abs(reversalFlow) / Math.abs(priorStreakFlow)).toFixed(3)) : 0;
 
   return {
-    today, d3Sum, d7Sum, d30Sum,
-    consecutiveOutflowDays, consecutiveInflowDays,
-    mean30d, sigma30d, todaySigma, percentile1m,
-    priorStreakFlow, reversalFlow, reversalRatio,
+    today,
+    d3Sum,
+    d7Sum,
+    d30Sum,
+    consecutiveOutflowDays,
+    consecutiveInflowDays,
+    mean30d,
+    sigma30d,
+    todaySigma,
+    percentile1m,
+    priorStreakFlow,
+    reversalFlow,
+    reversalRatio,
   };
 }
 
@@ -113,7 +120,7 @@ function computeFlowMetrics(history: EtfFlowDay[]): EtfFlowMetrics {
 // Minimum fraction of the prior streak that must be reversed for a regime change.
 // A $10M inflow after $500M outflow (2%) is noise, not a reversal.
 // A $200M inflow after $500M outflow (40%) is meaningful.
-const MIN_REVERSAL_RATIO = 0.20;
+const MIN_REVERSAL_RATIO = 0.2;
 
 function determineRegime(metrics: EtfFlowMetrics, prevRegime: EtfRegime | null): EtfRegime {
   const { consecutiveOutflowDays, consecutiveInflowDays, reversalRatio } = metrics;
@@ -202,7 +209,7 @@ function formatUsd(v: number): string {
 
 export function analyze(
   snapshot: EtfSnapshot,
-  prevState: EtfState | null
+  prevState: EtfState | null,
 ): { context: EtfContext; nextState: EtfState } {
   const now = new Date(snapshot.timestamp);
   const history30 = last30Days(snapshot.flowHistory, now);
@@ -210,14 +217,9 @@ export function analyze(
   const regime = determineRegime(metrics, prevState?.regime ?? null);
 
   const since = prevState?.regime === regime ? prevState.since : snapshot.timestamp;
-  const durationDays = Math.max(
-    0,
-    Math.round((now.getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24))
-  );
+  const durationDays = Math.max(0, Math.round((now.getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)));
   const previousRegime =
-    prevState?.regime !== regime
-      ? (prevState?.regime ?? null)
-      : (prevState?.previousRegime ?? null);
+    prevState?.regime !== regime ? (prevState?.regime ?? null) : (prevState?.previousRegime ?? null);
 
   const events = detectEvents(snapshot, metrics);
 

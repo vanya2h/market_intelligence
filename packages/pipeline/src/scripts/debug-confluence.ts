@@ -7,20 +7,20 @@
  * Usage:  tsx src/scripts/debug-confluence.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
 import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
+import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
-import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import type {
   DerivativesOutput,
   EtfsOutput,
+  ExchangeFlowsOutput,
   HtfOutput,
   SentimentOutput,
-  ExchangeFlowsOutput,
 } from "../orchestrator/types.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

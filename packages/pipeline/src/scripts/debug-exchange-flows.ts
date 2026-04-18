@@ -4,13 +4,13 @@
  * Usage:  tsx src/scripts/debug-exchange-flows.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
-import { collect } from "../exchange_flows/collector.js";
-import { analyze } from "../exchange_flows/analyzer.js";
-import type { ExchangeFlowsState } from "../exchange_flows/types.js";
-import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
+import { analyze } from "../exchange_flows/analyzer.js";
+import { collect } from "../exchange_flows/collector.js";
+import type { ExchangeFlowsState } from "../exchange_flows/types.js";
+import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

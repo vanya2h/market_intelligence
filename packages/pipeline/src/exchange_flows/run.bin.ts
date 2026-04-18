@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * CLI entry point for the exchange flows dimension.
  *
@@ -8,8 +7,8 @@
  */
 
 import chalk from "chalk";
-import { runExchangeFlows } from "./run.js";
 import { parseAsset } from "../scripts/utils.js";
+import { runExchangeFlows } from "./run.js";
 
 const asset = parseAsset();
 

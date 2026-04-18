@@ -7,9 +7,9 @@
  */
 
 import crypto from "node:crypto";
-import { SentimentContext } from "./types.js";
-import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
+import { SentimentContext } from "./types.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 

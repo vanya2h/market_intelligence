@@ -34,10 +34,7 @@ export function UsdValue({ value, compact = false, className, style }: UsdValueP
   const formatted = compact ? formatCompactPrice(value) : formatFullPrice(value);
 
   return (
-    <span
-      className={`font-mono-jb tabular-nums ${className ?? ""}`}
-      style={style}
-    >
+    <span className={`font-mono-jb tabular-nums ${className ?? ""}`} style={style}>
       {formatted}
     </span>
   );

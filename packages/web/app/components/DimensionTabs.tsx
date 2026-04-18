@@ -1,8 +1,8 @@
-import { useState } from "react";
 import type { BriefDimension } from "@market-intel/api";
+import { useState } from "react";
+import { DIMENSION_LABELS, DIMENSIONS } from "../lib/dimensions";
 import { DimensionCard } from "./DimensionCard";
 import { TabBar } from "./TabBar";
-import { DIMENSIONS, DIMENSION_LABELS } from "../lib/dimensions";
 
 interface DimensionTabsProps {
   dimensions: BriefDimension[];

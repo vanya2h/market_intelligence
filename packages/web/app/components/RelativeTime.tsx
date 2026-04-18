@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
+import { useEffect, useState } from "react";
 
 /**
  * Client-only relative time display that avoids SSR hydration mismatch.

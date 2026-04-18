@@ -7,7 +7,17 @@ const SIGNAL_COLORS: Record<MetricSignal, string> = {
   neutral: "var(--amber)",
 };
 
-export function MetricRow({ label, value, signal, hint }: { label: string; value: string; signal?: MetricSignal; hint?: string }) {
+export function MetricRow({
+  label,
+  value,
+  signal,
+  hint,
+}: {
+  label: string;
+  value: string;
+  signal?: MetricSignal;
+  hint?: string;
+}) {
   const valueColor = signal ? SIGNAL_COLORS[signal] : "var(--text-secondary)";
   return (
     <div
@@ -17,7 +27,10 @@ export function MetricRow({ label, value, signal, hint }: { label: string; value
       <span className="text-xs" style={{ color: "var(--text-muted)" }}>
         {label}
       </span>
-      <span className="flex items-center gap-1 font-mono-jb text-xs font-medium tabular-nums" style={{ color: valueColor }}>
+      <span
+        className="flex items-center gap-1 font-mono-jb text-xs font-medium tabular-nums"
+        style={{ color: valueColor }}
+      >
         {value}
         {hint && (
           <Tooltip content={hint} side="left">

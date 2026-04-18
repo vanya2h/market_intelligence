@@ -1,6 +1,6 @@
+import type { AssetType } from "@market-intel/api";
 import type { LoaderFunctionArgs } from "react-router";
 import { api } from "../server/api.server";
-import type { AssetType } from "@market-intel/api";
 
 interface BriefHistoryEntry {
   id: string;

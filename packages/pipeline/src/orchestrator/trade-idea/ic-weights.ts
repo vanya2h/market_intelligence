@@ -13,9 +13,9 @@
  * falls back to equal weights (1.0 each, sum = 4).
  */
 
+import type { $Enums } from "../../generated/prisma/client.js";
 import { prisma } from "../../storage/db.js";
 import { getRedis } from "../../storage/redis.js";
-import type { $Enums } from "../../generated/prisma/client.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

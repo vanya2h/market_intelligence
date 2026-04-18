@@ -24,31 +24,31 @@
  *   tsx src/scripts/debug-brief.ts --brief <briefId>   # specific Brief
  */
 
-import "../env.js";
 import fs from "node:fs";
 import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
-import { prisma } from "../storage/db.js";
-import {
-  type DimensionOutput,
-  type DerivativesOutput,
-  type EtfsOutput,
-  type HtfOutput,
-  type SentimentOutput,
-  type ExchangeFlowsOutput,
-} from "../orchestrator/types.js";
+import { parseAssetType } from "../models.js";
+import type { DeltaSummary } from "../orchestrator/delta.js";
+import type { RunArtifacts } from "../orchestrator/notify-run.js";
+import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
+import type { DirectionalBias } from "../orchestrator/trade-idea/bias.js";
+import { computeBias } from "../orchestrator/trade-idea/bias.js";
+import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
 import { computeConfluence, type Confluence } from "../orchestrator/trade-idea/confluence.js";
 import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
-import { computeBias } from "../orchestrator/trade-idea/bias.js";
-import type { DirectionalBias } from "../orchestrator/trade-idea/bias.js";
-import type { RunArtifacts } from "../orchestrator/notify-run.js";
-import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
-import type { DeltaSummary } from "../orchestrator/delta.js";
-import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
+import {
+  type DerivativesOutput,
+  type DimensionOutput,
+  type EtfsOutput,
+  type ExchangeFlowsOutput,
+  type HtfOutput,
+  type SentimentOutput,
+} from "../orchestrator/types.js";
+import { prisma } from "../storage/db.js";
 import type { AssetType } from "../types.js";
-import { parseAssetType } from "../models.js";
+import "../env.js";
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -594,10 +594,7 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   out += kv("Lean", bias.lean);
   out += kv("Strength", `${Math.round(bias.strength * 100)}/100`);
   if (bias.topFactors.length > 0) {
-    out += kv(
-      "Top Factors",
-      bias.topFactors.map((f) => `${f.dimension}:+${Math.round(f.score * 100)}%`).join("  "),
-    );
+    out += kv("Top Factors", bias.topFactors.map((f) => `${f.dimension}:+${Math.round(f.score * 100)}%`).join("  "));
   }
 
   return out;
@@ -972,11 +969,7 @@ async function main() {
     write(outDir, "10-rich-brief.txt", buildRichBrief(brief.richBrief as { blocks: Array<Record<string, unknown>> }));
   write(outDir, "11-brief-text.txt", brief.brief);
   write(outDir, "12-llm-system-prompt.txt", buildSystemPrompt(promptDecision, isDeltaBrief));
-  write(
-    outDir,
-    "13-llm-user-prompt.txt",
-    buildPrompt(asset as AssetType, storedOutputs, promptDecision, storedDelta),
-  );
+  write(outDir, "13-llm-user-prompt.txt", buildPrompt(asset as AssetType, storedOutputs, promptDecision, storedDelta));
 
   const contexts: Record<string, unknown> = {};
   if (brief.derivatives) contexts.derivatives = brief.derivatives.context;

@@ -8,14 +8,14 @@
  *   tsx src/scripts/debug-htf.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import { collect } from "../htf/collector.js";
 import { analyze } from "../htf/analyzer.js";
+import { collect } from "../htf/collector.js";
 import type { HtfContext, HtfState, VolumeProfileResult } from "../htf/types.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── State loader ─────────────────────────────────────────────────────────────
 

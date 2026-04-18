@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
+import type { ReactNode } from "react";
 import { Tooltip } from "./Tooltip";
 
 export function SectionBlock({

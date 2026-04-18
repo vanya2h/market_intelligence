@@ -1,16 +1,16 @@
+import { ComponentProps } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
-import { BriefSection } from "../components/BriefSection";
 import { AppHeader } from "../components/AppHeader";
+import { BriefSection } from "../components/BriefSection";
 import { BriefSidebar } from "../components/BriefSidebar";
-import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { DimensionTabs } from "../components/DimensionTabs";
-import { TradeIdeaSection } from "../components/TradeIdeaSection";
+import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { StickyFooter } from "../components/StickyFooter";
+import { TradeIdeaSection } from "../components/TradeIdeaSection";
 import { getBriefById } from "../lib/brief";
-import { getTradeIdeaByBriefId, getCandles } from "../lib/trade-idea";
+import { getCandles, getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
-import { ComponentProps } from "react";
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const { id } = params;

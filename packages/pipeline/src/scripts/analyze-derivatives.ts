@@ -5,10 +5,10 @@
  * Usage:  tsx src/scripts/analyze-derivatives.ts
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
 import chalk from "chalk";
 import type { HtfContext } from "../htf/types.js";
+import { prisma } from "../storage/db.js";
+import "../env.js";
 
 interface DerivativesContext {
   positioning: { state: string };
@@ -157,7 +157,9 @@ function pearson(x: number[], y: number[]): number {
   if (n < 5) return 0;
   const mx = avg(x);
   const my = avg(y);
-  let num = 0, dx2 = 0, dy2 = 0;
+  let num = 0,
+    dx2 = 0,
+    dy2 = 0;
   for (let i = 0; i < n; i++) {
     const dx = x[i]! - mx;
     const dy = y[i]! - my;
@@ -199,7 +201,13 @@ async function main() {
       const peak = idea.returns.reduce((best, r) =>
         Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
       );
-      return { ...components, peakQuality: peak.qualityAtPoint, direction: idea.direction, confluence: idea.confluence as unknown as Confluence, createdAt: idea.createdAt };
+      return {
+        ...components,
+        peakQuality: peak.qualityAtPoint,
+        direction: idea.direction,
+        confluence: idea.confluence as unknown as Confluence,
+        createdAt: idea.createdAt,
+      };
     });
 
     // IC per sub-component

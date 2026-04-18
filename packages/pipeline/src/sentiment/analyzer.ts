@@ -18,14 +18,14 @@
  */
 
 import {
-  SentimentSnapshot,
-  SentimentContext,
-  SentimentRegime,
-  SentimentState,
-  SentimentMetrics,
-  SentimentEvent,
-  FearGreedComponents,
   CrossDimensionInputs,
+  FearGreedComponents,
+  SentimentContext,
+  SentimentEvent,
+  SentimentMetrics,
+  SentimentRegime,
+  SentimentSnapshot,
+  SentimentState,
   UnbiasConsensusEntry,
 } from "./types.js";
 
@@ -56,14 +56,10 @@ function scorePositioning(d: CrossDimensionInputs["derivatives"]): number {
   // Formula: interpolate between inverted and raw percentile based on bias
   const longBias = d.liqLongPct / 100; // 0–1
   const liqBearish = 100 - d.liqPercentile1m; // high liqs + longs = fearful
-  const liqBullish = d.liqPercentile1m;        // high liqs + shorts = greedy
+  const liqBullish = d.liqPercentile1m; // high liqs + shorts = greedy
   const liqScore = liqBullish * (1 - longBias) + liqBearish * longBias;
 
-  const raw =
-    d.fundingPercentile1m * 0.35 +
-    d.cbPremiumPercentile1m * 0.25 +
-    d.oiPercentile1m * 0.25 +
-    liqScore * 0.15;
+  const raw = d.fundingPercentile1m * 0.35 + d.cbPremiumPercentile1m * 0.25 + d.oiPercentile1m * 0.25 + liqScore * 0.15;
 
   // Regime adjustments
   let regimeBonus = 0;
@@ -96,7 +92,8 @@ function scoreTrend(h: CrossDimensionInputs["htf"]): number {
   let structureScore = 50;
   if (h.structure === "HH_HL") structureScore = 75;
   else if (h.structure === "LH_LL") structureScore = 25;
-  else if (h.structure === "HH_LL") structureScore = 55; // expanding, slightly bullish
+  else if (h.structure === "HH_LL")
+    structureScore = 55; // expanding, slightly bullish
   else if (h.structure === "LH_HL") structureScore = 45; // contracting
 
   return clamp(sma200Score * 0.3 + sma50Score * 0.2 + rsiScore * 0.3 + structureScore * 0.2);
@@ -178,13 +175,14 @@ function scoreExchangeFlows(ef: CrossDimensionInputs["exchangeFlows"]): number {
 
   // Trend confirmation
   let trendBonus = 0;
-  if (ef.balanceTrend === "FALLING") trendBonus = 8;    // outflows = bullish
+  if (ef.balanceTrend === "FALLING")
+    trendBonus = 8; // outflows = bullish
   else if (ef.balanceTrend === "RISING") trendBonus = -8; // inflows = bearish
 
   // 30d extremes
   let extremeBonus = 0;
-  if (ef.isAt30dLow) extremeBonus = 10;   // reserves depleted = bullish
-  if (ef.isAt30dHigh) extremeBonus = -10;  // reserves elevated = bearish
+  if (ef.isAt30dLow) extremeBonus = 10; // reserves depleted = bullish
+  if (ef.isAt30dHigh) extremeBonus = -10; // reserves elevated = bearish
 
   // Regime adjustment
   let regimeBonus = 0;
@@ -201,9 +199,9 @@ function scoreExchangeFlows(ef: CrossDimensionInputs["exchangeFlows"]): number {
 // Three core components — exchange flows removed (unreliable sentiment signal).
 // Expert consensus still disabled while collecting delta-based data.
 const WEIGHTS = {
-  positioning: 0.50,
-  trend: 0.20,
-  institutionalFlows: 0.30,
+  positioning: 0.5,
+  trend: 0.2,
+  institutionalFlows: 0.3,
   exchangeFlows: 0,
   expertConsensus: 0,
 };
@@ -235,9 +233,7 @@ function computeMetrics(snapshot: SentimentSnapshot): SentimentMetrics {
   const consensusIndex30dMa = latestConsensus?.consensusIndex30dMa ?? 0;
   const zScore = latestConsensus?.zScore ?? 0;
   const totalAnalysts = latestConsensus?.totalAnalysts ?? 0;
-  const bullishRatio = totalAnalysts > 0
-    ? (latestConsensus?.bullishAnalysts ?? 0) / totalAnalysts
-    : 0.5;
+  const bullishRatio = totalAnalysts > 0 ? (latestConsensus?.bullishAnalysts ?? 0) / totalAnalysts : 0.5;
 
   // Compute component scores
   const cd = snapshot.crossDimensions;
@@ -365,7 +361,7 @@ function detectEvents(metrics: SentimentMetrics, timestamp: string): SentimentEv
 
 export function analyze(
   snapshot: SentimentSnapshot,
-  prevState: SentimentState | null
+  prevState: SentimentState | null,
 ): { context: SentimentContext; nextState: SentimentState } {
   const metrics = computeMetrics(snapshot);
   const regime = determineRegime(metrics);
@@ -373,14 +369,9 @@ export function analyze(
 
   const since = prevState?.regime === regime ? prevState.since : snapshot.timestamp;
   const now = new Date(snapshot.timestamp);
-  const durationDays = Math.max(
-    0,
-    Math.round((now.getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24))
-  );
+  const durationDays = Math.max(0, Math.round((now.getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)));
   const previousRegime =
-    prevState?.regime !== regime
-      ? (prevState?.regime ?? null)
-      : (prevState?.previousRegime ?? null);
+    prevState?.regime !== regime ? (prevState?.regime ?? null) : (prevState?.previousRegime ?? null);
 
   const context: SentimentContext = {
     asset: snapshot.asset,

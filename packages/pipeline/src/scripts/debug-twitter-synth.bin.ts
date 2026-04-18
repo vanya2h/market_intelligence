@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Debug script — Twitter Synthesizer
  *
@@ -13,23 +12,19 @@
  *   pnpm tsx src/orchestrator/debug-twitter-synth.bin.ts --prompt   # also print raw LLM prompt
  */
 
-import "../env.js";
 import chalk from "chalk";
-import { prisma } from "../storage/db.js";
 import { computeDelta } from "../orchestrator/delta.js";
-import { synthesizeTweet, buildPrompt } from "../orchestrator/twitter-synthesizer.js";
+import { buildPrompt, synthesizeTweet } from "../orchestrator/twitter-synthesizer.js";
 import type { DimensionOutput } from "../orchestrator/types.js";
+import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 const asset = parseAsset();
 
-const briefId = process.argv.includes("--id")
-  ? process.argv[process.argv.indexOf("--id") + 1]
-  : undefined;
+const briefId = process.argv.includes("--id") ? process.argv[process.argv.indexOf("--id") + 1] : undefined;
 
-const prevId = process.argv.includes("--prev")
-  ? process.argv[process.argv.indexOf("--prev") + 1]
-  : undefined;
+const prevId = process.argv.includes("--prev") ? process.argv[process.argv.indexOf("--prev") + 1] : undefined;
 
 const showPrompt = process.argv.includes("--prompt");
 
@@ -145,7 +140,9 @@ async function main(): Promise<void> {
   const delta = await computeDelta(asset, outputs, prevId ? { previousBriefId: prevId } : {});
 
   const tierColor = delta.tier === "high" ? chalk.red : delta.tier === "medium" ? chalk.yellow : chalk.green;
-  console.log(`${chalk.bold("Delta tier:")} ${tierColor.bold(delta.tier.toUpperCase())}  ${chalk.dim(`(maxZ=${delta.maxZ === Infinity ? "∞" : delta.maxZ.toFixed(3)})`)}`);
+  console.log(
+    `${chalk.bold("Delta tier:")} ${tierColor.bold(delta.tier.toUpperCase())}  ${chalk.dim(`(maxZ=${delta.maxZ === Infinity ? "∞" : delta.maxZ.toFixed(3)})`)}`,
+  );
   console.log(`${chalk.bold("Change summary:")} ${chalk.dim(delta.changeSummary)}`);
   console.log();
 

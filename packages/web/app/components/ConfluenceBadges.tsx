@@ -1,5 +1,5 @@
 import type { Confluence } from "@market-intel/api";
-import { CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_LABELS, CONFLUENCE_KEY_MAP } from "../lib/dimensions";
+import { CONFLUENCE_KEY_MAP, CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
 
 /**
  * All confluence values now live in -1..+1 (per-dim are unweighted normalized
@@ -60,11 +60,9 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
           </span>
         );
       })}
-      <span
-        className="text-[0.625rem] font-bold font-mono-jb tabular-nums"
-        style={{ color: totalColor(total) }}
-      >
-        {"\u03A3"}{pctLabel(total)}/100
+      <span className="text-[0.625rem] font-bold font-mono-jb tabular-nums" style={{ color: totalColor(total) }}>
+        {"\u03A3"}
+        {pctLabel(total)}/100
       </span>
     </div>
   );
@@ -87,23 +85,14 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
 
         return (
           <div key={dim} className="flex items-center gap-2">
-            <span
-              className="w-20 shrink-0 text-[0.5625rem] font-medium"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <span className="w-20 shrink-0 text-[0.5625rem] font-medium" style={{ color: "var(--text-muted)" }}>
               {LABELS[dim]}
             </span>
 
             {/* Bar container */}
-            <div
-              className="relative flex-1 h-4 rounded-sm overflow-hidden"
-              style={{ background: "var(--bg-hover)" }}
-            >
+            <div className="relative flex-1 h-4 rounded-sm overflow-hidden" style={{ background: "var(--bg-hover)" }}>
               {/* Center line */}
-              <div
-                className="absolute top-0 bottom-0 w-px"
-                style={{ left: "50%", background: "var(--border)" }}
-              />
+              <div className="absolute top-0 bottom-0 w-px" style={{ left: "50%", background: "var(--border)" }} />
 
               {/* Score bar */}
               <div
@@ -138,22 +127,20 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
           Conviction
         </span>
 
-        <div
-          className="relative flex-1 h-5 rounded-sm overflow-hidden"
-          style={{ background: "var(--bg-hover)" }}
-        >
+        <div className="relative flex-1 h-5 rounded-sm overflow-hidden" style={{ background: "var(--bg-hover)" }}>
           {/* Fill bar */}
           <div
             className="absolute top-0.5 bottom-0.5 left-0 rounded-sm transition-all"
             style={{
               width: `${convictionPct}%`,
-              background: total >= 0.6
-                ? "var(--green)"
-                : total >= 0.25
-                  ? "var(--amber)"
-                  : total > 0
-                    ? "var(--text-muted)"
-                    : "var(--red)",
+              background:
+                total >= 0.6
+                  ? "var(--green)"
+                  : total >= 0.25
+                    ? "var(--amber)"
+                    : total > 0
+                      ? "var(--text-muted)"
+                      : "var(--red)",
               opacity: 0.6,
             }}
           />

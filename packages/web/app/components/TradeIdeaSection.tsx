@@ -1,12 +1,12 @@
 import type { TradeIdea } from "@market-intel/api";
 import type { OhlcvCandle } from "@market-intel/api";
-import { SectionBlock } from "./SectionBlock";
-import { UsdValue } from "./UsdValue";
-import { InlineLink } from "./InlineLink";
+import { CandleReturnChart } from "./CandleReturnChart";
 import { ConfluenceBreakdown } from "./ConfluenceBadges";
+import { InlineLink } from "./InlineLink";
 import { LevelStatus } from "./LevelStatus";
 import { ReturnsCurve } from "./ReturnsCurve";
-import { CandleReturnChart } from "./CandleReturnChart";
+import { SectionBlock } from "./SectionBlock";
+import { UsdValue } from "./UsdValue";
 
 function LearnLink() {
   return (
@@ -43,7 +43,7 @@ function sizeColor(pct: number): string {
   return "var(--text-muted)";
 }
 
-export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: TradeIdea; candles?: OhlcvCandle[]}) {
+export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: TradeIdea; candles?: OhlcvCandle[] }) {
   const dir = directionStyle(tradeIdea.direction);
   const age = formatAge(tradeIdea.createdAt);
   const totalLevels = tradeIdea.levels.length;

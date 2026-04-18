@@ -7,13 +7,13 @@
  * Usage:  tsx src/scripts/debug-funding-pressure.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
-import { collect } from "../derivatives_structure/collector.js";
-import { analyze } from "../derivatives_structure/analyzer.js";
-import type { DerivativesState, TimestampedValue } from "../types.js";
-import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
+import { analyze } from "../derivatives_structure/analyzer.js";
+import { collect } from "../derivatives_structure/collector.js";
+import type { DerivativesState, TimestampedValue } from "../types.js";
+import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

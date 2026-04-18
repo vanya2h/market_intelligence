@@ -2,8 +2,8 @@
  * Shared Claude LLM client with retry logic for transient API errors.
  */
 
-import pRetry from "p-retry";
 import { APIError } from "@anthropic-ai/sdk";
+import pRetry from "p-retry";
 
 export interface LlmRequest {
   system: string;

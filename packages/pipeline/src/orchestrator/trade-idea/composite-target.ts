@@ -57,10 +57,10 @@ const ATR_FALLBACK_MULTIPLIER = 3.0;
 //   conviction 1.0 → 1.3× (wider — high conviction gets more room)
 
 const STOP_TIERS = [
-  { label: "S1", base: 1.0 },   // tight — scalp invalidation
-  { label: "S2", base: 1.5 },   // standard swing stop
-  { label: "S3", base: 2.0 },   // wide — room for volatility
-  { label: "S4", base: 2.5 },   // widest — high-conviction swing
+  { label: "S1", base: 1.0 }, // tight — scalp invalidation
+  { label: "S2", base: 1.5 }, // standard swing stop
+  { label: "S3", base: 2.0 }, // wide — room for volatility
+  { label: "S4", base: 2.5 }, // widest — high-conviction swing
 ] as const;
 
 const CONVICTION_SCALE_MIN = 0.8;

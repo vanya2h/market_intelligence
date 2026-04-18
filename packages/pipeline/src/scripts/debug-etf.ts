@@ -4,13 +4,13 @@
  * Usage:  tsx src/scripts/debug-etf.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
-import { collect as collectEtfs } from "../etfs/collector.js";
-import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
-import type { EtfState } from "../etfs/types.js";
-import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
+import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
+import { collect as collectEtfs } from "../etfs/collector.js";
+import type { EtfState } from "../etfs/types.js";
+import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

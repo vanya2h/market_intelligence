@@ -1,13 +1,5 @@
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-} from "recharts";
-import type { TradeIdeaReturn, TradeIdeaLevel } from "@market-intel/api";
+import type { TradeIdeaLevel, TradeIdeaReturn } from "@market-intel/api";
+import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 function formatHours(h: number): string {
   if (h < 24) return `${h}h`;
@@ -15,13 +7,7 @@ function formatHours(h: number): string {
   return `${d}d`;
 }
 
-export function ReturnsCurve({
-  returns,
-  levels,
-}: {
-  returns: TradeIdeaReturn[];
-  levels: TradeIdeaLevel[];
-}) {
+export function ReturnsCurve({ returns, levels }: { returns: TradeIdeaReturn[]; levels: TradeIdeaLevel[] }) {
   if (returns.length < 2) {
     return (
       <div
@@ -105,7 +91,10 @@ export function ReturnsCurve({
             >
               {l.outcome === "WIN" ? "\u2713" : "\u2717"} {l.label}
               {l.qualityScore != null && (
-                <span style={{ opacity: 0.7 }}>{l.qualityScore > 0 ? "+" : ""}{l.qualityScore.toFixed(1)}</span>
+                <span style={{ opacity: 0.7 }}>
+                  {l.qualityScore > 0 ? "+" : ""}
+                  {l.qualityScore.toFixed(1)}
+                </span>
               )}
             </span>
           ))}

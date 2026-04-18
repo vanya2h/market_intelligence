@@ -16,13 +16,13 @@
  */
 
 import crypto from "node:crypto";
-import { getCached } from "../storage/cache.js";
-import { callLlm } from "../llm.js";
-import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
-import type { TradeDecision } from "./trade-idea/index.js";
 import { $Enums } from "../generated/prisma/client.js";
-import type { DeltaSummary } from "./delta.js";
+import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
 import type { AssetType } from "../types.js";
+import type { TradeDecision } from "./trade-idea/index.js";
+import type { DeltaSummary } from "./delta.js";
+import { DIMENSION_LABELS, type DimensionOutput, type HtfOutput } from "./types.js";
 
 const SYNTH_CACHE_TTL = 1 * 60 * 60 * 1000;
 
@@ -59,14 +59,16 @@ export function buildPrompt(
 ): string {
   const richSection = `### Dimension Analysis
 
-${outputs.map((o) => {
+${outputs
+  .map((o) => {
     let line = `**${DIMENSION_LABELS[o.dimension]}** (${o.regime}): ${o.interpretation}`;
     if (o.dimension === "HTF") {
       const b = (o as HtfOutput).context.bias;
       line += `\n  Bias scores: trend=${b.trend.toFixed(2)}, momentum=${b.momentum.toFixed(2)}, flow=${b.flow.toFixed(2)}, compression=${b.compression.toFixed(2)}, vpGravity=${b.vpGravity.toFixed(2)}, composite=${b.composite.toFixed(2)}`;
     }
     return line;
-  }).join("\n\n")}`;
+  })
+  .join("\n\n")}`;
 
   const deltaSection =
     delta && delta.tier !== "low"
@@ -81,7 +83,8 @@ ${delta.changeSummary}
 ${delta.dimensions
   .flatMap((d) =>
     d.topMovers.map(
-      (m) => `- ${DIMENSION_LABELS[d.dimension]} / ${m.label}: ${m.prev.toFixed(2)} → ${m.curr.toFixed(2)} (z=${m.zScore.toFixed(1)})`,
+      (m) =>
+        `- ${DIMENSION_LABELS[d.dimension]} / ${m.label}: ${m.prev.toFixed(2)} → ${m.curr.toFixed(2)} (z=${m.zScore.toFixed(1)})`,
     ),
   )
   .join("\n")}
@@ -104,9 +107,7 @@ ${buildTradeSection(decision)}`
 }
 
 export function buildSystemPrompt(decision: TradeDecision | null, isDelta: boolean = false): string {
-  const biasSection = decision
-    ? `\n3. Trade: direction, why it works now, what price kills it.`
-    : ``;
+  const biasSection = decision ? `\n3. Trade: direction, why it works now, what price kills it.` : ``;
 
   const structure = isDelta
     ? `Structure (delta — reader saw the last brief):

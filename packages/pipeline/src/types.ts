@@ -1,6 +1,6 @@
 // ─── Derivatives Structure (Dimension 01) ───────────────────────────────────
 
-import type { PositioningRegime, StressLevel, OiSignal as PrismaOiSignal, $Enums } from "./generated/prisma/client.js";
+import type { $Enums, OiSignal as PrismaOiSignal, PositioningRegime, StressLevel } from "./generated/prisma/client.js";
 
 // Two independent dimensions (spec §1)
 

@@ -6,9 +6,9 @@
  */
 
 import crypto from "node:crypto";
-import { HtfContext } from "./types.js";
-import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
+import { HtfContext } from "./types.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -20,26 +20,26 @@ function contextCacheKey(ctx: HtfContext): string {
     recentCross: ctx.ma.recentCross,
     structure: ctx.structure,
     // Bucket to avoid cache misses on minor price moves
-    priceVsSma50Bucket:  Math.round(ctx.ma.priceVsSma50Pct  / 2) * 2,  // 2% buckets
-    priceVsSma200Bucket: Math.round(ctx.ma.priceVsSma200Pct / 5) * 5,  // 5% buckets
-    rsiDailyBucket: Math.round(ctx.rsi.daily / 5) * 5,                 // 5-point buckets
-    rsiH4Bucket:    Math.round(ctx.rsi.h4    / 5) * 5,
-    rsiDiv:         ctx.rsi.divergence,
+    priceVsSma50Bucket: Math.round(ctx.ma.priceVsSma50Pct / 2) * 2, // 2% buckets
+    priceVsSma200Bucket: Math.round(ctx.ma.priceVsSma200Pct / 5) * 5, // 5% buckets
+    rsiDailyBucket: Math.round(ctx.rsi.daily / 5) * 5, // 5-point buckets
+    rsiH4Bucket: Math.round(ctx.rsi.h4 / 5) * 5,
+    rsiDiv: ctx.rsi.divergence,
     // MFI — volume-weighted momentum (5-point buckets like RSI)
     mfiDailyBucket: Math.round(ctx.mfi.daily / 5) * 5,
-    mfiH4Bucket:    Math.round(ctx.mfi.h4    / 5) * 5,
-    mfiDiv:         ctx.mfi.divergence,
+    mfiH4Bucket: Math.round(ctx.mfi.h4 / 5) * 5,
+    mfiDiv: ctx.mfi.divergence,
     // Divergence confluence — mean reversion trigger
     confluenceDir: ctx.divergenceConfluence.direction,
     confluenceStrengthBucket: Math.round(ctx.divergenceConfluence.strength * 10) / 10, // 0.1 buckets
     confluenceSources: ctx.divergenceConfluence.sources.map((s) => s.indicator).sort(),
     // CVD dual-window regimes + divergence for caching
-    cvdFutShort:  ctx.cvd.futures.short.regime,
-    cvdFutLong:   ctx.cvd.futures.long.regime,
-    cvdFutDiv:    ctx.cvd.futures.divergence,
+    cvdFutShort: ctx.cvd.futures.short.regime,
+    cvdFutLong: ctx.cvd.futures.long.regime,
+    cvdFutDiv: ctx.cvd.futures.divergence,
     cvdSpotShort: ctx.cvd.spot.short.regime,
-    cvdSpotLong:  ctx.cvd.spot.long.regime,
-    cvdSpotDiv:   ctx.cvd.spot.divergence,
+    cvdSpotLong: ctx.cvd.spot.long.regime,
+    cvdSpotDiv: ctx.cvd.spot.divergence,
     // VWAP position relative to price: above or below
     priceVsWeeklyVwap: ctx.price > ctx.vwap.weekly ? "above" : "below",
     priceVsMonthlyVwap: ctx.price > ctx.vwap.monthly ? "above" : "below",
@@ -52,11 +52,7 @@ function contextCacheKey(ctx: HtfContext): string {
     staleMfi: ctx.staleness.mfiExtreme !== null ? Math.min(ctx.staleness.mfiExtreme, 10) : null,
     staleCvdDiv: ctx.staleness.cvdDivergencePeak !== null ? Math.min(ctx.staleness.cvdDivergencePeak, 10) : null,
   };
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(fingerprint))
-    .digest("hex")
-    .slice(0, 12);
+  const hash = crypto.createHash("sha256").update(JSON.stringify(fingerprint)).digest("hex").slice(0, 12);
   return `agent-htf-${ctx.asset.toLowerCase()}-${hash}`;
 }
 

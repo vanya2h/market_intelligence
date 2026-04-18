@@ -9,9 +9,9 @@
  * Auth: CG-API-KEY header (set COINGLASS_API_KEY in .env)
  */
 
-import { EtfFlowDay, EtfSnapshot } from "./types.js";
 import { getCached } from "../storage/cache.js";
 import type { AssetType } from "../types.js";
+import { EtfFlowDay, EtfSnapshot } from "./types.js";
 
 const BASE = "https://open-api-v4.coinglass.com";
 
@@ -82,21 +82,19 @@ function parseFlowHistory(raw: FlowHistoryEntry[]): EtfFlowDay[] {
 
 async function fetchBtcFlowHistory(): Promise<EtfFlowDay[]> {
   const data = await getCached("etf-btc-flow-history", TTL_DAILY, () =>
-    cgGet<FlowHistoryEntry[]>("/api/etf/bitcoin/flow-history")
+    cgGet<FlowHistoryEntry[]>("/api/etf/bitcoin/flow-history"),
   );
   return parseFlowHistory(data);
 }
 
 async function fetchBtcTotalAum(): Promise<number> {
-  const data = await getCached("etf-btc-list", TTL_DAILY, () =>
-    cgGet<BtcListEntry[]>("/api/etf/bitcoin/list")
-  );
+  const data = await getCached("etf-btc-list", TTL_DAILY, () => cgGet<BtcListEntry[]>("/api/etf/bitcoin/list"));
   return data.reduce((sum, e) => sum + (parseFloat(e.aum_usd) || 0), 0);
 }
 
 async function fetchGbtcData(): Promise<{ premiumRate: number; holdingsBtc: number }> {
   const data = await getCached("grayscale-holdings-list", TTL_DAILY, () =>
-    cgGet<GrayscaleEntry[]>("/api/grayscale/holdings-list")
+    cgGet<GrayscaleEntry[]>("/api/grayscale/holdings-list"),
   );
   const gbtc = data.find((e) => e.symbol === "BTC");
   if (!gbtc) return { premiumRate: 0, holdingsBtc: 0 };
@@ -107,14 +105,14 @@ async function fetchGbtcData(): Promise<{ premiumRate: number; holdingsBtc: numb
 
 async function fetchEthFlowHistory(): Promise<EtfFlowDay[]> {
   const data = await getCached("etf-eth-flow-history", TTL_DAILY, () =>
-    cgGet<FlowHistoryEntry[]>("/api/etf/ethereum/flow-history")
+    cgGet<FlowHistoryEntry[]>("/api/etf/ethereum/flow-history"),
   );
   return parseFlowHistory(data);
 }
 
 async function fetchEthTotalAum(): Promise<number> {
   const data = await getCached("etf-eth-net-assets", TTL_DAILY, () =>
-    cgGet<EthNetAssetsEntry[]>("/api/etf/ethereum/net-assets/history")
+    cgGet<EthNetAssetsEntry[]>("/api/etf/ethereum/net-assets/history"),
   );
   return data.at(-1)?.net_assets_usd ?? 0;
 }
@@ -125,10 +123,7 @@ export async function collect(asset: AssetType = "BTC"): Promise<EtfSnapshot> {
   console.log(`      Fetching ETF data from CoinGlass v4 (${asset})...`);
 
   if (asset === "ETH") {
-    const [flowHistory, totalAumUsd] = await Promise.all([
-      fetchEthFlowHistory(),
-      fetchEthTotalAum(),
-    ]);
+    const [flowHistory, totalAumUsd] = await Promise.all([fetchEthFlowHistory(), fetchEthTotalAum()]);
     return { timestamp: new Date().toISOString(), asset: "ETH", flowHistory, totalAumUsd };
   }
 

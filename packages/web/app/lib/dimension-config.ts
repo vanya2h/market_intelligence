@@ -1,5 +1,5 @@
 import { get } from "lodash-es";
-import { formatUsd, formatPercent, formatNumber, formatCompact } from "./format";
+import { formatCompact, formatNumber, formatPercent, formatUsd } from "./format";
 
 export type MetricSignal = "bullish" | "bearish" | "neutral";
 

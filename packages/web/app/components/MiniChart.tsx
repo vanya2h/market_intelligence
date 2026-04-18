@@ -1,4 +1,4 @@
-import { ResponsiveContainer, AreaChart, Area, Tooltip, YAxis } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 
 interface DataPoint {
   timestamp: string;

@@ -4,14 +4,14 @@
  * Usage:  tsx src/scripts/debug-volatility.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
-import { collect as collectHtf } from "../htf/collector.js";
+import fs from "node:fs";
+import path from "node:path";
 import { analyze as analyzeHtf } from "../htf/analyzer.js";
+import { collect as collectHtf } from "../htf/collector.js";
 import type { HtfState } from "../htf/types.js";
 import type { Candle } from "../htf/types.js";
 import { parseAsset } from "./utils.js";
-import fs from "node:fs";
-import path from "node:path";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

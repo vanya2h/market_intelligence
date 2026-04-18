@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * CLI entry point for the derivatives structure dimension.
  *
@@ -8,8 +7,8 @@
  */
 
 import chalk from "chalk";
-import { runDerivatives } from "./run.js";
 import { parseAssetType } from "./models.js";
+import { runDerivatives } from "./run.js";
 
 const asset = parseAssetType(process.argv.find((a) => a === "ETH") ? "ETH" : "BTC");
 

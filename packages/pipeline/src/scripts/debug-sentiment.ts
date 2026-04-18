@@ -4,13 +4,13 @@
  * Usage:  tsx src/scripts/debug-sentiment.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
-import { collect as collectSentiment } from "../sentiment/collector.js";
-import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
-import type { SentimentState } from "../sentiment/types.js";
-import { parseAsset } from "./utils.js";
 import fs from "node:fs";
 import path from "node:path";
+import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
+import { collect as collectSentiment } from "../sentiment/collector.js";
+import type { SentimentState } from "../sentiment/types.js";
+import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

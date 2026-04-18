@@ -6,15 +6,15 @@
  *   pnpm sentiment --asset ETH
  */
 
-import "../env.js";
 import fs from "node:fs";
 import path from "node:path";
 import chalk, { type ChalkInstance } from "chalk";
-import { collect } from "./collector.js";
-import { analyze } from "./analyzer.js";
-import { runAgent } from "./agent.js";
-import type { SentimentContext, SentimentRegime, SentimentState } from "./types.js";
 import type { AssetType } from "../types.js";
+import { runAgent } from "./agent.js";
+import { analyze } from "./analyzer.js";
+import { collect } from "./collector.js";
+import type { SentimentContext, SentimentRegime, SentimentState } from "./types.js";
+import "../env.js";
 
 const STATE_FILE = path.resolve("data", "sentiment_state.json");
 
@@ -39,14 +39,22 @@ function saveState(state: SentimentState): void {
 
 function regimeColor(regime: SentimentRegime): ChalkInstance {
   switch (regime) {
-    case "EXTREME_FEAR":         return chalk.red.bold;
-    case "FEAR":                 return chalk.red;
-    case "SENTIMENT_NEUTRAL":    return chalk.white;
-    case "GREED":                return chalk.green;
-    case "EXTREME_GREED":        return chalk.green.bold;
-    case "CONSENSUS_BULLISH":    return chalk.cyan.bold;
-    case "CONSENSUS_BEARISH":    return chalk.magenta.bold;
-    case "SENTIMENT_DIVERGENCE": return chalk.yellow.bold;
+    case "EXTREME_FEAR":
+      return chalk.red.bold;
+    case "FEAR":
+      return chalk.red;
+    case "SENTIMENT_NEUTRAL":
+      return chalk.white;
+    case "GREED":
+      return chalk.green;
+    case "EXTREME_GREED":
+      return chalk.green.bold;
+    case "CONSENSUS_BULLISH":
+      return chalk.cyan.bold;
+    case "CONSENSUS_BEARISH":
+      return chalk.magenta.bold;
+    case "SENTIMENT_DIVERGENCE":
+      return chalk.yellow.bold;
   }
 }
 
@@ -96,9 +104,7 @@ function printBrief(ctx: SentimentContext, interpretation: string): void {
   const m = ctx.metrics;
 
   console.log(`\n${sep}`);
-  console.log(
-    `  ${chalk.bold("SENTIMENT")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`
-  );
+  console.log(`  ${chalk.bold("SENTIMENT")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(sep);
 
   const regimeFmt = regimeColor(ctx.regime)(ctx.regime);
@@ -118,9 +124,15 @@ function printBrief(ctx: SentimentContext, interpretation: string): void {
   console.log(`\n  ${chalk.dim("── Components ───────────────────────────────────")}`);
   const c = m.components;
   const pad = (s: string) => s.padEnd(16);
-  console.log(`  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(37.5%)")}`);
-  console.log(`  ${chalk.dim(pad("Trend"))} ${componentBar(c.trend)} ${chalk.white(c.trend.toFixed(0).padStart(3))}  ${chalk.dim("(15%)")}`);
-  console.log(`  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(20%)")}`);
+  console.log(
+    `  ${chalk.dim(pad("Positioning"))} ${componentBar(c.positioning)} ${chalk.white(c.positioning.toFixed(0).padStart(3))}  ${chalk.dim("(37.5%)")}`,
+  );
+  console.log(
+    `  ${chalk.dim(pad("Trend"))} ${componentBar(c.trend)} ${chalk.white(c.trend.toFixed(0).padStart(3))}  ${chalk.dim("(15%)")}`,
+  );
+  console.log(
+    `  ${chalk.dim(pad("Inst. Flows"))} ${componentBar(c.institutionalFlows)} ${chalk.white(c.institutionalFlows.toFixed(0).padStart(3))}  ${chalk.dim("(20%)")}`,
+  );
   // Expert consensus excluded while collecting more data
   // console.log(`  ${chalk.dim(pad("Expert Consns"))} ${componentBar(c.expertConsensus)} ${chalk.white(c.expertConsensus.toFixed(0).padStart(3))}  ${chalk.dim("(25%)")}`);
 
@@ -181,8 +193,8 @@ export async function runSentiment(asset: AssetType): Promise<void> {
   // );
   note(
     `cross-dims: derivatives=${cd.derivatives ? "✓" : "✗"}  ` +
-    `etfs=${cd.etfs ? "✓" : "✗"}  ` +
-    `htf=${cd.htf ? "✓" : "✗"}`
+      `etfs=${cd.etfs ? "✓" : "✗"}  ` +
+      `htf=${cd.htf ? "✓" : "✗"}`,
   );
 
   step(2, 4, "Loading previous state...");
@@ -197,7 +209,7 @@ export async function runSentiment(asset: AssetType): Promise<void> {
   const { context, nextState } = analyze(snapshot, prevState);
   note(
     `${regimeColor(context.regime)(context.regime)}  ` +
-    chalk.dim(`composite=${context.metrics.compositeIndex.toFixed(1)}`)
+      chalk.dim(`composite=${context.metrics.compositeIndex.toFixed(1)}`),
     // + `  Δ7d=${context.metrics.consensusDelta7d >= 0 ? "+" : ""}${context.metrics.consensusDelta7d.toFixed(1)}`
   );
   saveState(nextState);

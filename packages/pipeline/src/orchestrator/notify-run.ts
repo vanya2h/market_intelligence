@@ -6,12 +6,12 @@
  * that a failed run can be resumed without re-running expensive stages.
  */
 
-import { prisma } from "../storage/db.js";
 import type { $Enums } from "../generated/prisma/client.js";
-import type { DimensionOutput } from "./types.js";
+import { prisma } from "../storage/db.js";
 import type { TradeDecision } from "./trade-idea/index.js";
-import type { RichBrief } from "./rich-synthesizer.js";
 import type { DeltaSummary } from "./delta.js";
+import type { RichBrief } from "./rich-synthesizer.js";
+import type { DimensionOutput } from "./types.js";
 
 // ─── Artifact shape stored in the JSON column ───────────────────────────────
 
@@ -28,14 +28,7 @@ export interface RunArtifacts {
 
 export type NotifyStage = $Enums.NotifyStage;
 
-export const STAGES: NotifyStage[] = [
-  "DIMENSIONS",
-  "TRADE_IDEA",
-  "SYNTHESIS",
-  "PERSIST",
-  "TELEGRAM",
-  "TWITTER",
-];
+export const STAGES: NotifyStage[] = ["DIMENSIONS", "TRADE_IDEA", "SYNTHESIS", "PERSIST", "TELEGRAM", "TWITTER"];
 
 // ─── Lifecycle helpers ──────────────────────────────────────────────────────
 
@@ -44,11 +37,7 @@ export async function createRun(asset: $Enums.Asset): Promise<string> {
   return run.id;
 }
 
-export async function markStageCompleted(
-  runId: string,
-  stage: NotifyStage,
-  artifacts: RunArtifacts,
-): Promise<void> {
+export async function markStageCompleted(runId: string, stage: NotifyStage, artifacts: RunArtifacts): Promise<void> {
   await prisma.notifyRun.update({
     where: { id: runId },
     data: {
@@ -61,11 +50,7 @@ export async function markStageCompleted(
   });
 }
 
-export async function markFailed(
-  runId: string,
-  stage: NotifyStage,
-  error: string,
-): Promise<void> {
+export async function markFailed(runId: string, stage: NotifyStage, error: string): Promise<void> {
   await prisma.notifyRun.update({
     where: { id: runId },
     data: { status: "FAILED", failedStage: stage, error },

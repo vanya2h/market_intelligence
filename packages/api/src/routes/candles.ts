@@ -8,9 +8,9 @@
  * Candles are cached 5 minutes per asset — concurrent requests share one fetch.
  */
 
-import { z } from "zod";
-import { describeRoute, validator } from "hono-openapi";
 import { getCached } from "@market-intel/pipeline";
+import { describeRoute, validator } from "hono-openapi";
+import { z } from "zod";
 import { createController } from "../common/controller.js";
 import { AssetParamSchema } from "../common/schemas.js";
 
@@ -28,11 +28,7 @@ export interface OhlcvCandle {
 
 type BinanceKline = [number, string, string, string, string, string, ...unknown[]];
 
-async function fetchBinanceCandles(
-  asset: string,
-  interval: string,
-  since: number,
-): Promise<OhlcvCandle[]> {
+async function fetchBinanceCandles(asset: string, interval: string, since: number): Promise<OhlcvCandle[]> {
   const url = new URL(`${BINANCE_SPOT}/api/v3/klines`);
   url.searchParams.set("symbol", `${asset}USDT`);
   url.searchParams.set("interval", interval);
@@ -73,25 +69,17 @@ export const CandlesController = createController({
   build: (factory) =>
     factory
       .createApp()
-      .get(
-        "/:asset",
-        route,
-        validator("param", AssetParamSchema),
-        validator("query", SinceQuerySchema),
-        async (c) => {
-          const { asset } = c.req.valid("param");
-          const { since, interval } = c.req.valid("query");
+      .get("/:asset", route, validator("param", AssetParamSchema), validator("query", SinceQuerySchema), async (c) => {
+        const { asset } = c.req.valid("param");
+        const { since, interval } = c.req.valid("query");
 
-          try {
-            const candles = await getCached(
-              `candles:${interval}:${asset.toLowerCase()}:${since}`,
-              CACHE_TTL_MS,
-              () => fetchBinanceCandles(asset, interval, since),
-            );
-            return c.json({ candles });
-          } catch {
-            return c.json({ error: "Failed to fetch candles" }, 502);
-          }
-        },
-      ),
+        try {
+          const candles = await getCached(`candles:${interval}:${asset.toLowerCase()}:${since}`, CACHE_TTL_MS, () =>
+            fetchBinanceCandles(asset, interval, since),
+          );
+          return c.json({ candles });
+        } catch {
+          return c.json({ error: "Failed to fetch candles" }, 502);
+        }
+      }),
 });

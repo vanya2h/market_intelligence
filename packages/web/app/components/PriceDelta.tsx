@@ -5,12 +5,12 @@
  * Fetches live price from /api/price/:asset on mount and every 30s.
  */
 
+import { AssetType } from "@market-intel/api";
 import { useEffect, useState } from "react";
+import { api } from "../lib/api.client";
+import { getAssetPrice } from "../lib/asset";
 import { RelativeTime } from "./RelativeTime";
 import { UsdValue } from "./UsdValue";
-import { getAssetPrice } from "../lib/asset";
-import { AssetType } from "@market-intel/api";
-import { api } from "../lib/api.client";
 
 interface PriceDeltaProps {
   asset: AssetType;
@@ -69,11 +69,11 @@ export function PriceDelta({ asset, snapshotPrice, timestamp }: PriceDeltaProps)
         >
           Brief price
         </span>
-        <UsdValue value={snapshotPrice} style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--text-primary)" }} />
-        <RelativeTime
-          date={new Date(timestamp)}
-          style={{ fontSize: "0.625rem", color: "var(--text-muted)" }}
+        <UsdValue
+          value={snapshotPrice}
+          style={{ fontSize: "0.875rem", fontWeight: 700, color: "var(--text-primary)" }}
         />
+        <RelativeTime date={new Date(timestamp)} style={{ fontSize: "0.625rem", color: "var(--text-muted)" }} />
       </div>
     );
   }

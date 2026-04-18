@@ -1,7 +1,7 @@
 import type { Confluence, TradeIdea } from "@market-intel/api";
-import { CONFLUENCE_KEYS, DIMENSION_LABELS, CONFLUENCE_KEY_MAP, type ConfluenceKey } from "../lib/dimensions";
-import { Tooltip } from "./Tooltip";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { CONFLUENCE_KEY_MAP, CONFLUENCE_KEYS, type ConfluenceKey, DIMENSION_LABELS } from "../lib/dimensions";
+import { Tooltip } from "./Tooltip";
 
 /**
  * Conviction "fully loaded" threshold on the new -1..+1 scale (= 0.5 of full).

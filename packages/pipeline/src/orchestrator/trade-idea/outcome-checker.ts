@@ -21,13 +21,9 @@
  */
 
 import chalk from "chalk";
-import { prisma } from "../../storage/db.js";
+import type { TradeIdea, TradeIdeaLevel, TradeIdeaReturn } from "../../generated/prisma/client.js";
 import { fetchCandlesSince } from "../../shared/binance.js";
-import type {
-  TradeIdea,
-  TradeIdeaLevel,
-  TradeIdeaReturn,
-} from "../../generated/prisma/client.js";
+import { prisma } from "../../storage/db.js";
 import type { AssetType } from "../../types.js";
 
 // Time decay constant in hours (~3 days)
@@ -42,11 +38,7 @@ function timeDecay(hoursAfter: number): number {
   return Math.exp(-hoursAfter / TAU_HOURS);
 }
 
-function computeReturnPct(
-  direction: string,
-  entryPrice: number,
-  currentPrice: number,
-): number {
+function computeReturnPct(direction: string, entryPrice: number, currentPrice: number): number {
   const rawReturn = ((currentPrice - entryPrice) / entryPrice) * 100;
   return direction === "SHORT" ? -rawReturn : rawReturn;
 }
@@ -84,8 +76,7 @@ function checkTargetLevel(
   returnPct: number,
 ): LevelResolution | null {
   const hit =
-    (direction === "LONG" && candle.high >= level.price) ||
-    (direction === "SHORT" && candle.low <= level.price);
+    (direction === "LONG" && candle.high >= level.price) || (direction === "SHORT" && candle.low <= level.price);
 
   if (!hit) return null;
 
@@ -124,9 +115,10 @@ function checkInvalidationLevel(
 
   if (!hit) return null;
 
-  const quality = idea.direction === "FLAT"
-    ? computeQualityAtPoint(-Math.abs(returnPct), hoursAfter)
-    : computeQualityAtPoint(returnPct, hoursAfter);
+  const quality =
+    idea.direction === "FLAT"
+      ? computeQualityAtPoint(-Math.abs(returnPct), hoursAfter)
+      : computeQualityAtPoint(returnPct, hoursAfter);
 
   return {
     levelId: level.id,
@@ -141,11 +133,7 @@ function checkInvalidationLevel(
 type IdeaWithLevels = TradeIdea & { levels: TradeIdeaLevel[] };
 
 async function checkSingleIdea(idea: IdeaWithLevels): Promise<void> {
-  const openLevels = new Map(
-    idea.levels
-      .filter((l) => l.outcome === "OPEN")
-      .map((l) => [l.id, l]),
-  );
+  const openLevels = new Map(idea.levels.filter((l) => l.outcome === "OPEN").map((l) => [l.id, l]));
 
   if (openLevels.size === 0) return;
 
@@ -160,11 +148,7 @@ async function checkSingleIdea(idea: IdeaWithLevels): Promise<void> {
     : idea.createdAt.getTime();
 
   // Fetch 4H candles since last check
-  const candles = await fetchCandlesSince(
-    idea.asset as AssetType,
-    "4h",
-    lastCheckedTime,
-  );
+  const candles = await fetchCandlesSince(idea.asset as AssetType, "4h", lastCheckedTime);
 
   if (candles.length === 0) return;
 
@@ -172,9 +156,7 @@ async function checkSingleIdea(idea: IdeaWithLevels): Promise<void> {
   const resolutions: LevelResolution[] = [];
 
   for (const candle of candles) {
-    const hoursAfter = Math.round(
-      (candle.time - idea.createdAt.getTime()) / (1000 * 60 * 60),
-    );
+    const hoursAfter = Math.round((candle.time - idea.createdAt.getTime()) / (1000 * 60 * 60));
 
     if (hoursAfter <= 0) continue;
     if (lastReturn && hoursAfter <= lastReturn.hoursAfter) continue;
@@ -194,16 +176,11 @@ async function checkSingleIdea(idea: IdeaWithLevels): Promise<void> {
     }
 
     // Compute return for the shared returns curve
-    const returnPct = computeReturnPct(
-      idea.direction,
-      idea.entryPrice,
-      candle.close,
-    );
+    const returnPct = computeReturnPct(idea.direction, idea.entryPrice, candle.close);
 
     let qualityAtPoint: number;
     if (idea.direction === "FLAT") {
-      const deviation =
-        (Math.abs(candle.close - idea.entryPrice) / idea.entryPrice) * 100;
+      const deviation = (Math.abs(candle.close - idea.entryPrice) / idea.entryPrice) * 100;
       qualityAtPoint = computeQualityAtPoint(-deviation, hoursAfter);
     } else {
       qualityAtPoint = computeQualityAtPoint(returnPct, hoursAfter);

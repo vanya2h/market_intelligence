@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { createChart, LineSeries, LineStyle, ColorType, CrosshairMode } from "lightweight-charts";
+import type { Strategy, StrategyCurvesData } from "@market-intel/api";
 import type { Time } from "lightweight-charts";
-import type { StrategyCurvesData, Strategy } from "@market-intel/api";
+import { ColorType, createChart, CrosshairMode, LineSeries, LineStyle } from "lightweight-charts";
+import { useEffect, useRef, useState } from "react";
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();

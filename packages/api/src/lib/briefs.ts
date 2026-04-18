@@ -1,15 +1,15 @@
 import {
   $Enums,
-  Prisma,
-  type RichBlock,
   type DerivativesEventType,
   type EtfEventType,
-  type HtfEventType,
-  type SentimentEventType,
   type ExchangeFlowsEventType,
+  type HtfEventType,
+  Prisma,
+  type RichBlock,
+  type SentimentEventType,
 } from "@market-intel/pipeline";
-import { AssetType } from "./asset.js";
 import { Jsonify } from "../common/json.js";
+import { AssetType } from "./asset.js";
 
 export type Regime =
   | $Enums.PositioningRegime
@@ -31,7 +31,7 @@ export type DimensionEventType =
   | SentimentEventType
   | ExchangeFlowsEventType;
 
-export type { DerivativesEventType, EtfEventType, HtfEventType, SentimentEventType, ExchangeFlowsEventType };
+export type { DerivativesEventType, EtfEventType, ExchangeFlowsEventType, HtfEventType, SentimentEventType };
 
 export const briefInclude = {
   derivatives: true,
@@ -78,10 +78,7 @@ export type Brief = {
   dimensions: BriefDimension[];
 };
 
-function sentimentComponent(
-  sentiment: Jsonify<BriefRaw>["sentiment"],
-  key: string,
-): number | null {
+function sentimentComponent(sentiment: Jsonify<BriefRaw>["sentiment"], key: string): number | null {
   if (!sentiment) return null;
   const ctx = sentiment.context as Record<string, unknown> | null;
   const metrics = ctx?.metrics as Record<string, unknown> | undefined;

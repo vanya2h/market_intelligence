@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * CLI entry point for the notify pipeline.
  *
@@ -10,9 +9,9 @@
  */
 
 import chalk from "chalk";
-import { runNotify, showFailedRuns } from "./notify.js";
-import type { AssetType } from "../types.js";
 import { parseAsset } from "../scripts/utils.js";
+import type { AssetType } from "../types.js";
+import { runNotify, showFailedRuns } from "./notify.js";
 
 if (process.argv.includes("--list-failed")) {
   showFailedRuns().catch((err) => {
@@ -20,13 +19,9 @@ if (process.argv.includes("--list-failed")) {
     process.exit(1);
   });
 } else {
-  const assets: AssetType[] = process.argv.includes("--asset")
-    ? [parseAsset()]
-    : ["BTC", "ETH"];
+  const assets: AssetType[] = process.argv.includes("--asset") ? [parseAsset()] : ["BTC", "ETH"];
 
-  const resume = process.argv.includes("--resume")
-    ? process.argv[process.argv.indexOf("--resume") + 1]
-    : undefined;
+  const resume = process.argv.includes("--resume") ? process.argv[process.argv.indexOf("--resume") + 1] : undefined;
 
   runNotify(assets, { resume }).catch((err) => {
     console.error(chalk.red.bold("Fatal error:"), err);

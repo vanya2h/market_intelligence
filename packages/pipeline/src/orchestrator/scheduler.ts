@@ -11,12 +11,12 @@
 //   pnpm schedule
 //   BRIEF_CRON="0 0,8,12,15,18,21 * * *" pnpm schedule
 
-import "../env.js";
-import cron from "node-cron";
 import chalk from "chalk";
-import { runNotify } from "./notify.js";
-import { checkOutcomes } from "./trade-idea/outcome-checker.js";
+import cron from "node-cron";
 import type { AssetType } from "../types.js";
+import { checkOutcomes } from "./trade-idea/outcome-checker.js";
+import { runNotify } from "./notify.js";
+import "../env.js";
 
 const BRIEF_CRON = process.env.BRIEF_CRON ?? "0 0,8,12,15,18,21 * * *";
 const OUTCOME_CRON = process.env.OUTCOME_CRON ?? "0 6,18 * * *"; // 2x/day at 06:00 and 18:00 UTC
@@ -95,7 +95,9 @@ function validateEnv(): void {
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 
+// eslint-disable-next-line prefer-const
 let briefTask!: cron.ScheduledTask;
+// eslint-disable-next-line prefer-const
 let outcomeTask!: cron.ScheduledTask;
 
 function shutdown(signal: string): void {
@@ -137,8 +139,20 @@ console.log(chalk.dim(`  outcome cron: ${OUTCOME_CRON}`));
 console.log(chalk.dim(`  assets: ${ASSETS.join(", ")}`));
 console.log(chalk.dim(`  started: ${new Date().toUTCString()}\n`));
 
-briefTask = cron.schedule(BRIEF_CRON, () => { tick(); }, { timezone: "UTC" });
-outcomeTask = cron.schedule(OUTCOME_CRON, () => { outcomeTick(); }, { timezone: "UTC" });
+briefTask = cron.schedule(
+  BRIEF_CRON,
+  () => {
+    tick();
+  },
+  { timezone: "UTC" },
+);
+outcomeTask = cron.schedule(
+  OUTCOME_CRON,
+  () => {
+    outcomeTick();
+  },
+  { timezone: "UTC" },
+);
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));

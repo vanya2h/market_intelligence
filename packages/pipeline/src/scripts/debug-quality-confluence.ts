@@ -5,10 +5,10 @@
  * Usage:  tsx src/scripts/debug-quality-confluence.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
 

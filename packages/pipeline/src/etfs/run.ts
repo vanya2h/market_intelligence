@@ -6,15 +6,15 @@
  *   pnpm etfs --asset ETH
  */
 
-import "../env.js";
 import fs from "node:fs";
 import path from "node:path";
 import chalk, { type ChalkInstance } from "chalk";
-import { collect } from "./collector.js";
-import { analyze } from "./analyzer.js";
-import { runAgent } from "./agent.js";
-import type { EtfContext, EtfRegime, EtfState } from "./types.js";
 import type { AssetType } from "../types.js";
+import { runAgent } from "./agent.js";
+import { analyze } from "./analyzer.js";
+import { collect } from "./collector.js";
+import type { EtfContext, EtfRegime, EtfState } from "./types.js";
+import "../env.js";
 
 const STATE_FILE = path.resolve("data", "etfs_state.json");
 
@@ -47,12 +47,18 @@ function formatUsd(v: number): string {
 
 function regimeColor(regime: EtfRegime): ChalkInstance {
   switch (regime) {
-    case "STRONG_INFLOW":      return chalk.green.bold;
-    case "REVERSAL_TO_INFLOW": return chalk.green;
-    case "STRONG_OUTFLOW":     return chalk.red.bold;
-    case "REVERSAL_TO_OUTFLOW":return chalk.red;
-    case "ETF_NEUTRAL":        return chalk.white;
-    case "MIXED":              return chalk.yellow;
+    case "STRONG_INFLOW":
+      return chalk.green.bold;
+    case "REVERSAL_TO_INFLOW":
+      return chalk.green;
+    case "STRONG_OUTFLOW":
+      return chalk.red.bold;
+    case "REVERSAL_TO_OUTFLOW":
+      return chalk.red;
+    case "ETF_NEUTRAL":
+      return chalk.white;
+    case "MIXED":
+      return chalk.yellow;
   }
 }
 
@@ -84,9 +90,7 @@ function printBrief(ctx: EtfContext, interpretation: string, latestDay: string):
   const label = (s: string) => chalk.dim(s.padEnd(11));
 
   console.log(`\n${sep}`);
-  console.log(
-    `  ${chalk.bold("ETF FLOWS")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`
-  );
+  console.log(`  ${chalk.bold("ETF FLOWS")}  ${chalk.dim(ctx.asset)}  ${chalk.dim(new Date().toUTCString())}`);
   console.log(sep);
 
   const regimeFmt = regimeColor(ctx.regime)(ctx.regime);
@@ -117,8 +121,8 @@ function printBrief(ctx: EtfContext, interpretation: string, latestDay: string):
       ctx.gbtcPremiumRate < -1
         ? chalk.red(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`)
         : ctx.gbtcPremiumRate > 1
-        ? chalk.green(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`)
-        : chalk.dim(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`);
+          ? chalk.green(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`)
+          : chalk.dim(`${sign}${ctx.gbtcPremiumRate.toFixed(2)}%`);
     console.log(`  ${label("GBTC Prem")} ${pFmt}`);
   }
 
@@ -152,10 +156,11 @@ function printBrief(ctx: EtfContext, interpretation: string, latestDay: string):
 export async function runEtfs(asset: AssetType): Promise<void> {
   step(1, 4, `Collecting ETF data (${asset})...`);
   const snapshot = await collect(asset);
-  const latestDay = snapshot.flowHistory
-    .filter((d) => d.flowUsd !== 0)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .at(0)?.date ?? "unknown";
+  const latestDay =
+    snapshot.flowHistory
+      .filter((d) => d.flowUsd !== 0)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .at(0)?.date ?? "unknown";
   note(`${snapshot.flowHistory.length} days of flow history · latest: ${latestDay}`);
 
   step(2, 4, "Loading previous state...");
@@ -170,12 +175,14 @@ export async function runEtfs(asset: AssetType): Promise<void> {
   const { context, nextState } = analyze(snapshot, prevState);
   note(
     `${regimeColor(context.regime)(context.regime)}  ` +
-    chalk.dim(
-      `today=${context.flow.today >= 0 ? "+" : ""}$${(context.flow.today / 1e6).toFixed(0)}M  ` +
-      `streak=${context.flow.consecutiveOutflowDays > 0
-        ? `-${context.flow.consecutiveOutflowDays}d`
-        : `+${context.flow.consecutiveInflowDays}d`}`
-    )
+      chalk.dim(
+        `today=${context.flow.today >= 0 ? "+" : ""}$${(context.flow.today / 1e6).toFixed(0)}M  ` +
+          `streak=${
+            context.flow.consecutiveOutflowDays > 0
+              ? `-${context.flow.consecutiveOutflowDays}d`
+              : `+${context.flow.consecutiveInflowDays}d`
+          }`,
+      ),
   );
   saveState(nextState);
 

@@ -64,26 +64,22 @@ function round3(n: number): number {
 export function computeBias(longConf: Confluence, shortConf: Confluence): DirectionalBias {
   const margin = longConf.total - shortConf.total;
 
-  const lean: BiasDirection =
-    margin > LEAN_DEAD_ZONE ? "LONG" :
-    margin < -LEAN_DEAD_ZONE ? "SHORT" :
-    "NEUTRAL";
+  const lean: BiasDirection = margin > LEAN_DEAD_ZONE ? "LONG" : margin < -LEAN_DEAD_ZONE ? "SHORT" : "NEUTRAL";
 
   const strength = round3(Math.min(Math.abs(margin) / MAX_MARGIN, 1));
 
   const leanConf = lean === "SHORT" ? shortConf : longConf;
 
-  const dims: ReadonlyArray<keyof Omit<Confluence, "total">> = [
-    "derivatives", "etfs", "htf", "exchangeFlows",
-  ];
+  const dims: ReadonlyArray<keyof Omit<Confluence, "total">> = ["derivatives", "etfs", "htf", "exchangeFlows"];
 
-  const topFactors: BiasFactor[] = lean === "NEUTRAL"
-    ? []
-    : dims
-        .map((dimension) => ({ dimension, score: leanConf[dimension] }))
-        .filter((f) => f.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3);
+  const topFactors: BiasFactor[] =
+    lean === "NEUTRAL"
+      ? []
+      : dims
+          .map((dimension) => ({ dimension, score: leanConf[dimension] }))
+          .filter((f) => f.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3);
 
   return { lean, strength, topFactors };
 }

@@ -42,15 +42,15 @@ import {
   SignalStaleness,
   SpotFuturesCvdDivergence,
   SthContext,
+  SweepContext,
+  SweepLevel,
+  SweepLevelType,
+  SweepPeriod,
   VolatilityContext,
   VolumeProfileContext,
   VolumeProfilePosition,
   VolumeProfileResult,
   VwapContext,
-  SweepContext,
-  SweepLevel,
-  SweepLevelType,
-  SweepPeriod,
 } from "./types.js";
 
 // ─── Technical indicators ─────────────────────────────────────────────────────
@@ -191,10 +191,10 @@ export function mfi14Curve(candles: Candle[]): number[] {
 
 // ─── CVD regime detection (dual-window + divergence) ─────────────────────────
 
-const CVD_SHORT_LOOKBACK = 20;  // ~3.3 days — catches regime turns early
-const CVD_LONG_LOOKBACK  = 75;  // ~12.5 days — covers a full swing hold
+const CVD_SHORT_LOOKBACK = 20; // ~3.3 days — catches regime turns early
+const CVD_LONG_LOOKBACK = 75; // ~12.5 days — covers a full swing hold
 const SLOPE_THRESHOLD = 0.02;
-const R2_THRESHOLD    = 0.3;
+const R2_THRESHOLD = 0.3;
 
 /**
  * Linear regression on a numeric series.
@@ -204,15 +204,15 @@ function linreg(values: number[]): { slope: number; intercept: number; r2: numbe
   const n = values.length;
   if (n < 2) return { slope: 0, intercept: 0, r2: 0 };
 
-  const sumX  = (n * (n - 1)) / 2;
+  const sumX = (n * (n - 1)) / 2;
   const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
-  let sumY  = 0;
+  let sumY = 0;
   let sumXY = 0;
   for (let i = 0; i < n; i++) {
-    sumY  += values[i]!;
+    sumY += values[i]!;
     sumXY += i * values[i]!;
   }
-  const slope     = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
   const intercept = (sumY - slope * sumX) / n;
 
   const meanY = sumY / n;
@@ -260,7 +260,7 @@ function classifyWindow(candles: Candle[], cvdCurve: number[]): CvdWindow {
   const lb = n <= 25 ? 3 : 5;
 
   const highs = swingHighs(cvdCurve, lb);
-  const lows  = swingLows(cvdCurve, lb);
+  const lows = swingLows(cvdCurve, lb);
 
   if (highs.length < 2 || lows.length < 2) {
     // Not enough pivots — fall back to simple start-vs-end direction
@@ -283,7 +283,7 @@ function classifyWindow(candles: Candle[], cvdCurve: number[]): CvdWindow {
   // Magnitude: distance between last swing high and last swing low,
   // normalized by total volume over the window
   const lastHigh = highs.at(-1)!.value;
-  const lastLow  = lows.at(-1)!.value;
+  const lastLow = lows.at(-1)!.value;
   const totalVolume = candles.reduce((s, c) => s + c.volume, 0);
   const magnitude = totalVolume === 0 ? 0 : Math.abs(lastHigh - lastLow) / totalVolume;
 
@@ -321,7 +321,10 @@ export function swingHighs(values: number[], lookback = 3): { index: number; val
     const v = values[i]!;
     let isPivot = true;
     for (let j = 1; j <= lookback; j++) {
-      if (values[i - j]! >= v || values[i + j]! >= v) { isPivot = false; break; }
+      if (values[i - j]! >= v || values[i + j]! >= v) {
+        isPivot = false;
+        break;
+      }
     }
     if (isPivot) results.push({ index: i, value: v });
   }
@@ -338,7 +341,10 @@ export function swingLows(values: number[], lookback = 3): { index: number; valu
     const v = values[i]!;
     let isPivot = true;
     for (let j = 1; j <= lookback; j++) {
-      if (values[i - j]! <= v || values[i + j]! <= v) { isPivot = false; break; }
+      if (values[i - j]! <= v || values[i + j]! <= v) {
+        isPivot = false;
+        break;
+      }
     }
     if (isPivot) results.push({ index: i, value: v });
   }
@@ -364,26 +370,25 @@ export function swingLows(values: number[], lookback = 3): { index: number; valu
  */
 function detectDivergence(
   candles: Candle[],
-  cvdCurve: number[]
+  cvdCurve: number[],
 ): { divergence: CvdDivergence; mechanism: CvdDivergenceMechanism } {
   const NONE = { divergence: "NONE" as CvdDivergence, mechanism: "NONE" as CvdDivergenceMechanism };
   const MIN_PIVOTS = 2;
   const LOOKBACK = 14;
-  const MIN_PIVOT_DISTANCE = 5;     // min candles between compared pivots
-  const MIN_PRICE_SWING_PCT = 0.5;  // ignore HH/LL if price diff < 0.5%
+  const MIN_PIVOT_DISTANCE = 5; // min candles between compared pivots
+  const MIN_PRICE_SWING_PCT = 0.5; // ignore HH/LL if price diff < 0.5%
 
   if (candles.length < LOOKBACK * 2 + MIN_PIVOTS + 1) return NONE;
 
   const priceHighValues = candles.map((c) => c.high);
-  const priceLowValues  = candles.map((c) => c.low);
+  const priceLowValues = candles.map((c) => c.low);
 
   const pH = swingHighs(priceHighValues, LOOKBACK);
   const pL = swingLows(priceLowValues, LOOKBACK);
   const cH = swingHighs(cvdCurve, LOOKBACK);
   const cL = swingLows(cvdCurve, LOOKBACK);
 
-  if (pH.length < MIN_PIVOTS || pL.length < MIN_PIVOTS ||
-      cH.length < MIN_PIVOTS || cL.length < MIN_PIVOTS) return NONE;
+  if (pH.length < MIN_PIVOTS || pL.length < MIN_PIVOTS || cH.length < MIN_PIVOTS || cL.length < MIN_PIVOTS) return NONE;
 
   // Pick the last two pivots that are sufficiently spaced apart
   const lastTwo = <T extends { index: number; value: number }>(arr: T[]): [T, T] | null => {
@@ -405,12 +410,10 @@ function detectDivergence(
   const priceMid = (pHPair[1].value + pLPair[1].value) / 2;
   const minSwing = priceMid * (MIN_PRICE_SWING_PCT / 100);
 
-  const priceHH = pHPair[1].value > pHPair[0].value &&
-    Math.abs(pHPair[1].value - pHPair[0].value) >= minSwing;
-  const cvdHH   = cHPair[1].value > cHPair[0].value;
-  const priceLL = pLPair[1].value < pLPair[0].value &&
-    Math.abs(pLPair[1].value - pLPair[0].value) >= minSwing;
-  const cvdLL   = cLPair[1].value < cLPair[0].value;
+  const priceHH = pHPair[1].value > pHPair[0].value && Math.abs(pHPair[1].value - pHPair[0].value) >= minSwing;
+  const cvdHH = cHPair[1].value > cHPair[0].value;
+  const priceLL = pLPair[1].value < pLPair[0].value && Math.abs(pLPair[1].value - pLPair[0].value) >= minSwing;
+  const cvdLL = cLPair[1].value < cLPair[0].value;
 
   // Bearish: absorption (CVD HH, price fails) — stronger than exhaustion
   if (cvdHH && !priceHH) return { divergence: "BEARISH", mechanism: "ABSORPTION" };
@@ -455,7 +458,7 @@ function normalizeIndicatorMove(
   indicatorCurve: number[],
   idx1: number,
   idx2: number,
-  kind: "bounded" | "unbounded"
+  kind: "bounded" | "unbounded",
 ): number {
   const v1 = indicatorCurve[idx1]!;
   const v2 = indicatorCurve[idx2]!;
@@ -484,14 +487,20 @@ function normalizeIndicatorMove(
 export function detectIndicatorDivergence(
   candles: Candle[],
   indicatorCurve: number[],
-  kind: "bounded" | "unbounded"
+  kind: "bounded" | "unbounded",
 ): { direction: "BULLISH" | "BEARISH" | "NONE"; magnitude: number } {
   const NONE = { direction: "NONE" as const, magnitude: 0 };
   if (candles.length < DIV_LOOKBACK * 2 + 3) return NONE;
   if (indicatorCurve.length !== candles.length) return NONE;
 
-  const priceHighs = swingHighs(candles.map((c) => c.high), DIV_LOOKBACK);
-  const priceLows = swingLows(candles.map((c) => c.low), DIV_LOOKBACK);
+  const priceHighs = swingHighs(
+    candles.map((c) => c.high),
+    DIV_LOOKBACK,
+  );
+  const priceLows = swingLows(
+    candles.map((c) => c.low),
+    DIV_LOOKBACK,
+  );
 
   const pHPair = lastTwoPivots(priceHighs);
   const pLPair = lastTwoPivots(priceLows);
@@ -569,11 +578,7 @@ export function detectRsiDivergence(candles: Candle[]): {
  *
  * Returns 0 if direction is "NONE" or if pivots insufficient.
  */
-export function cvdDivergenceMagnitude(
-  candles: Candle[],
-  cvdCurve: number[],
-  direction: CvdDivergence
-): number {
+export function cvdDivergenceMagnitude(candles: Candle[], cvdCurve: number[], direction: CvdDivergence): number {
   if (direction === "NONE") return 0;
   const result = detectIndicatorDivergence(candles, cvdCurve, "unbounded");
   // Trust the original detector's direction; use the magnitude from the generic
@@ -588,10 +593,10 @@ export function cvdDivergenceMagnitude(
  * volume-confirmed exhaustion is the strongest single divergence signal.
  */
 const DIV_W: Record<"mfi" | "rsi" | "cvd_futures" | "cvd_spot", number> = {
-  mfi: 1.30,         // volume-weighted momentum — strongest for mean reversion
-  cvd_futures: 1.10, // authoritative leveraged intent
-  rsi: 0.80,         // price-only momentum, weaker as standalone
-  cvd_spot: 0.70,    // confirms demand but leads less than futures
+  mfi: 1.3, // volume-weighted momentum — strongest for mean reversion
+  cvd_futures: 1.1, // authoritative leveraged intent
+  rsi: 0.8, // price-only momentum, weaker as standalone
+  cvd_spot: 0.7, // confirms demand but leads less than futures
 };
 
 /** Saturation steepness — tuned so one strong MFI divergence reaches ~0.76. */
@@ -611,7 +616,7 @@ export function computeDivergenceConfluence(
   mfi: { direction: MfiDivergence; magnitude: number },
   rsi: { direction: RsiDivergence; magnitude: number },
   cvdFutures: { direction: CvdDivergence; magnitude: number },
-  cvdSpot: { direction: CvdDivergence; magnitude: number }
+  cvdSpot: { direction: CvdDivergence; magnitude: number },
 ): DivergenceConfluence {
   type Kind = "mfi" | "rsi" | "cvd_futures" | "cvd_spot";
   const all: Array<{ indicator: Kind; direction: "BULLISH" | "BEARISH" | "NONE"; magnitude: number }> = [
@@ -668,17 +673,14 @@ export function computeDivergenceConfluence(
  *   SPOT_LEADS:        spot rising  + futures flat/falling
  *                      → organic accumulation without leverage
  */
-function computeSpotFuturesDivergence(
-  spotShort: CvdWindow,
-  futuresShort: CvdWindow
-): SpotFuturesCvdDivergence {
+function computeSpotFuturesDivergence(spotShort: CvdWindow, futuresShort: CvdWindow): SpotFuturesCvdDivergence {
   const f = futuresShort.regime;
   const s = spotShort.regime;
 
-  if (f === "RISING"   && s === "RISING")   return "CONFIRMED_BUYING";
+  if (f === "RISING" && s === "RISING") return "CONFIRMED_BUYING";
   if (f === "DECLINING" && s === "DECLINING") return "CONFIRMED_SELLING";
-  if (f === "RISING"   && s !== "RISING")   return "SUSPECT_BOUNCE";
-  if (s === "RISING"   && f !== "RISING")   return "SPOT_LEADS";
+  if (f === "RISING" && s !== "RISING") return "SUSPECT_BOUNCE";
+  if (s === "RISING" && f !== "RISING") return "SPOT_LEADS";
 
   return "NONE";
 }
@@ -697,10 +699,7 @@ function computeSpotFuturesDivergence(
 const CVD_EXTREME_ROLL = 5; // rolling window for change measurement
 const CVD_EXTREME_PCTILE = 90; // percentile threshold for extreme
 
-function detectCvdExtreme(
-  cvdCurve: number[],
-  longWindow: CvdWindow,
-): CvdExtreme {
+function detectCvdExtreme(cvdCurve: number[], longWindow: CvdWindow): CvdExtreme {
   const NONE: CvdExtreme = { state: "NONE", changePctile: 50, extensionPct: 0 };
   if (cvdCurve.length < CVD_EXTREME_ROLL + 10) return NONE;
 
@@ -714,13 +713,16 @@ function detectCvdExtreme(
   // Percentile of the recent change within the distribution
   const sorted = [...changes].sort((a, b) => a - b);
   let rank = 0;
-  for (const v of sorted) { if (v < recentChange) rank++; else break; }
+  for (const v of sorted) {
+    if (v < recentChange) rank++;
+    else break;
+  }
   const changePctile = Math.round((rank / sorted.length) * 100);
 
   // Extension: how far current CVD is beyond the last swing high or low
   const lb = cvdCurve.length <= 25 ? 3 : 5;
   const highs = swingHighs(cvdCurve, lb);
-  const lows  = swingLows(cvdCurve, lb);
+  const lows = swingLows(cvdCurve, lb);
 
   const curValue = cvdCurve.at(-1)!;
   const cvdRange = Math.max(...cvdCurve) - Math.min(...cvdCurve);
@@ -742,7 +744,7 @@ function detectCvdExtreme(
     if (curValue < lastSwingLow) {
       extensionPct = ((lastSwingLow - curValue) / cvdRange) * 100;
     }
-    if (changePctile <= (100 - CVD_EXTREME_PCTILE)) {
+    if (changePctile <= 100 - CVD_EXTREME_PCTILE) {
       state = "OVERSOLD";
     }
   }
@@ -763,13 +765,13 @@ function detectCvdExtreme(
  * Extremes checked on the long window — spikes within the swing structure.
  */
 function cvdAnalysis(candles: Candle[]): CvdSeries {
-  const longSlice  = candles.slice(-CVD_LONG_LOOKBACK);
+  const longSlice = candles.slice(-CVD_LONG_LOOKBACK);
   const shortSlice = longSlice.slice(-CVD_SHORT_LOOKBACK);
 
-  const longCurve  = buildCvdCurve(longSlice);
+  const longCurve = buildCvdCurve(longSlice);
   const shortCurve = buildCvdCurve(shortSlice);
 
-  const longWindow  = classifyWindow(longSlice, longCurve);
+  const longWindow = classifyWindow(longSlice, longCurve);
   const shortWindow = classifyWindow(shortSlice, shortCurve);
 
   const value = longCurve.length > 0 ? parseFloat(longCurve.at(-1)!.toFixed(2)) : 0;
@@ -817,9 +819,7 @@ const STH_WINDOW = 155; // days — standard short-term holder cohort window
 function computeSthProxy(dailyCandles: Candle[], currentPrice: number): SthContext {
   const window = dailyCandles.slice(-STH_WINDOW);
   const sumVol = window.reduce((s, c) => s + c.volume, 0);
-  const sthPrice = sumVol === 0
-    ? currentPrice
-    : window.reduce((s, c) => s + c.close * c.volume, 0) / sumVol;
+  const sthPrice = sumVol === 0 ? currentPrice : window.reduce((s, c) => s + c.close * c.volume, 0) / sumVol;
 
   return {
     price: parseFloat(sthPrice.toFixed(2)),
@@ -953,9 +953,9 @@ function pivotHighs(candles: Candle[], atrValue: number, lookback = 3): Pivot[] 
     if (!isPivot) continue;
     // ATR filter: pivot must rise at least 1× ATR above the lowest adjacent low
     const adjacentLow = Math.min(
-      ...Array.from({ length: lookback }, (_, j) => Math.min(candles[i - j - 1]!.low, candles[i + j + 1]!.low))
+      ...Array.from({ length: lookback }, (_, j) => Math.min(candles[i - j - 1]!.low, candles[i + j + 1]!.low)),
     );
-    if (atrValue > 0 && (h - adjacentLow) < atrValue) continue;
+    if (atrValue > 0 && h - adjacentLow < atrValue) continue;
     pivots.push({ index: i, value: h, time: candles[i]!.time });
   }
   return pivots;
@@ -979,15 +979,18 @@ function pivotLows(candles: Candle[], atrValue: number, lookback = 3): Pivot[] {
     if (!isPivot) continue;
     // ATR filter: pivot must drop at least 1× ATR below the highest adjacent high
     const adjacentHigh = Math.max(
-      ...Array.from({ length: lookback }, (_, j) => Math.max(candles[i - j - 1]!.high, candles[i + j + 1]!.high))
+      ...Array.from({ length: lookback }, (_, j) => Math.max(candles[i - j - 1]!.high, candles[i + j + 1]!.high)),
     );
-    if (atrValue > 0 && (adjacentHigh - l) < atrValue) continue;
+    if (atrValue > 0 && adjacentHigh - l < atrValue) continue;
     pivots.push({ index: i, value: l, time: candles[i]!.time });
   }
   return pivots;
 }
 
-function detectStructure(dailyCandles: Candle[], atrValue: number): { structure: MarketStructure; lastPivotAge: number | null } {
+function detectStructure(
+  dailyCandles: Candle[],
+  atrValue: number,
+): { structure: MarketStructure; lastPivotAge: number | null } {
   // Use last 40 daily candles for pivot detection
   const window = dailyCandles.slice(-40);
   const highs = pivotHighs(window, atrValue);
@@ -1008,23 +1011,21 @@ function detectStructure(dailyCandles: Candle[], atrValue: number): { structure:
   const hl = lastLow.value > prevLow.value;
 
   let structure: MarketStructure;
-  if (hh && hl)       structure = "HH_HL";
+  if (hh && hl) structure = "HH_HL";
   else if (!hh && !hl) structure = "LH_LL";
-  else if (hh && !hl)  structure = "HH_LL";
-  else                  structure = "LH_HL";
+  else if (hh && !hl) structure = "HH_LL";
+  else structure = "LH_HL";
 
   return { structure, lastPivotAge };
 }
 
 // ─── MA cross ────────────────────────────────────────────────────────────────
 
-function detectCross(
-  daily: Candle[]
-): { current: MaCrossType; recent: MaCrossType } {
+function detectCross(daily: Candle[]): { current: MaCrossType; recent: MaCrossType } {
   const closes = daily.map((c) => c.close);
   if (closes.length < 201) return { current: "NONE", recent: "NONE" };
 
-  const currentSma50  = sma(closes, 50);
+  const currentSma50 = sma(closes, 50);
   const currentSma200 = sma(closes, 200);
   const current: MaCrossType = currentSma50 > currentSma200 ? "GOLDEN" : "DEATH";
 
@@ -1033,10 +1034,10 @@ function detectCross(
   for (let offset = 1; offset <= 10; offset++) {
     const prevCloses = closes.slice(0, closes.length - offset);
     if (prevCloses.length < 200) break;
-    const prevSma50  = sma(prevCloses, 50);
+    const prevSma50 = sma(prevCloses, 50);
     const prevSma200 = sma(prevCloses, 200);
     const prevGolden = prevSma50 > prevSma200;
-    const curGolden  = currentSma50 > currentSma200;
+    const curGolden = currentSma50 > currentSma200;
     if (prevGolden !== curGolden) {
       recent = curGolden ? "GOLDEN" : "DEATH";
       break;
@@ -1061,7 +1062,8 @@ function rsiExtremeStaleness(h4Closes: number[]): number | null {
   for (let i = 14; i < window.length; i++) {
     const r = rsi14(window.slice(0, i + 1));
     const dist = Math.abs(r - 50);
-    if (dist >= 20 && dist >= maxDist) { // only track if actually extreme (>70 or <30)
+    if (dist >= 20 && dist >= maxDist) {
+      // only track if actually extreme (>70 or <30)
       maxDist = dist;
       bestIdx = i;
     }
@@ -1130,11 +1132,11 @@ function cvdDivergencePeakStaleness(candles: Candle[]): number | null {
 
 // ─── Volume Profile ─────────────────────────────────────────────────────────
 
-const VP_BIN_PCT = 0.005;          // 0.5% of price per bin (~$350 at BTC $70k)
-const VP_MIN_RANGE_CANDLES = 20;   // minimum candles for meaningful profile
-const VP_DISPLACEMENT_SINGLE = 5;  // single-candle displacement threshold (×ATR)
-const VP_DISPLACEMENT_WINDOW = 5;  // 3-candle window displacement threshold (×ATR)
-const VA_COVERAGE = 0.70;          // Value Area = 70% of total volume
+const VP_BIN_PCT = 0.005; // 0.5% of price per bin (~$350 at BTC $70k)
+const VP_MIN_RANGE_CANDLES = 20; // minimum candles for meaningful profile
+const VP_DISPLACEMENT_SINGLE = 5; // single-candle displacement threshold (×ATR)
+const VP_DISPLACEMENT_WINDOW = 5; // 3-candle window displacement threshold (×ATR)
+const VA_COVERAGE = 0.7; // Value Area = 70% of total volume
 
 /**
  * Find where the current range started by detecting the most recent displacement.
@@ -1207,10 +1209,14 @@ function analyzeVolumeProfile(
 ): VolumeProfileResult {
   if (profile.size === 0) {
     return {
-      poc: currentPrice, pocVolumePct: 0,
-      vaHigh: currentPrice, vaLow: currentPrice,
-      pricePosition: "INSIDE_VA", priceVsPocPct: 0,
-      hvns: [], lvns: [],
+      poc: currentPrice,
+      pocVolumePct: 0,
+      vaHigh: currentPrice,
+      vaLow: currentPrice,
+      pricePosition: "INSIDE_VA",
+      priceVsPocPct: 0,
+      hvns: [],
+      lvns: [],
     };
   }
 
@@ -1319,7 +1325,7 @@ function computeVolumeProfileContext(
   currentPrice: number,
 ): VolumeProfileContext {
   const binSize = currentPrice * VP_BIN_PCT;
-  const anchorIdx = futuresCandles.findIndex(c => c.time >= VP_RANGE_ANCHOR);
+  const anchorIdx = futuresCandles.findIndex((c) => c.time >= VP_RANGE_ANCHOR);
   const rangeStartIdx = anchorIdx >= 0 ? anchorIdx : findRangeStart(futuresCandles, atr);
   const rangeCandles = futuresCandles.slice(rangeStartIdx);
 
@@ -1452,9 +1458,7 @@ function deduplicateLevels(levels: SweepLevel[]): SweepLevel[] {
   const result: SweepLevel[] = [];
 
   for (const level of sorted) {
-    const existing = result.find(
-      (r) => r.type === level.type && Math.abs(r.price / level.price - 1) < 0.005,
-    );
+    const existing = result.find((r) => r.type === level.type && Math.abs(r.price / level.price - 1) < 0.005);
     if (existing) {
       // Keep higher attraction
       if (level.attraction > existing.attraction) {
@@ -1481,7 +1485,7 @@ function detectEvents(
   cvd: CvdContext,
   confluence: DivergenceConfluence,
   sth: SthContext,
-  prevState: HtfState | null
+  prevState: HtfState | null,
 ): HtfEvent[] {
   const events: HtfEvent[] = [];
   const at = snapshot.timestamp;
@@ -1499,7 +1503,7 @@ function detectEvents(
     if (candles.length >= 2) {
       const prevClose = candles.at(-2)!.close;
       const prevBelow = prevClose < sma200;
-      const nowAbove  = price > sma200;
+      const nowAbove = price > sma200;
       if (prevBelow && nowAbove) {
         events.push({ type: "dma200_reclaim", detail: `Price reclaimed 200 DMA ($${sma200.toFixed(0)})`, at });
       } else if (!prevBelow && !nowAbove) {
@@ -1512,7 +1516,7 @@ function detectEvents(
   if (prevState) {
     const prevClose = snapshot.h4Candles.at(-2)!.close;
     const prevBelowSth = prevClose < sth.price;
-    const nowAboveSth  = price > sth.price;
+    const nowAboveSth = price > sth.price;
     if (prevBelowSth && nowAboveSth) {
       events.push({
         type: "sth_reclaim",
@@ -1584,13 +1588,12 @@ function detectEvents(
   // Divergence confluence — the primary mean reversion trigger when 2+ indicators agree
   if (confluence.direction !== "NONE" && confluence.sources.length >= 2) {
     const srcs = confluence.sources.map((s) => s.indicator).join(", ");
-    const type = confluence.direction === "BULLISH"
-      ? "divergence_confluence_bullish"
-      : "divergence_confluence_bearish";
+    const type = confluence.direction === "BULLISH" ? "divergence_confluence_bullish" : "divergence_confluence_bearish";
     events.push({
       type,
-      detail: `${confluence.sources.length}-indicator ${confluence.direction.toLowerCase()} divergence confluence `
-        + `(strength ${confluence.strength.toFixed(2)}) — ${srcs}`,
+      detail:
+        `${confluence.sources.length}-indicator ${confluence.direction.toLowerCase()} divergence confluence ` +
+        `(strength ${confluence.strength.toFixed(2)}) — ${srcs}`,
       at,
     });
   }
@@ -1606,18 +1609,20 @@ function detectEvents(
 
   // CVD divergence events (futures pivot-based — the authoritative reversal signal)
   if (cvd.futures.divergence === "BULLISH") {
-    const mech = cvd.futures.divergenceMechanism === "ABSORPTION"
-      ? "CVD making lower lows while price holds — sellers being absorbed"
-      : "price making lower lows but CVD holds — seller exhaustion";
+    const mech =
+      cvd.futures.divergenceMechanism === "ABSORPTION"
+        ? "CVD making lower lows while price holds — sellers being absorbed"
+        : "price making lower lows but CVD holds — seller exhaustion";
     events.push({
       type: "cvd_divergence_bullish",
       detail: `Bullish CVD divergence (${cvd.futures.divergenceMechanism}): ${mech}`,
       at,
     });
   } else if (cvd.futures.divergence === "BEARISH") {
-    const mech = cvd.futures.divergenceMechanism === "ABSORPTION"
-      ? "CVD making higher highs while price stalls — buyers being absorbed"
-      : "price making higher highs but CVD stalls — buyer exhaustion";
+    const mech =
+      cvd.futures.divergenceMechanism === "ABSORPTION"
+        ? "CVD making higher highs while price stalls — buyers being absorbed"
+        : "price making higher highs but CVD stalls — buyer exhaustion";
     events.push({
       type: "cvd_divergence_bearish",
       detail: `Bearish CVD divergence (${cvd.futures.divergenceMechanism}): ${mech}`,
@@ -1638,15 +1643,17 @@ function detectEvents(
   if (cvd.futures.extreme.state === "OVERBOUGHT") {
     events.push({
       type: "cvd_overbought",
-      detail: `Futures CVD overbought spike — change at ${cvd.futures.extreme.changePctile}th percentile, `
-        + `${cvd.futures.extreme.extensionPct.toFixed(1)}% extension beyond last swing high`,
+      detail:
+        `Futures CVD overbought spike — change at ${cvd.futures.extreme.changePctile}th percentile, ` +
+        `${cvd.futures.extreme.extensionPct.toFixed(1)}% extension beyond last swing high`,
       at,
     });
   } else if (cvd.futures.extreme.state === "OVERSOLD") {
     events.push({
       type: "cvd_oversold",
-      detail: `Futures CVD oversold spike — change at ${cvd.futures.extreme.changePctile}th percentile, `
-        + `${cvd.futures.extreme.extensionPct.toFixed(1)}% extension beyond last swing low`,
+      detail:
+        `Futures CVD oversold spike — change at ${cvd.futures.extreme.changePctile}th percentile, ` +
+        `${cvd.futures.extreme.extensionPct.toFixed(1)}% extension beyond last swing low`,
       at,
     });
   }
@@ -1671,10 +1678,10 @@ function determineRegime(
   sma200: number,
   dailyRsi: number,
   structure: MarketStructure,
-  futuresCvdLong: CvdWindow
+  futuresCvdLong: CvdWindow,
 ): HtfRegime {
   const aboveSma200 = price > sma200;
-  const aboveSma50  = price > sma50;
+  const aboveSma50 = price > sma50;
 
   if (aboveSma200) {
     if (dailyRsi > 70) return "BULL_EXTENDED";
@@ -1700,10 +1707,10 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-const BIAS_W_TREND = 0.10;
-const BIAS_W_MOMENTUM = 0.20;
-const BIAS_W_FLOW = 0.20;
-const BIAS_W_COMPRESSION = 0.30;
+const BIAS_W_TREND = 0.1;
+const BIAS_W_MOMENTUM = 0.2;
+const BIAS_W_FLOW = 0.2;
+const BIAS_W_COMPRESSION = 0.3;
 // VP is shorter-term (displacement-anchored range) → higher probability near-term signal.
 // STH is longer-term (155d behavioral cost basis) → directional context, not timing.
 const BIAS_W_VP = 0.14;
@@ -1738,12 +1745,12 @@ function computeBias(
   //    MFI weighted slightly above RSI — volume-confirmed momentum is more reliable
   //    for mean reversion. Daily MFI dominates further because swing signals need
   //    stronger volume conviction.
-  const rsiDev4h = (50 - rsi.h4) / 50;          // +1 at RSI=0, -1 at RSI=100
+  const rsiDev4h = (50 - rsi.h4) / 50; // +1 at RSI=0, -1 at RSI=100
   const rsiDevDaily = (50 - rsi.daily) / 50;
   const mfiDev4h = (50 - mfi.h4) / 50;
   const mfiDevDaily = (50 - mfi.daily) / 50;
   const h4Momentum = rsiDev4h * 0.45 + mfiDev4h * 0.55;
-  const dailyMomentum = rsiDevDaily * 0.40 + mfiDevDaily * 0.60;
+  const dailyMomentum = rsiDevDaily * 0.4 + mfiDevDaily * 0.6;
   const rsiLinear = clamp(h4Momentum * 0.7 + dailyMomentum * 0.3, -1, 1);
   const momentum = Math.sign(rsiLinear) * Math.pow(Math.abs(rsiLinear), 0.6);
 
@@ -1756,13 +1763,12 @@ function computeBias(
   // Base flow from CVD regime direction.
   // Short window captures the current move, long window the structural trend.
   // Futures weighted 60%, spot 40%.
-  const regimeSign = (w: CvdWindow): number =>
-    w.regime === "RISING" ? 1 : w.regime === "DECLINING" ? -1 : 0;
+  const regimeSign = (w: CvdWindow): number => (w.regime === "RISING" ? 1 : w.regime === "DECLINING" ? -1 : 0);
   const windowScore = (w: CvdWindow): number =>
     regimeSign(w) * clamp(Math.abs(w.slope) / 0.01, 0.2, 1.0) * (0.4 + w.r2 * 0.6);
 
   const futuresBase = windowScore(futures.short) * 0.6 + windowScore(futures.long) * 0.4;
-  const spotBase    = windowScore(spot.short) * 0.6 + windowScore(spot.long) * 0.4;
+  const spotBase = windowScore(spot.short) * 0.6 + windowScore(spot.long) * 0.4;
   flow = futuresBase * 0.6 + spotBase * 0.4;
 
   // Divergence confluence boost — magnitude-weighted, replaces independent per-indicator boosts.
@@ -1770,13 +1776,13 @@ function computeBias(
   // the prior maximum combined boost (futures 0.30×1.25 + spot 0.15×1.4 ≈ 0.58 under old system).
   if (confluence.direction !== "NONE") {
     const sign = confluence.direction === "BULLISH" ? 1 : -1;
-    flow += sign * confluence.strength * 0.70;
+    flow += sign * confluence.strength * 0.7;
 
     // Preserve CVD mechanism nuance: absorption > exhaustion when CVD futures participates
     const cvdFutInConfluence = confluence.sources.some((s) => s.indicator === "cvd_futures");
     if (cvdFutInConfluence) {
       if (futures.divergenceMechanism === "ABSORPTION") flow *= 1.15;
-      else if (futures.divergenceMechanism === "EXHAUSTION") flow *= 0.90;
+      else if (futures.divergenceMechanism === "EXHAUSTION") flow *= 0.9;
     }
   }
 
@@ -1789,17 +1795,20 @@ function computeBias(
     const ext = clamp(futures.extreme.extensionPct / 20, 0, 1);
     flow -= 0.3 * (0.6 * depth + 0.4 * ext); // pushes bearish
   } else if (futures.extreme.state === "OVERSOLD") {
-    const depth = clamp(((100 - CVD_EXTREME_PCTILE) - futures.extreme.changePctile) / (100 - CVD_EXTREME_PCTILE), 0, 1);
+    const depth = clamp((100 - CVD_EXTREME_PCTILE - futures.extreme.changePctile) / (100 - CVD_EXTREME_PCTILE), 0, 1);
     const ext = clamp(futures.extreme.extensionPct / 20, 0, 1);
     flow += 0.3 * (0.6 * depth + 0.4 * ext); // pushes bullish
   }
 
   // Spot-futures alignment modifier
   const alignmentMult =
-    spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING" ? 1.0
-    : spotFuturesDivergence === "SPOT_LEADS" ? 0.85
-    : spotFuturesDivergence === "SUSPECT_BOUNCE" ? 0.6
-    : 0.90;
+    spotFuturesDivergence === "CONFIRMED_BUYING" || spotFuturesDivergence === "CONFIRMED_SELLING"
+      ? 1.0
+      : spotFuturesDivergence === "SPOT_LEADS"
+        ? 0.85
+        : spotFuturesDivergence === "SUSPECT_BOUNCE"
+          ? 0.6
+          : 0.9;
   flow = clamp(flow * alignmentMult, -1, 1);
 
   // 4. Compression — volatility energy (unsigned 0..1).
@@ -1841,7 +1850,7 @@ function computeBias(
   // Compression scales the directional signal: 0 compression = 1× (no effect),
   // max compression = up to 2.0× amplification.
   const compressionMult = 1 + compression * 1.0;
-  const composite = clamp(directional * compressionMult / (1 - BIAS_W_COMPRESSION), -1, 1);
+  const composite = clamp((directional * compressionMult) / (1 - BIAS_W_COMPRESSION), -1, 1);
 
   return {
     trend: parseFloat(trend.toFixed(3)),
@@ -1858,31 +1867,31 @@ function computeBias(
 
 export function analyze(
   snapshot: HtfSnapshot,
-  prevState: HtfState | null
+  prevState: HtfState | null,
 ): { context: HtfContext; nextState: HtfState } {
-  const h4     = snapshot.h4Candles;
-  const daily  = snapshot.dailyCandles;
-  const price  = h4.at(-1)!.close;
+  const h4 = snapshot.h4Candles;
+  const daily = snapshot.dailyCandles;
+  const price = h4.at(-1)!.close;
 
-  const h4Closes    = h4.map((c) => c.close);
+  const h4Closes = h4.map((c) => c.close);
   const dailyCloses = daily.map((c) => c.close);
 
   // SMA 50/200 and cross detection on 4h — the execution timeframe
-  const sma50  = sma(h4Closes, 50);
+  const sma50 = sma(h4Closes, 50);
   const sma200 = sma(h4Closes, 200);
-  const priceVsSma50Pct  = parseFloat(((price / sma50  - 1) * 100).toFixed(2));
+  const priceVsSma50Pct = parseFloat(((price / sma50 - 1) * 100).toFixed(2));
   const priceVsSma200Pct = parseFloat(((price / sma200 - 1) * 100).toFixed(2));
 
   // RSI on both timeframes + 4h divergence
-  const rsiH4    = rsi14(h4Closes);
+  const rsiH4 = rsi14(h4Closes);
   const rsiDaily = rsi14(dailyCloses);
-  const rsiDiv   = detectRsiDivergence(h4);
+  const rsiDiv = detectRsiDivergence(h4);
 
   // MFI (Money Flow Index) — volume-weighted momentum on both timeframes
   // + 4h divergence for volume-confirmed exhaustion signals.
-  const mfiH4    = mfi14(h4);
+  const mfiH4 = mfi14(h4);
   const mfiDaily = mfi14(daily);
-  const mfiDiv   = detectMfiDivergence(h4);
+  const mfiDiv = detectMfiDivergence(h4);
 
   // ATR-14 on 4h candles — volatility context on the execution timeframe
   const h4Atr = atr14(h4);
@@ -1893,10 +1902,10 @@ export function analyze(
   // Futures is authoritative for reversal signals (leveraged intent).
   // Spot is used alongside futures to detect short-covering vs real demand.
   const futuresCvd = cvdAnalysis(snapshot.futuresH4Candles);
-  const spotCvd    = cvdAnalysis(h4);
+  const spotCvd = cvdAnalysis(h4);
   const cvdData: CvdContext = {
     futures: futuresCvd,
-    spot:    spotCvd,
+    spot: spotCvd,
     spotFuturesDivergence: computeSpotFuturesDivergence(spotCvd.short, futuresCvd.short),
   };
 
@@ -1908,11 +1917,7 @@ export function analyze(
     futuresCvdCurve,
     futuresCvd.divergence,
   );
-  const cvdSpotMag = cvdDivergenceMagnitude(
-    h4.slice(-CVD_LONG_LOOKBACK),
-    spotCvdCurve,
-    spotCvd.divergence,
-  );
+  const cvdSpotMag = cvdDivergenceMagnitude(h4.slice(-CVD_LONG_LOOKBACK), spotCvdCurve, spotCvd.divergence);
 
   // Multi-indicator divergence confluence — magnitude-weighted
   const divergenceConfluence = computeDivergenceConfluence(
@@ -1924,10 +1929,12 @@ export function analyze(
 
   // Anchored VWAPs — weekly (Monday 00:00 UTC) and monthly (1st 00:00 UTC)
   const now = new Date(snapshot.timestamp);
-  const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+  const weekStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)),
+  );
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const vwapData: VwapContext = {
-    weekly:  anchoredVwap(h4, weekStart.getTime()),
+    weekly: anchoredVwap(h4, weekStart.getTime()),
     monthly: anchoredVwap(h4, monthStart.getTime()),
   };
 
@@ -1936,11 +1943,11 @@ export function analyze(
   const cross = detectCross(h4);
 
   const ma: MaContext = {
-    sma50:  parseFloat(sma50.toFixed(2)),
+    sma50: parseFloat(sma50.toFixed(2)),
     sma200: parseFloat(sma200.toFixed(2)),
     priceVsSma50Pct,
     priceVsSma200Pct,
-    crossType:   cross.current,
+    crossType: cross.current,
     recentCross: cross.recent,
   };
 
@@ -1950,19 +1957,24 @@ export function analyze(
   const regime = determineRegime(price, sma50, sma200, rsiDaily, structure, cvdData.futures.long);
 
   const since = prevState?.regime === regime ? prevState.since : snapshot.timestamp;
-  const durationDays = Math.max(
-    0,
-    Math.round((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24))
-  );
+  const durationDays = Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)));
   const previousRegime =
-    prevState?.regime !== regime
-      ? (prevState?.regime ?? null)
-      : (prevState?.previousRegime ?? null);
+    prevState?.regime !== regime ? (prevState?.regime ?? null) : (prevState?.previousRegime ?? null);
 
   const sth = computeSthProxy(daily, price);
 
   const events = detectEvents(
-    snapshot, price, sma200, rsi, mfi, cross, structure, cvdData, divergenceConfluence, sth, prevState,
+    snapshot,
+    price,
+    sma200,
+    rsi,
+    mfi,
+    cross,
+    structure,
+    cvdData,
+    divergenceConfluence,
+    sth,
+    prevState,
   );
 
   // Signal staleness — how fresh each key signal is

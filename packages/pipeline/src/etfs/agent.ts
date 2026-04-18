@@ -7,9 +7,9 @@
  */
 
 import crypto from "node:crypto";
-import { EtfContext } from "./types.js";
-import { getCached } from "../storage/cache.js";
 import { callLlm } from "../llm.js";
+import { getCached } from "../storage/cache.js";
+import { EtfContext } from "./types.js";
 
 const AGENT_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -20,18 +20,13 @@ function contextCacheKey(ctx: EtfContext): string {
     consecutiveOutflowDays: ctx.flow.consecutiveOutflowDays,
     consecutiveInflowDays: ctx.flow.consecutiveInflowDays,
     // Bucket to avoid cache misses on tiny daily changes
-    d7SumBucket: Math.round(ctx.flow.d7Sum / 1e8),      // $100M buckets
-    d30SumBucket: Math.round(ctx.flow.d30Sum / 5e8),    // $500M buckets
+    d7SumBucket: Math.round(ctx.flow.d7Sum / 1e8), // $100M buckets
+    d30SumBucket: Math.round(ctx.flow.d30Sum / 5e8), // $500M buckets
     todaySigmaBucket: Math.round(ctx.flow.todaySigma * 2) / 2, // 0.5σ buckets
     events: ctx.events.map((e) => e.type).sort(),
-    gbtcPremiumBucket:
-      ctx.gbtcPremiumRate !== undefined ? Math.round(ctx.gbtcPremiumRate) : null,
+    gbtcPremiumBucket: ctx.gbtcPremiumRate !== undefined ? Math.round(ctx.gbtcPremiumRate) : null,
   };
-  const hash = crypto
-    .createHash("sha256")
-    .update(JSON.stringify(fingerprint))
-    .digest("hex")
-    .slice(0, 12);
+  const hash = crypto.createHash("sha256").update(JSON.stringify(fingerprint)).digest("hex").slice(0, 12);
   return `agent-etfs-${ctx.asset.toLowerCase()}-${hash}`;
 }
 

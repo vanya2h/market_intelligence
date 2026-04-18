@@ -14,29 +14,29 @@
  *   TWITTER_API_KEY     — enables Twitter posting (+ API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)
  */
 
-import "../env.js";
 import chalk from "chalk";
-import { runAllDimensions } from "./pipeline.js";
-import { synthesize } from "./synthesizer.js";
-import { synthesizeRich } from "./rich-synthesizer.js";
-import { saveBrief, updateBrief } from "./persist.js";
-import { processTradeIdea } from "./trade-idea/index.js";
-import type { HtfOutput } from "./types.js";
 import type { AssetType } from "../types.js";
-import { postTweet } from "./twitter.js";
-import { synthesizeTweet } from "./twitter-synthesizer.js";
+import { processTradeIdea } from "./trade-idea/index.js";
 import { computeDelta } from "./delta.js";
 import {
-  type RunArtifacts,
-  type NotifyStage,
-  STAGES,
   createRun,
-  markStageCompleted,
-  markFailed,
-  markCompleted,
-  loadRun,
   listFailedRuns,
+  loadRun,
+  markCompleted,
+  markFailed,
+  markStageCompleted,
+  type NotifyStage,
+  type RunArtifacts,
+  STAGES,
 } from "./notify-run.js";
+import { saveBrief, updateBrief } from "./persist.js";
+import { runAllDimensions } from "./pipeline.js";
+import { synthesizeRich } from "./rich-synthesizer.js";
+import { synthesize } from "./synthesizer.js";
+import { postTweet } from "./twitter.js";
+import { synthesizeTweet } from "./twitter-synthesizer.js";
+import type { HtfOutput } from "./types.js";
+import "../env.js";
 
 // ─── Telegram API ────────────────────────────────────────────────────────────
 
@@ -127,7 +127,9 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
     // (same context data) and all deltas come out as zero.
     const deltaSummary = await computeDelta(ctx.asset, outputs);
     ctx.artifacts.deltaSummary = deltaSummary;
-    note(`delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`);
+    note(
+      `delta: tier=${deltaSummary.tier}, maxZ=${deltaSummary.maxZ === Infinity ? "∞" : deltaSummary.maxZ.toFixed(2)}`,
+    );
 
     const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
 
@@ -184,7 +186,12 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
   async TWITTER(ctx, idx, total) {
     if (!ctx.twitterEnabled || ctx.asset !== "BTC") return;
     step(idx, total, `Synthesizing Twitter/X post (${ctx.asset})...`);
-    const tweet = await synthesizeTweet(ctx.asset, ctx.artifacts.outputs!, ctx.artifacts.briefUrl, ctx.artifacts.deltaSummary ?? null);
+    const tweet = await synthesizeTweet(
+      ctx.asset,
+      ctx.artifacts.outputs!,
+      ctx.artifacts.briefUrl,
+      ctx.artifacts.deltaSummary ?? null,
+    );
     if (!tweet) {
       note(`tweet skipped (low delta significance)`);
       return;

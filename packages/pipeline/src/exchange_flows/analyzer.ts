@@ -16,13 +16,13 @@
  */
 
 import type {
-  ExchangeFlowsSnapshot,
-  ExchangeFlowsContext,
-  ExchangeFlowsRegime,
-  ExchangeFlowsState,
-  ExchangeFlowsMetrics,
-  ExchangeFlowsEvent,
   BalancePoint,
+  ExchangeFlowsContext,
+  ExchangeFlowsEvent,
+  ExchangeFlowsMetrics,
+  ExchangeFlowsRegime,
+  ExchangeFlowsSnapshot,
+  ExchangeFlowsState,
 } from "./types.js";
 
 // ─── Flow metrics ─────────────────────────────────────────────────────────────
@@ -58,7 +58,8 @@ function computeMetrics(snapshot: ExchangeFlowsSnapshot): ExchangeFlowsMetrics {
   // Net flows over windows
   const latestBalance = history30.at(-1)?.totalBalance ?? totalBalance;
   const balance1dAgo = history30.length >= 2 ? history30.at(-2)!.totalBalance : latestBalance;
-  const balance7dAgo = history30.length >= 8 ? history30.at(-8)!.totalBalance : history30.at(0)?.totalBalance ?? latestBalance;
+  const balance7dAgo =
+    history30.length >= 8 ? history30.at(-8)!.totalBalance : (history30.at(0)?.totalBalance ?? latestBalance);
   const balance30dAgo = history30.at(0)?.totalBalance ?? latestBalance;
 
   const netFlow1d = latestBalance - balance1dAgo;
@@ -66,26 +67,24 @@ function computeMetrics(snapshot: ExchangeFlowsSnapshot): ExchangeFlowsMetrics {
   const netFlow30d = latestBalance - balance30dAgo;
 
   // Percentage changes
-  const reserveChange1dPct = balance1dAgo > 0 ? ((netFlow1d / balance1dAgo) * 100) : 0;
-  const reserveChange7dPct = balance7dAgo > 0 ? ((netFlow7d / balance7dAgo) * 100) : 0;
-  const reserveChange30dPct = balance30dAgo > 0 ? ((netFlow30d / balance30dAgo) * 100) : 0;
+  const reserveChange1dPct = balance1dAgo > 0 ? (netFlow1d / balance1dAgo) * 100 : 0;
+  const reserveChange7dPct = balance7dAgo > 0 ? (netFlow7d / balance7dAgo) * 100 : 0;
+  const reserveChange30dPct = balance30dAgo > 0 ? (netFlow30d / balance30dAgo) * 100 : 0;
 
   // Statistical context on daily deltas
   const deltaValues = deltas.map((d) => d.delta);
-  const dailyFlowMean30d = deltaValues.length > 0
-    ? deltaValues.reduce((s, v) => s + v, 0) / deltaValues.length
-    : 0;
-  const variance = deltaValues.length > 0
-    ? deltaValues.reduce((s, v) => s + (v - dailyFlowMean30d) ** 2, 0) / deltaValues.length
-    : 0;
+  const dailyFlowMean30d = deltaValues.length > 0 ? deltaValues.reduce((s, v) => s + v, 0) / deltaValues.length : 0;
+  const variance =
+    deltaValues.length > 0 ? deltaValues.reduce((s, v) => s + (v - dailyFlowMean30d) ** 2, 0) / deltaValues.length : 0;
   const dailyFlowSigma30d = Math.sqrt(variance);
 
   const todayDelta = deltaValues.at(-1) ?? 0;
   const todaySigma = dailyFlowSigma30d > 0 ? (todayDelta - dailyFlowMean30d) / dailyFlowSigma30d : 0;
 
-  const flowPercentile1m = deltaValues.length > 0
-    ? Math.round((deltaValues.filter((v) => v < todayDelta).length / deltaValues.length) * 100)
-    : 50;
+  const flowPercentile1m =
+    deltaValues.length > 0
+      ? Math.round((deltaValues.filter((v) => v < todayDelta).length / deltaValues.length) * 100)
+      : 50;
 
   // Balance trend: compare last 7 data points
   const recentHistory = history30.slice(-7);
@@ -217,21 +216,16 @@ function formatAsset(v: number, asset: string): string {
 
 export function analyze(
   snapshot: ExchangeFlowsSnapshot,
-  prevState: ExchangeFlowsState | null
+  prevState: ExchangeFlowsState | null,
 ): { context: ExchangeFlowsContext; nextState: ExchangeFlowsState } {
   const metrics = computeMetrics(snapshot);
   const regime = determineRegime(metrics);
 
   const since = prevState?.regime === regime ? prevState.since : snapshot.timestamp;
   const now = new Date(snapshot.timestamp);
-  const durationDays = Math.max(
-    0,
-    Math.round((now.getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24))
-  );
+  const durationDays = Math.max(0, Math.round((now.getTime() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)));
   const previousRegime =
-    prevState?.regime !== regime
-      ? (prevState?.regime ?? null)
-      : (prevState?.previousRegime ?? null);
+    prevState?.regime !== regime ? (prevState?.regime ?? null) : (prevState?.previousRegime ?? null);
 
   const events = detectEvents(snapshot, metrics);
 

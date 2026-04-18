@@ -4,10 +4,10 @@
  * Saves a completed brief with all dimension outputs to the database.
  */
 
-import { prisma } from "../storage/db.js";
 import type { $Enums, Prisma } from "../generated/prisma/client.js";
-import type { DimensionOutput } from "./types.js";
+import { prisma } from "../storage/db.js";
 import type { RichBrief } from "./rich-synthesizer.js";
+import type { DimensionOutput } from "./types.js";
 
 export async function saveBrief(
   asset: $Enums.Asset,
@@ -100,11 +100,7 @@ export async function saveBrief(
 }
 
 /** Update an existing brief with synthesized text (called after trade idea is computed). */
-export async function updateBrief(
-  briefId: string,
-  brief: string,
-  richBrief?: RichBrief | null,
-): Promise<void> {
+export async function updateBrief(briefId: string, brief: string, richBrief?: RichBrief | null): Promise<void> {
   await prisma.brief.update({
     where: { id: briefId },
     data: {

@@ -1,18 +1,18 @@
-import dotenv from "dotenv";
 import path from "node:path";
+import dotenv from "dotenv";
 if (process.env.NODE_ENV !== "production") {
   dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 }
 
-import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { HealthController } from "./routes/health.js";
+import { Hono } from "hono";
+import type { IFactory } from "./common/controller.js";
 import { BriefsController } from "./routes/briefs.js";
+import { CandlesController } from "./routes/candles.js";
 import { DimensionsController } from "./routes/dimensions.js";
+import { HealthController } from "./routes/health.js";
 import { PriceController } from "./routes/price.js";
 import { TradeIdeasController } from "./routes/trade-ideas.js";
-import { CandlesController } from "./routes/candles.js";
-import type { IFactory } from "./common/controller.js";
 
 const factory: IFactory = {
   createApp: () => new Hono(),

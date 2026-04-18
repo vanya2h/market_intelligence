@@ -5,8 +5,8 @@
  * has time to load env vars before we read DATABASE_URL.
  */
 
-import { PrismaClient } from "../generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client.js";
 
 let _prisma: PrismaClient | undefined;
 

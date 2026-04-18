@@ -6,8 +6,8 @@
  * Used by the web dashboard to show price delta since brief generation.
  */
 
-import { describeRoute, validator } from "hono-openapi";
 import { getCached } from "@market-intel/pipeline";
+import { describeRoute, validator } from "hono-openapi";
 import { createController } from "../common/controller.js";
 import { AssetParamSchema } from "../common/schemas.js";
 

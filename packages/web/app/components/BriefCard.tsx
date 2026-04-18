@@ -20,25 +20,13 @@ function ComponentBar({ label, value }: { label: string; value: number | null })
 
   return (
     <div className="flex items-center gap-3">
-      <span
-        className="w-24 shrink-0 text-[0.6875rem]"
-        style={{ color: "var(--text-muted)" }}
-      >
+      <span className="w-24 shrink-0 text-[0.6875rem]" style={{ color: "var(--text-muted)" }}>
         {label}
       </span>
-      <div
-        className="h-1 flex-1"
-        style={{ background: "var(--bg-hover)" }}
-      >
-        <div
-          className="bar-fill h-full"
-          style={{ width: `${value}%`, background: color }}
-        />
+      <div className="h-1 flex-1" style={{ background: "var(--bg-hover)" }}>
+        <div className="bar-fill h-full" style={{ width: `${value}%`, background: color }} />
       </div>
-      <span
-        className="font-mono-jb w-6 text-right text-[0.6875rem] tabular-nums"
-        style={{ color }}
-      >
+      <span className="font-mono-jb w-6 text-right text-[0.6875rem] tabular-nums" style={{ color }}>
         {Math.round(value)}
       </span>
     </div>
@@ -49,10 +37,7 @@ function renderBriefText(text: string) {
   return text.split("\n").map((line, i) => {
     if (!line.trim()) return <br key={i} />;
 
-    const rendered = line.replace(
-      /\*\*(.+?)\*\*/g,
-      '<strong style="color: var(--text-primary)">$1</strong>'
-    );
+    const rendered = line.replace(/\*\*(.+?)\*\*/g, '<strong style="color: var(--text-primary)">$1</strong>');
 
     const isBullet = line.trimStart().startsWith("- ");
 
@@ -98,15 +83,11 @@ export function BriefCard({
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        <span
-          className="text-[0.625rem] font-medium uppercase tracking-widest"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <span className="text-[0.625rem] font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
           Market Brief
         </span>
         <span className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
-          {asset} &middot; Generated{" "}
-          <RelativeTime date={new Date(timestamp)} />
+          {asset} &middot; Generated <RelativeTime date={new Date(timestamp)} />
         </span>
       </div>
 

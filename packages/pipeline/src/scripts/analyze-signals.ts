@@ -5,9 +5,9 @@
  * Usage:  tsx src/scripts/analyze-signals.ts
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import { prisma } from "../storage/db.js";
+import "../env.js";
 
 const DIMENSIONS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
 type Dim = (typeof DIMENSIONS)[number];
@@ -116,17 +116,15 @@ async function main() {
     const peak = idea.returns.reduce((best, r) =>
       Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
     );
-    const maxFavorable = idea.returns.reduce((best, r) =>
-      r.returnPct > best.returnPct ? r : best,
-    );
-    const maxAdverse = idea.returns.reduce((worst, r) =>
-      r.returnPct < worst.returnPct ? r : worst,
-    );
+    const maxFavorable = idea.returns.reduce((best, r) => (r.returnPct > best.returnPct ? r : best));
+    const maxAdverse = idea.returns.reduce((worst, r) => (r.returnPct < worst.returnPct ? r : worst));
 
     // T1 hit rate
     const t1 = idea.levels.find((l) => l.label === "T1");
     const anyInvalidation = idea.levels.filter((l) => l.type === "INVALIDATION" && l.outcome === "LOSS");
-    const allInvalidationsLost = idea.levels.filter((l) => l.type === "INVALIDATION").every((l) => l.outcome === "LOSS");
+    const allInvalidationsLost = idea.levels
+      .filter((l) => l.type === "INVALIDATION")
+      .every((l) => l.outcome === "LOSS");
 
     return {
       ...idea,
@@ -190,12 +188,8 @@ async function main() {
       const avgAbs = avg(absScores);
 
       // Signal strength when correct vs wrong
-      const correctScores = assetIdeas
-        .filter((i) => i.peakQuality > 0)
-        .map((i) => i.confluence[dim]);
-      const wrongScores = assetIdeas
-        .filter((i) => i.peakQuality <= 0)
-        .map((i) => i.confluence[dim]);
+      const correctScores = assetIdeas.filter((i) => i.peakQuality > 0).map((i) => i.confluence[dim]);
+      const wrongScores = assetIdeas.filter((i) => i.peakQuality <= 0).map((i) => i.confluence[dim]);
 
       const icColor = Math.abs(ic) > 0.15 ? (ic > 0 ? chalk.green : chalk.red) : chalk.dim;
 
@@ -327,7 +321,9 @@ async function main() {
       });
 
     if (t1Resolved.length > 0) {
-      console.log(`    T1 hit:  median ${median(t1Resolved).toFixed(0)}h  avg ${avg(t1Resolved).toFixed(0)}h (n=${t1Resolved.length})`);
+      console.log(
+        `    T1 hit:  median ${median(t1Resolved).toFixed(0)}h  avg ${avg(t1Resolved).toFixed(0)}h (n=${t1Resolved.length})`,
+      );
     }
   }
 
@@ -366,7 +362,7 @@ async function main() {
     subsection(`${asset}`);
 
     const targetDistances = assetIdeas.map((i) => {
-      const targetDist = Math.abs(i.compositeTarget - i.entryPrice) / i.entryPrice * 100;
+      const targetDist = (Math.abs(i.compositeTarget - i.entryPrice) / i.entryPrice) * 100;
       return { targetDist, maxFav: i.maxFavorable, maxAdv: i.maxAdverse };
     });
 
@@ -433,7 +429,9 @@ async function main() {
       console.log(
         `    HTF ${label.padEnd(10)} n=${String(group.length).padEnd(4)} ` +
           `win=${pct(wins.length, group.length).padStart(6)}  ` +
-          `avgQ=${avg(group.map((i) => i.peakQuality)).toFixed(2).padStart(6)}`,
+          `avgQ=${avg(group.map((i) => i.peakQuality))
+            .toFixed(2)
+            .padStart(6)}`,
       );
     }
   }
@@ -468,7 +466,9 @@ async function main() {
       console.log(
         `    streak=${len >= 5 ? "5+" : String(len)}  n=${String(matching.length).padEnd(4)} ` +
           `win=${pct(wins.length, matching.length).padStart(6)}  ` +
-          `avgQ=${avg(matching.map((i) => i.peakQuality)).toFixed(2).padStart(6)}`,
+          `avgQ=${avg(matching.map((i) => i.peakQuality))
+            .toFixed(2)
+            .padStart(6)}`,
       );
     }
   }

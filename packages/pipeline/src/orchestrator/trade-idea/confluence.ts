@@ -21,11 +21,10 @@
  * It remains valuable as a narrative/context layer for the LLM synthesizer.
  */
 
-import type { AnalysisSignals, DerivativesContext } from "../../types.js";
 import type { EtfContext } from "../../etfs/types.js";
-import type { HtfContext } from "../../htf/types.js";
-
 import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
+import type { HtfContext } from "../../htf/types.js";
+import type { AnalysisSignals, DerivativesContext } from "../../types.js";
 import type { DimensionOutput } from "../types.js";
 import type { Direction } from "./composite-target.js";
 import type { DimensionWeights } from "./ic-weights.js";
@@ -82,11 +81,7 @@ const FUNDING_DEAD_ZONE = 20; // ±20 pctl points around median (widened from 15
  * Detect trend exhaustion from HTF momentum indicators.
  * Returns 0..1 where 0 = no exhaustion, 1 = fully exhausted.
  */
-function computeExhaustion(
-  htfCtx: HtfContext,
-  signals: AnalysisSignals,
-  fundingSide: "LONG" | "SHORT" | null,
-): number {
+function computeExhaustion(htfCtx: HtfContext, signals: AnalysisSignals, fundingSide: "LONG" | "SHORT" | null): number {
   if (!fundingSide) return 0;
 
   let score = 0;
@@ -470,7 +465,7 @@ function round3(n: number): number {
 // Threshold 0.80 = clearly extreme conviction (not just a moderate lean).
 // Alpha 0.50 = dominant signal gets equal footing with the full IC-weighted rest.
 
-const FIRE_THRESHOLD = 0.80;
+const FIRE_THRESHOLD = 0.8;
 const FIRE_ALPHA = 0.5;
 
 /**

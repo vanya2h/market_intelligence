@@ -1,8 +1,8 @@
-import { SectionBlock } from "./SectionBlock";
+import type { Brief, TradeIdea } from "@market-intel/api";
 import { OpportunityGauge } from "./OpportunityGauge";
 import { ConfluenceRows } from "./OpportunityGauge";
 import { RegimeOverview } from "./RegimeOverview";
-import type { Brief, TradeIdea } from "@market-intel/api";
+import { SectionBlock } from "./SectionBlock";
 
 export function BriefSidebar({ brief, tradeIdea }: { brief: Brief; tradeIdea: TradeIdea | null }) {
   return (

@@ -36,12 +36,16 @@ export const BriefSchema = z.object({
   derivatives: DimensionBaseSchema.extend({
     stress: z.string().nullable(),
     previousStress: z.string().nullable(),
-  }).nullable().optional(),
+  })
+    .nullable()
+    .optional(),
   etfs: DimensionBaseSchema.nullable().optional(),
   htf: DimensionBaseSchema.extend({
     lastStructure: z.string().nullable(),
     snapshotPrice: z.number().nullable(),
-  }).nullable().optional(),
+  })
+    .nullable()
+    .optional(),
   sentiment: DimensionBaseSchema.extend({
     compositeIndex: z.number().nullable(),
     compositeLabel: z.string().nullable(),
@@ -49,7 +53,9 @@ export const BriefSchema = z.object({
     trend: z.number().nullable(),
     institutionalFlows: z.number().nullable(),
     expertConsensus: z.number().nullable(),
-  }).nullable().optional(),
+  })
+    .nullable()
+    .optional(),
 });
 
 export const DimensionStateSchema = z.object({

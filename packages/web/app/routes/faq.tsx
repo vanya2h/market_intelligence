@@ -62,7 +62,10 @@ interface FaqItem {
 }
 
 function slugify(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 const faqSections: { title: string; items: FaqItem[] }[] = [
@@ -71,7 +74,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
     items: [
       {
         q: "What is the Opportunity Score?",
-        a: "A bipolar directional edge score from -100% to +100%. It answers the single question: \"should I buy or sell right now?\" Positive = buy setup, negative = sell setup, near zero = no edge. The score is derived from the directional bias between LONG and SHORT confluence — the gap between how strongly the market supports buying vs selling, normalized to a clean scale. The sign IS the direction, the magnitude IS the conviction.",
+        a: 'A bipolar directional edge score from -100% to +100%. It answers the single question: "should I buy or sell right now?" Positive = buy setup, negative = sell setup, near zero = no edge. The score is derived from the directional bias between LONG and SHORT confluence — the gap between how strongly the market supports buying vs selling, normalized to a clean scale. The sign IS the direction, the magnitude IS the conviction.',
       },
       {
         q: "What do the different score zones mean?",
@@ -91,7 +94,7 @@ const faqSections: { title: string; items: FaqItem[] }[] = [
       },
       {
         q: "Should I trade directly from the Opportunity Score?",
-        a: 'The Opportunity Score tells you the mechanical system\'s assessment. A strong reading (+70 or -70) means multiple independent data sources agree on direction. However, the system is designed for swing trading reversals — always consider the broader context and your own risk management. The trade idea section shows the full confluence breakdown, entry/target levels, and whether a trade was actually taken.',
+        a: "The Opportunity Score tells you the mechanical system's assessment. A strong reading (+70 or -70) means multiple independent data sources agree on direction. However, the system is designed for swing trading reversals — always consider the broader context and your own risk management. The trade idea section shows the full confluence breakdown, entry/target levels, and whether a trade was actually taken.",
       },
     ],
   },
@@ -277,11 +280,7 @@ function FaqEntry({ q, a }: FaqItem) {
       {a === "opportunityZones" ? (
         <div className="flex flex-col gap-2">
           {opportunityZones.map((z) => (
-            <div
-              key={z.range}
-              className="flex flex-col gap-1 rounded p-2"
-              style={{ background: "var(--bg-surface)" }}
-            >
+            <div key={z.range} className="flex flex-col gap-1 rounded p-2" style={{ background: "var(--bg-surface)" }}>
               <div className="flex items-center gap-3">
                 <span className="font-mono-jb text-xs" style={{ color: "var(--text-muted)" }}>
                   {z.range}

@@ -70,16 +70,12 @@ function computeChange(history: TimestampedValue[], current: number, hours: numb
 
 // ─── Metric builders ─────────────────────────────────────────────────────────
 
-function buildMetricContext(
-  current: number,
-  history: TimestampedValue[],
-  nowMs: number
-): MetricContext {
+function buildMetricContext(current: number, history: TimestampedValue[], nowMs: number): MetricContext {
   const w1w = windowValues(history, 7 * 24, nowMs);
   const w1m = windowValues(history, 30 * 24, nowMs);
 
   const high = (vals: number[]) => (vals.length ? Math.max(...vals) : current);
-  const low  = (vals: number[]) => (vals.length ? Math.min(...vals) : current);
+  const low = (vals: number[]) => (vals.length ? Math.min(...vals) : current);
 
   return {
     current,
@@ -101,7 +97,7 @@ function buildLiquidationContext(
   current8h: number,
   bias: string,
   history: TimestampedValue[],
-  nowMs: number
+  nowMs: number,
 ): LiquidationContext {
   const w1w = windowValues(history, 7 * 24, nowMs);
   const w1m = windowValues(history, 30 * 24, nowMs);
@@ -148,10 +144,7 @@ function countExtremeFundingCycles(
   // Compute median funding rate over the window
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  const median =
-    sorted.length % 2 === 0
-      ? (sorted[mid - 1]! + sorted[mid]!) / 2
-      : sorted[mid]!;
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!;
 
   // Compute IQR-based thresholds (75th / 25th percentile)
   const q75Idx = Math.floor(sorted.length * 0.75);
@@ -162,8 +155,10 @@ function countExtremeFundingCycles(
   // Determine which side the most recent cycle is on
   const latest = values[values.length - 1]!;
   let side: "LONG" | "SHORT" | null = null;
-  if (latest > upperThresh) side = "LONG"; // longs paying shorts → crowded long
-  else if (latest < lowerThresh) side = "SHORT"; // shorts paying longs → crowded short
+  if (latest > upperThresh)
+    side = "LONG"; // longs paying shorts → crowded long
+  else if (latest < lowerThresh)
+    side = "SHORT"; // shorts paying longs → crowded short
   else return { cycles: 0, side: null }; // not extreme
 
   // Count consecutive extreme cycles on the same side
@@ -182,20 +177,16 @@ function countExtremeFundingCycles(
 }
 
 /** Compute all AnalysisSignals (spec §2) from a snapshot. */
-function computeSignals(
-  snapshot: DerivativesSnapshot,
-  liqCtx: LiquidationContext,
-  nowMs: number
-): AnalysisSignals {
+function computeSignals(snapshot: DerivativesSnapshot, liqCtx: LiquidationContext, nowMs: number): AnalysisSignals {
   const fundingVals1m = windowValues(snapshot.funding.history1m, 30 * 24, nowMs);
-  const oiVals30d     = windowValues(snapshot.openInterest.history1m, 30 * 24, nowMs);
+  const oiVals30d = windowValues(snapshot.openInterest.history1m, 30 * 24, nowMs);
 
   const fundingPct1m = computePercentile(fundingVals1m, snapshot.funding.current);
-  const liqPct1m     = liqCtx.percentile["1m"];
-  const liqPct3m     = liqCtx.percentile["3m"] ?? liqPct1m;
+  const liqPct1m = liqCtx.percentile["1m"];
+  const liqPct3m = liqCtx.percentile["3m"] ?? liqPct1m;
 
   const oiChange24h = computeChange(snapshot.openInterest.history1m, snapshot.openInterest.current, 24, nowMs);
-  const oiChange7d  = computeChange(snapshot.openInterest.history1m, snapshot.openInterest.current, 7 * 24, nowMs);
+  const oiChange7d = computeChange(snapshot.openInterest.history1m, snapshot.openInterest.current, 7 * 24, nowMs);
   const oiZScore30d = computeZScore(oiVals30d, snapshot.openInterest.current);
 
   let priceReturn24h: number | null = null;
@@ -203,7 +194,7 @@ function computeSignals(
   if (snapshot.price && snapshot.price.history.length > 0) {
     const priceCurrent = snapshot.price.history.at(-1)!.value;
     priceReturn24h = computeChange(snapshot.price.history, priceCurrent, 24, nowMs);
-    priceReturn7d  = computeChange(snapshot.price.history, priceCurrent, 7 * 24, nowMs);
+    priceReturn7d = computeChange(snapshot.price.history, priceCurrent, 7 * 24, nowMs);
   }
 
   const pressure = countExtremeFundingCycles(snapshot, oiZScore30d);
@@ -229,7 +220,7 @@ function computeSignals(
 
 function classifyPositioning(
   signals: AnalysisSignals,
-  prevPositioning: PositioningState | null
+  prevPositioning: PositioningState | null,
 ): Classified<PositioningState> {
   const { fundingPct1m, oiZScore30d, oiChange7d, priceReturn24h, priceReturn7d } = signals;
 
@@ -239,8 +230,8 @@ function classifyPositioning(
   // ── CROWDED_LONG ───────────────────────────────────────────────────────────
   // Entry threshold: fundingPct1m > 80; exit (hysteresis): > 75
   const clFundingThresh = prevPositioning === "CROWDED_LONG" ? 75 : 80;
-  const clFundingFires  = fundingPct1m > clFundingThresh;
-  const clOiFires       = oiElevated;
+  const clFundingFires = fundingPct1m > clFundingThresh;
+  const clOiFires = oiElevated;
   // Non-negative price: pass if data unavailable (graceful degradation)
   const clPriceFires =
     priceReturn24h === null && priceReturn7d === null
@@ -249,9 +240,8 @@ function classifyPositioning(
 
   if (clFundingFires) {
     const triggers: string[] = [`fundingPct1m=${fundingPct1m} > ${clFundingThresh}`];
-    if (clOiFires)                    triggers.push(`oiZScore30d=${oiZScore30d.toFixed(2)}`);
-    if (clPriceFires === true && priceReturn24h !== null)
-      triggers.push(`priceReturn24h=${pct(priceReturn24h)}`);
+    if (clOiFires) triggers.push(`oiZScore30d=${oiZScore30d.toFixed(2)}`);
+    if (clPriceFires === true && priceReturn24h !== null) triggers.push(`priceReturn24h=${pct(priceReturn24h)}`);
     // Require funding + at least 1 confirmation (spec: avoid single-trigger states)
     if (triggers.length >= 2 && (clOiFires || clPriceFires !== false)) {
       return { state: "CROWDED_LONG", triggers };
@@ -261,8 +251,8 @@ function classifyPositioning(
   // ── CROWDED_SHORT ──────────────────────────────────────────────────────────
   // Entry threshold: fundingPct1m < 20; exit (hysteresis): < 25
   const csFundingThresh = prevPositioning === "CROWDED_SHORT" ? 25 : 20;
-  const csFundingFires  = fundingPct1m < csFundingThresh;
-  const csOiFires       = oiElevated;
+  const csFundingFires = fundingPct1m < csFundingThresh;
+  const csOiFires = oiElevated;
   const csPriceFires =
     priceReturn24h === null && priceReturn7d === null
       ? null
@@ -270,9 +260,8 @@ function classifyPositioning(
 
   if (csFundingFires) {
     const triggers: string[] = [`fundingPct1m=${fundingPct1m} < ${csFundingThresh}`];
-    if (csOiFires)                    triggers.push(`oiZScore30d=${oiZScore30d.toFixed(2)}`);
-    if (csPriceFires === true && priceReturn24h !== null)
-      triggers.push(`priceReturn24h=${pct(priceReturn24h)}`);
+    if (csOiFires) triggers.push(`oiZScore30d=${oiZScore30d.toFixed(2)}`);
+    if (csPriceFires === true && priceReturn24h !== null) triggers.push(`priceReturn24h=${pct(priceReturn24h)}`);
     if (triggers.length >= 2 && (csOiFires || csPriceFires !== false)) {
       return { state: "CROWDED_SHORT", triggers };
     }
@@ -281,15 +270,12 @@ function classifyPositioning(
   // ── HEATING_UP ─────────────────────────────────────────────────────────────
   // Mid-funding percentile + OI increasing over medium horizon (≥2 signals)
   const huFundingFires = fundingPct1m >= 40 && fundingPct1m <= 70;
-  const huOiFires      = oiChange7d > 0.02;
+  const huOiFires = oiChange7d > 0.02;
 
   if (huFundingFires && huOiFires) {
     return {
       state: "HEATING_UP",
-      triggers: [
-        `fundingPct1m=${fundingPct1m} (40–70 range)`,
-        `oiChange7d=${pct(oiChange7d)} > +2%`,
-      ],
+      triggers: [`fundingPct1m=${fundingPct1m} (40–70 range)`, `oiChange7d=${pct(oiChange7d)} > +2%`],
     };
   }
 
@@ -301,34 +287,24 @@ function classifyPositioning(
 // Priority: CAPITULATION > UNWINDING > DELEVERAGING > NONE
 // Hysteresis applied per state.
 
-function classifyStress(
-  signals: AnalysisSignals,
-  prevStress: StressState | null
-): Classified<StressState> {
-  const {
-    liqPct1m,
-    liqPct3m,
-    oiChange24h,
-    oiChange7d,
-    priceReturn24h,
-    fundingPressureCycles,
-    fundingPressureSide,
-  } = signals;
+function classifyStress(signals: AnalysisSignals, prevStress: StressState | null): Classified<StressState> {
+  const { liqPct1m, liqPct3m, oiChange24h, oiChange7d, priceReturn24h, fundingPressureCycles, fundingPressureSide } =
+    signals;
 
   // ── 1. CAPITULATION (highest priority) ────────────────────────────────────
   // Requires ≥2 of 3 confirming signals.
   // Hysteresis: lower thresholds when already in CAPITULATION.
-  const inCap     = prevStress === "CAPITULATION";
+  const inCap = prevStress === "CAPITULATION";
   const capLiqThresh = inCap ? 85 : 90;
-  const capOiThresh  = inCap ? -0.07 : -0.10;
+  const capOiThresh = inCap ? -0.07 : -0.1;
 
-  const capLiqFires   = liqPct3m > capLiqThresh;
-  const capOiFires    = oiChange24h <= capOiThresh;
+  const capLiqFires = liqPct3m > capLiqThresh;
+  const capOiFires = oiChange24h <= capOiThresh;
   const capPriceFires = priceReturn24h !== null && Math.abs(priceReturn24h) >= 0.05;
 
   const capSignals: string[] = [];
-  if (capLiqFires)   capSignals.push(`liqPct3m=${liqPct3m} > ${capLiqThresh}`);
-  if (capOiFires)    capSignals.push(`oiChange24h=${pct(oiChange24h)} ≤ ${pct(capOiThresh)}`);
+  if (capLiqFires) capSignals.push(`liqPct3m=${liqPct3m} > ${capLiqThresh}`);
+  if (capOiFires) capSignals.push(`oiChange24h=${pct(oiChange24h)} ≤ ${pct(capOiThresh)}`);
   if (capPriceFires) capSignals.push(`|priceReturn24h|=${pct(Math.abs(priceReturn24h!))} ≥ 5%`);
 
   if (capSignals.length >= 2) {
@@ -338,34 +314,31 @@ function classifyStress(
   // ── 2. UNWINDING ──────────────────────────────────────────────────────────
   // Both signals required.
   // Hysteresis: stay in UNWINDING with lower thresholds.
-  const inUnw     = prevStress === "UNWINDING";
-  const unwOiThresh  = inUnw ? -0.03 : -0.05;
-  const unwLiqThresh = inUnw ? 60    : 70;
+  const inUnw = prevStress === "UNWINDING";
+  const unwOiThresh = inUnw ? -0.03 : -0.05;
+  const unwLiqThresh = inUnw ? 60 : 70;
 
-  const unwOiFires  = oiChange24h <= unwOiThresh;
+  const unwOiFires = oiChange24h <= unwOiThresh;
   const unwLiqFires = liqPct1m > unwLiqThresh;
 
   if (unwOiFires && unwLiqFires) {
     return {
       state: "UNWINDING",
-      triggers: [
-        `oiChange24h=${pct(oiChange24h)} ≤ ${pct(unwOiThresh)}`,
-        `liqPct1m=${liqPct1m} > ${unwLiqThresh}`,
-      ],
+      triggers: [`oiChange24h=${pct(oiChange24h)} ≤ ${pct(unwOiThresh)}`, `liqPct1m=${liqPct1m} > ${unwLiqThresh}`],
     };
   }
 
   // ── 3. DELEVERAGING ───────────────────────────────────────────────────────
   // All conditions required.
   // Hysteresis: lower cycle count and OI thresholds when already in DELEVERAGING.
-  const inDlv           = prevStress === "DELEVERAGING";
-  const dlvCycleThresh  = inDlv ? 2    : 3;
-  const dlvOi24hThresh  = inDlv ? -0.01 : -0.02;
-  const dlvOi7dThresh   = inDlv ? -0.02 : -0.05;
-  const dlvLiqCap       = inDlv ? 75   : 70; // must be below (no extreme liq)
+  const inDlv = prevStress === "DELEVERAGING";
+  const dlvCycleThresh = inDlv ? 2 : 3;
+  const dlvOi24hThresh = inDlv ? -0.01 : -0.02;
+  const dlvOi7dThresh = inDlv ? -0.02 : -0.05;
+  const dlvLiqCap = inDlv ? 75 : 70; // must be below (no extreme liq)
 
   const dlvCyclesFire = fundingPressureSide !== null && fundingPressureCycles >= dlvCycleThresh;
-  const dlvOiFires    = oiChange24h < dlvOi24hThresh || oiChange7d < dlvOi7dThresh;
+  const dlvOiFires = oiChange24h < dlvOi24hThresh || oiChange7d < dlvOi7dThresh;
   const dlvNoLiqSpike = liqPct1m <= dlvLiqCap;
 
   if (dlvCyclesFire && dlvOiFires && dlvNoLiqSpike) {
@@ -387,7 +360,7 @@ function detectEvents(snapshot: DerivativesSnapshot, nowMs: number): RegimeEvent
 
   const oiHistory = snapshot.openInterest.history1m;
   if (oiHistory.length >= 1) {
-    const prev   = oiHistory[oiHistory.length - 1]!.value;
+    const prev = oiHistory[oiHistory.length - 1]!.value;
     const change = (snapshot.openInterest.current - prev) / prev;
     if (Math.abs(change) >= 0.025) {
       events.push({
@@ -421,18 +394,18 @@ function pct(v: number): string {
 
 export function analyze(
   snapshot: DerivativesSnapshot,
-  prevState: DerivativesState | null
+  prevState: DerivativesState | null,
 ): { context: DerivativesContext; nextState: DerivativesState } {
   const nowMs = new Date(snapshot.timestamp).getTime();
 
   // Build metric contexts
-  const fundingCtx  = buildMetricContext(snapshot.funding.current, snapshot.funding.history1m, nowMs);
-  const oiCtx       = buildMetricContext(snapshot.openInterest.current, snapshot.openInterest.history1m, nowMs);
-  const liqCtx      = buildLiquidationContext(
+  const fundingCtx = buildMetricContext(snapshot.funding.current, snapshot.funding.history1m, nowMs);
+  const oiCtx = buildMetricContext(snapshot.openInterest.current, snapshot.openInterest.history1m, nowMs);
+  const liqCtx = buildLiquidationContext(
     snapshot.liquidations.current8h,
     snapshot.liquidations.bias,
     snapshot.liquidations.history1m,
-    nowMs
+    nowMs,
   );
   const cbPremiumCtx = buildMetricContext(snapshot.coinbasePremium.current, snapshot.coinbasePremium.history1m, nowMs);
 
@@ -447,30 +420,21 @@ export function analyze(
 
   // Track duration since positioning last changed (stress is shown separately in UI)
   const positioningChanged = prevState?.positioning !== positioning.state;
-  const stressChanged      = prevState?.stress      !== stress.state;
-  const since = positioningChanged
-    ? snapshot.timestamp
-    : (prevState?.since ?? snapshot.timestamp);
+  const stressChanged = prevState?.stress !== stress.state;
+  const since = positioningChanged ? snapshot.timestamp : (prevState?.since ?? snapshot.timestamp);
 
-  const durationHours = Math.round(
-    (nowMs - new Date(since).getTime()) / (1000 * 60 * 60)
-  );
+  const durationHours = Math.round((nowMs - new Date(since).getTime()) / (1000 * 60 * 60));
 
   const previousPositioning = positioningChanged
     ? (prevState?.positioning ?? null)
     : (prevState?.previousPositioning ?? null);
 
-  const previousStress = stressChanged
-    ? (prevState?.stress ?? null)
-    : (prevState?.previousStress ?? null);
+  const previousStress = stressChanged ? (prevState?.stress ?? null) : (prevState?.previousStress ?? null);
 
   // OI signal (orthogonal modifier)
   const oiPct1m = oiCtx.percentile["1m"];
   const oiSignal: OiSignal =
-    oiPct1m > 90 ? "EXTREME"   :
-    oiPct1m > 70 ? "ELEVATED"  :
-    oiPct1m < 30 ? "DEPRESSED" :
-    "OI_NORMAL";
+    oiPct1m > 90 ? "EXTREME" : oiPct1m > 70 ? "ELEVATED" : oiPct1m < 30 ? "DEPRESSED" : "OI_NORMAL";
 
   const events = detectEvents(snapshot, nowMs);
 

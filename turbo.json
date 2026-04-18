@@ -1,5 +1,25 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "ANTHROPIC_API_KEY",
+    "COINGLASS_API_KEY",
+    "UNBIAS_API_KEY",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_CHAT_ID",
+    "WEB_APP_URL",
+    "TWITTER_API_KEY",
+    "TWITTER_API_SECRET",
+    "TWITTER_ACCESS_TOKEN",
+    "TWITTER_ACCESS_SECRET",
+    "BRIEF_CRON",
+    "OUTCOME_CRON",
+    "API_PORT",
+    "API_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

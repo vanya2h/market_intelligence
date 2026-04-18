@@ -11,28 +11,28 @@
  * Usage:  tsx src/scripts/debug-synthesizer.ts --asset [BTC|ETH]
  */
 
-import "../env.js";
 import chalk from "chalk";
-import { runAllDimensions } from "../orchestrator/pipeline.js";
-import { synthesize, buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { computeDelta } from "../orchestrator/delta.js";
-import {
-  DIMENSION_LABELS,
-  type DimensionOutput,
-  type DerivativesOutput,
-  type EtfsOutput,
-  type HtfOutput,
-  type SentimentOutput,
-  type ExchangeFlowsOutput,
-} from "../orchestrator/types.js";
-import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
-import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
+import { runAllDimensions } from "../orchestrator/pipeline.js";
+import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
+import { buildPrompt, buildSystemPrompt, synthesize } from "../orchestrator/synthesizer.js";
 import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
+import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
+import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
+import {
+  type DerivativesOutput,
+  DIMENSION_LABELS,
+  type DimensionOutput,
+  type EtfsOutput,
+  type ExchangeFlowsOutput,
+  type HtfOutput,
+  type SentimentOutput,
+} from "../orchestrator/types.js";
 import { parseAsset } from "./utils.js";
+import "../env.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

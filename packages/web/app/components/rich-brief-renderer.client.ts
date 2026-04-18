@@ -11,22 +11,22 @@
 
 import { html, reactive } from "@arrow-js/core";
 import type { Regime } from "@market-intel/api";
-import { regimeLabel } from "../lib/regime-colors";
 import type {
-  RichBlock,
-  HeadingBlock,
-  TextBlock,
-  SpectrumBlock,
-  MetricRowBlock,
   BarChartBlock,
-  HeatmapBlock,
-  ScorecardBlock,
   CalloutBlock,
-  SignalBlock,
+  HeadingBlock,
+  HeatmapBlock,
   LevelMapBlock,
+  MetricRowBlock,
   RegimeBannerBlock,
+  RichBlock,
+  ScorecardBlock,
+  SignalBlock,
+  SpectrumBlock,
   TensionBlock,
+  TextBlock,
 } from "@market-intel/pipeline";
+import { regimeLabel } from "../lib/regime-colors";
 
 // ─── Color helpers ──────────────────────────────────────────────────────────
 

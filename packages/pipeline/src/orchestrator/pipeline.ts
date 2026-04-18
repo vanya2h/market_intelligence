@@ -8,37 +8,39 @@
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import { collect as collectDerivatives } from "../derivatives_structure/collector.js";
-import { analyze as analyzeDerivatives } from "../derivatives_structure/analyzer.js";
 import { runAgent as runDerivativesAgent } from "../derivatives_structure/agent.js";
+import { analyze as analyzeDerivatives } from "../derivatives_structure/analyzer.js";
+import { collect as collectDerivatives } from "../derivatives_structure/collector.js";
+import { runAgent as runEtfsAgent } from "../etfs/agent.js";
+import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
+import { collect as collectEtfs } from "../etfs/collector.js";
+import type { EtfState } from "../etfs/types.js";
+import { runAgent as runExchangeFlowsAgent } from "../exchange_flows/agent.js";
+import { analyze as analyzeExchangeFlows } from "../exchange_flows/analyzer.js";
+import { collect as collectExchangeFlows } from "../exchange_flows/collector.js";
+import type { ExchangeFlowsState } from "../exchange_flows/types.js";
+import { runAgent as runHtfAgent } from "../htf/agent.js";
+import { analyze as analyzeHtf } from "../htf/analyzer.js";
+import { collect as collectHtf } from "../htf/collector.js";
+import type { HtfState } from "../htf/types.js";
+import { runAgent as runSentimentAgent } from "../sentiment/agent.js";
+import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
+import { collect as collectSentiment } from "../sentiment/collector.js";
+import type { SentimentState } from "../sentiment/types.js";
 import {
   appendSnapshot,
   loadState as loadDerivativesState,
   saveState as saveDerivativesState,
 } from "../storage/json.js";
-
-import { collect as collectEtfs } from "../etfs/collector.js";
-import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
-import { runAgent as runEtfsAgent } from "../etfs/agent.js";
-import type { EtfState } from "../etfs/types.js";
-
-import { collect as collectHtf } from "../htf/collector.js";
-import { analyze as analyzeHtf } from "../htf/analyzer.js";
-import { runAgent as runHtfAgent } from "../htf/agent.js";
-import type { HtfState } from "../htf/types.js";
-
-import { collect as collectSentiment } from "../sentiment/collector.js";
-import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
-import { runAgent as runSentimentAgent } from "../sentiment/agent.js";
-import type { SentimentState } from "../sentiment/types.js";
-
-import { collect as collectExchangeFlows } from "../exchange_flows/collector.js";
-import { analyze as analyzeExchangeFlows } from "../exchange_flows/analyzer.js";
-import { runAgent as runExchangeFlowsAgent } from "../exchange_flows/agent.js";
-import type { ExchangeFlowsState } from "../exchange_flows/types.js";
-
-import type { DimensionOutput, DerivativesOutput, EtfsOutput, HtfOutput, SentimentOutput, ExchangeFlowsOutput } from "./types.js";
 import type { AssetType } from "../types.js";
+import type {
+  DerivativesOutput,
+  DimensionOutput,
+  EtfsOutput,
+  ExchangeFlowsOutput,
+  HtfOutput,
+  SentimentOutput,
+} from "./types.js";
 
 // ─── State helpers ───────────────────────────────────────────────────────────
 

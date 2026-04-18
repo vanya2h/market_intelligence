@@ -20,11 +20,7 @@ function formatAge(fetchedAt: number): string {
 
 const KEY_PREFIX = "cache:";
 
-export async function getCached<T>(
-  key: string,
-  ttlMs: number,
-  fetch: () => Promise<T>
-): Promise<T> {
+export async function getCached<T>(key: string, ttlMs: number, fetch: () => Promise<T>): Promise<T> {
   const redisKey = `${KEY_PREFIX}${key}`;
   const redis = getRedis();
   const existing = await redis.get<CacheEntry<T>>(redisKey);
@@ -33,12 +29,12 @@ export async function getCached<T>(
     const age = Date.now() - existing.fetchedAt;
     if (age < ttlMs) {
       console.log(
-        `      ${chalk.green("▸ cache hit")}  ${chalk.cyan(key)} ${chalk.dim(`${formatAge(existing.fetchedAt)} old`)}`
+        `      ${chalk.green("▸ cache hit")}  ${chalk.cyan(key)} ${chalk.dim(`${formatAge(existing.fetchedAt)} old`)}`,
       );
       return existing.data;
     }
     console.log(
-      `      ${chalk.yellow("▸ cache miss")} ${chalk.cyan(key)} ${chalk.dim(`${formatAge(existing.fetchedAt)} old, expired`)}`
+      `      ${chalk.yellow("▸ cache miss")} ${chalk.cyan(key)} ${chalk.dim(`${formatAge(existing.fetchedAt)} old, expired`)}`,
     );
   }
 

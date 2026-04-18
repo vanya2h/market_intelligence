@@ -10,9 +10,9 @@
  * Usage:  tsx src/scripts/analyze-remaining.ts
  */
 
-import "../env.js";
-import { prisma } from "../storage/db.js";
 import chalk from "chalk";
+import { prisma } from "../storage/db.js";
+import "../env.js";
 
 interface Confluence {
   derivatives: number;
@@ -85,21 +85,27 @@ async function main() {
     console.log(`    Correct: ${shortCorrect.length}  Wrong: ${shortWrong.length}`);
     console.log(`    Avg max favorable: ${avg(shorts.map((i) => i.maxFav)).toFixed(2)}%`);
     console.log(`    Avg max adverse:   ${avg(shorts.map((i) => i.maxAdv)).toFixed(2)}%`);
-    console.log(`    → Market usually moves AGAINST shorts by ${Math.abs(avg(shorts.map((i) => i.maxAdv))).toFixed(2)}%\n`);
+    console.log(
+      `    → Market usually moves AGAINST shorts by ${Math.abs(avg(shorts.map((i) => i.maxAdv))).toFixed(2)}%\n`,
+    );
 
     // Dimension scores for correct vs wrong SHORTs
     console.log(`    ${chalk.underline("Dimension scores: correct vs wrong SHORTs")}\n`);
     for (const dim of DIMS) {
       const cAvg = avg(shortCorrect.map((i) => i.conf[dim]));
       const wAvg = avg(shortWrong.map((i) => i.conf[dim]));
-      console.log(`      ${dim.padEnd(16)} correct=${(cAvg * 100).toFixed(0).padStart(4)}%  wrong=${(wAvg * 100).toFixed(0).padStart(4)}%  Δ=${((cAvg - wAvg) * 100).toFixed(0).padStart(4)}%`);
+      console.log(
+        `      ${dim.padEnd(16)} correct=${(cAvg * 100).toFixed(0).padStart(4)}%  wrong=${(wAvg * 100).toFixed(0).padStart(4)}%  Δ=${((cAvg - wAvg) * 100).toFixed(0).padStart(4)}%`,
+      );
     }
 
     // When was SHORT actually right? What conditions?
     console.log(`\n    ${chalk.underline("Correct SHORT confluence totals")}`);
     for (const s of shortCorrect) {
       const date = s.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      console.log(`      ${date}  total=${(s.conf.total * 100).toFixed(0)}%  peak=${s.peakReturn.toFixed(2)}%  deriv=${(s.conf.derivatives * 100).toFixed(0)}% etf=${(s.conf.etfs * 100).toFixed(0)}% htf=${(s.conf.htf * 100).toFixed(0)}% ef=${(s.conf.exchangeFlows * 100).toFixed(0)}%`);
+      console.log(
+        `      ${date}  total=${(s.conf.total * 100).toFixed(0)}%  peak=${s.peakReturn.toFixed(2)}%  deriv=${(s.conf.derivatives * 100).toFixed(0)}% etf=${(s.conf.etfs * 100).toFixed(0)}% htf=${(s.conf.htf * 100).toFixed(0)}% ef=${(s.conf.exchangeFlows * 100).toFixed(0)}%`,
+      );
     }
 
     // Compare: SHORT total vs LONG total — was SHORT even the stronger signal?
@@ -110,8 +116,12 @@ async function main() {
     // If SHORT total > LONG total, it means more dims agreed with SHORT
     const weakShorts = shorts.filter((i) => i.conf.total < 0.1);
     const strongShorts = shorts.filter((i) => i.conf.total >= 0.1);
-    console.log(`    Weak SHORTs (total < 10%):  n=${weakShorts.length}  win=${pct(weakShorts.filter((i) => i.peakQ > 0).length, weakShorts.length)}`);
-    console.log(`    Strong SHORTs (total ≥ 10%): n=${strongShorts.length}  win=${pct(strongShorts.filter((i) => i.peakQ > 0).length, strongShorts.length)}`);
+    console.log(
+      `    Weak SHORTs (total < 10%):  n=${weakShorts.length}  win=${pct(weakShorts.filter((i) => i.peakQ > 0).length, weakShorts.length)}`,
+    );
+    console.log(
+      `    Strong SHORTs (total ≥ 10%): n=${strongShorts.length}  win=${pct(strongShorts.filter((i) => i.peakQ > 0).length, strongShorts.length)}`,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -130,9 +140,15 @@ async function main() {
     const etfNegative = assetIdeas.filter((i) => i.conf.etfs < -0.05);
     const etfZero = assetIdeas.filter((i) => Math.abs(i.conf.etfs) <= 0.05);
 
-    console.log(`    ETF > +5%:  n=${etfPositive.length}  win=${pct(etfPositive.filter((i) => i.peakQ > 0).length, etfPositive.length)}  avgQ=${avg(etfPositive.map((i) => i.peakQ)).toFixed(2)}`);
-    console.log(`    ETF ~0:     n=${etfZero.length}  win=${pct(etfZero.filter((i) => i.peakQ > 0).length, etfZero.length)}  avgQ=${avg(etfZero.map((i) => i.peakQ)).toFixed(2)}`);
-    console.log(`    ETF < -5%:  n=${etfNegative.length}  win=${pct(etfNegative.filter((i) => i.peakQ > 0).length, etfNegative.length)}  avgQ=${avg(etfNegative.map((i) => i.peakQ)).toFixed(2)}`);
+    console.log(
+      `    ETF > +5%:  n=${etfPositive.length}  win=${pct(etfPositive.filter((i) => i.peakQ > 0).length, etfPositive.length)}  avgQ=${avg(etfPositive.map((i) => i.peakQ)).toFixed(2)}`,
+    );
+    console.log(
+      `    ETF ~0:     n=${etfZero.length}  win=${pct(etfZero.filter((i) => i.peakQ > 0).length, etfZero.length)}  avgQ=${avg(etfZero.map((i) => i.peakQ)).toFixed(2)}`,
+    );
+    console.log(
+      `    ETF < -5%:  n=${etfNegative.length}  win=${pct(etfNegative.filter((i) => i.peakQ > 0).length, etfNegative.length)}  avgQ=${avg(etfNegative.map((i) => i.peakQ)).toFixed(2)}`,
+    );
 
     // ETH-specific: ETF data is BTC ETF data applied to ETH. Does ETH even follow BTC ETF flows?
     if (asset === "ETH") {
@@ -185,44 +201,69 @@ async function main() {
       // What direction was chosen when HTF opposes?
       const oppLong = htfOpposes.filter((i) => i.direction === "LONG");
       const oppShort = htfOpposes.filter((i) => i.direction === "SHORT");
-      console.log(`      LONG chosen:  n=${oppLong.length}  win=${pct(oppLong.filter((i) => i.peakQ > 0).length, oppLong.length)}`);
-      console.log(`      SHORT chosen: n=${oppShort.length}  win=${pct(oppShort.filter((i) => i.peakQ > 0).length, oppShort.length)}`);
+      console.log(
+        `      LONG chosen:  n=${oppLong.length}  win=${pct(oppLong.filter((i) => i.peakQ > 0).length, oppLong.length)}`,
+      );
+      console.log(
+        `      SHORT chosen: n=${oppShort.length}  win=${pct(oppShort.filter((i) => i.peakQ > 0).length, oppShort.length)}`,
+      );
 
       // What other dimensions overrode HTF?
       console.log(`\n      ${chalk.underline("What dims overrode HTF?")}\n`);
       for (const dim of DIMS.filter((d) => d !== "htf")) {
         const dimAgrees = htfOpposes.filter((i) => i.conf[dim] > 0.1);
         const dimWins = dimAgrees.filter((i) => i.peakQ > 0);
-        console.log(`        ${dim.padEnd(16)} agreed: ${dimAgrees.length}/${htfOpposes.length}  win when agreed: ${pct(dimWins.length, dimAgrees.length)}`);
+        console.log(
+          `        ${dim.padEnd(16)} agreed: ${dimAgrees.length}/${htfOpposes.length}  win when agreed: ${pct(dimWins.length, dimAgrees.length)}`,
+        );
       }
     }
 
     // HTF composite bias vs actual outcome
     if (htfCtxs.length > 0) {
       console.log(`\n    ${chalk.underline("HTF Bias Composite (raw, not directional)")}\n`);
-      const biasValues = htfCtxs.filter((i) => {
-        const ctx = i.brief!.htf!.context as Record<string, unknown> | null;
-        return ctx && ctx.bias;
-      }).map((i) => {
-        const ctx = i.brief!.htf!.context as Record<string, unknown>;
-        const bias = ctx.bias as Record<string, number>;
-        return { composite: bias.composite ?? 0, compression: bias.compression ?? 0, momentum: bias.momentum ?? 0, flow: bias.flow ?? 0, trend: bias.trend ?? 0, correct: i.peakQ > 0 };
-      });
+      const biasValues = htfCtxs
+        .filter((i) => {
+          const ctx = i.brief!.htf!.context as Record<string, unknown> | null;
+          return ctx && ctx.bias;
+        })
+        .map((i) => {
+          const ctx = i.brief!.htf!.context as Record<string, unknown>;
+          const bias = ctx.bias as Record<string, number>;
+          return {
+            composite: bias.composite ?? 0,
+            compression: bias.compression ?? 0,
+            momentum: bias.momentum ?? 0,
+            flow: bias.flow ?? 0,
+            trend: bias.trend ?? 0,
+            correct: i.peakQ > 0,
+          };
+        });
 
       // When composite bias magnitude is high vs low
       const highBias = biasValues.filter((b) => Math.abs(b.composite) > 0.3);
       const lowBias = biasValues.filter((b) => Math.abs(b.composite) <= 0.1);
       const midBias = biasValues.filter((b) => Math.abs(b.composite) > 0.1 && Math.abs(b.composite) <= 0.3);
 
-      console.log(`      |composite| > 0.3:  n=${highBias.length}  win=${pct(highBias.filter((b) => b.correct).length, highBias.length)}`);
-      console.log(`      |composite| 0.1-0.3: n=${midBias.length}  win=${pct(midBias.filter((b) => b.correct).length, midBias.length)}`);
-      console.log(`      |composite| ≤ 0.1:  n=${lowBias.length}  win=${pct(lowBias.filter((b) => b.correct).length, lowBias.length)}`);
+      console.log(
+        `      |composite| > 0.3:  n=${highBias.length}  win=${pct(highBias.filter((b) => b.correct).length, highBias.length)}`,
+      );
+      console.log(
+        `      |composite| 0.1-0.3: n=${midBias.length}  win=${pct(midBias.filter((b) => b.correct).length, midBias.length)}`,
+      );
+      console.log(
+        `      |composite| ≤ 0.1:  n=${lowBias.length}  win=${pct(lowBias.filter((b) => b.correct).length, lowBias.length)}`,
+      );
 
       // Compression as a standalone signal
       const compressed = biasValues.filter((b) => (b.compression ?? 0) > 0.5);
       const notCompressed = biasValues.filter((b) => (b.compression ?? 0) <= 0.2);
-      console.log(`\n      Compression > 0.5:  n=${compressed.length}  win=${pct(compressed.filter((b) => b.correct).length, compressed.length)}`);
-      console.log(`      Compression ≤ 0.2:  n=${notCompressed.length}  win=${pct(notCompressed.filter((b) => b.correct).length, notCompressed.length)}`);
+      console.log(
+        `\n      Compression > 0.5:  n=${compressed.length}  win=${pct(compressed.filter((b) => b.correct).length, compressed.length)}`,
+      );
+      console.log(
+        `      Compression ≤ 0.2:  n=${notCompressed.length}  win=${pct(notCompressed.filter((b) => b.correct).length, notCompressed.length)}`,
+      );
     }
   }
 
@@ -236,7 +277,8 @@ async function main() {
 
     console.log(`\n  ${chalk.underline(asset)}\n`);
 
-    let flips = 0, persists = 0;
+    let flips = 0,
+      persists = 0;
     const flipResults: boolean[] = [];
     const persistResults: boolean[] = [];
 
@@ -256,8 +298,12 @@ async function main() {
 
     const flipWin = flipResults.filter(Boolean).length;
     const persistWin = persistResults.filter(Boolean).length;
-    console.log(`    Flips:    n=${flips}  win=${pct(flipWin, flips)}  avgQ=${avg(flipResults.map((r) => r ? 1 : -1)).toFixed(2)}`);
-    console.log(`    Persists: n=${persists}  win=${pct(persistWin, persists)}  avgQ=${avg(persistResults.map((r) => r ? 1 : -1)).toFixed(2)}`);
+    console.log(
+      `    Flips:    n=${flips}  win=${pct(flipWin, flips)}  avgQ=${avg(flipResults.map((r) => (r ? 1 : -1))).toFixed(2)}`,
+    );
+    console.log(
+      `    Persists: n=${persists}  win=${pct(persistWin, persists)}  avgQ=${avg(persistResults.map((r) => (r ? 1 : -1))).toFixed(2)}`,
+    );
 
     // What was the previous idea's outcome when we flip?
     const flipAfterCorrect: boolean[] = [];
@@ -270,8 +316,12 @@ async function main() {
         else flipAfterWrong.push(curr.peakQ > 0);
       }
     }
-    console.log(`    Flip after correct prev: n=${flipAfterCorrect.length}  win=${pct(flipAfterCorrect.filter(Boolean).length, flipAfterCorrect.length)}`);
-    console.log(`    Flip after wrong prev:   n=${flipAfterWrong.length}  win=${pct(flipAfterWrong.filter(Boolean).length, flipAfterWrong.length)}`);
+    console.log(
+      `    Flip after correct prev: n=${flipAfterCorrect.length}  win=${pct(flipAfterCorrect.filter(Boolean).length, flipAfterCorrect.length)}`,
+    );
+    console.log(
+      `    Flip after wrong prev:   n=${flipAfterWrong.length}  win=${pct(flipAfterWrong.filter(Boolean).length, flipAfterWrong.length)}`,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -302,7 +352,9 @@ async function main() {
       const inBucket = withMargin.filter((i) => i.margin >= b.min && i.margin < b.max);
       if (inBucket.length === 0) continue;
       const wins = inBucket.filter((i) => i.peakQ > 0);
-      console.log(`    ${b.label.padEnd(18)} n=${String(inBucket.length).padEnd(4)} win=${pct(wins.length, inBucket.length).padStart(6)}  avgQ=${avg(inBucket.map((i) => i.peakQ)).toFixed(2)}`);
+      console.log(
+        `    ${b.label.padEnd(18)} n=${String(inBucket.length).padEnd(4)} win=${pct(wins.length, inBucket.length).padStart(6)}  avgQ=${avg(inBucket.map((i) => i.peakQ)).toFixed(2)}`,
+      );
     }
   }
 
@@ -327,7 +379,9 @@ async function main() {
     }
 
     for (const [hour, data] of [...byHour.entries()].sort((a, b) => a[0] - b[0])) {
-      console.log(`    ${String(hour).padStart(2)}:00 UTC  n=${String(data.total).padEnd(4)} win=${pct(data.wins, data.total).padStart(6)}  avgQ=${avg(data.avgQ).toFixed(2)}`);
+      console.log(
+        `    ${String(hour).padStart(2)}:00 UTC  n=${String(data.total).padEnd(4)} win=${pct(data.wins, data.total).padStart(6)}  avgQ=${avg(data.avgQ).toFixed(2)}`,
+      );
     }
   }
 
