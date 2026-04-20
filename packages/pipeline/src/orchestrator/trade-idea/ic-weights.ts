@@ -29,16 +29,28 @@ export interface DimensionWeights {
   exchangeFlows: number;
   /** Whether IC-based weights were computed (true) or equal fallback used (false) */
   calibrated: boolean;
-  /** Number of resolved trade ideas used for calibration */
+  /** Number of trade ideas used for calibration */
   sampleCount: number;
-  /** Per-dimension IC values (for diagnostics / logging) */
+  /** Full-history IC values (EMA-smoothed) used to derive weights */
   ic: Record<DimensionKey, number>;
+  /**
+   * IC computed from the most recent RECENT_WINDOW ideas only.
+   * Compare against `ic` to detect a dimension that is starting to turn around
+   * before it shows up in the full-history weights.
+   */
+  recentIc: Record<DimensionKey, number>;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-/** Minimum resolved trade ideas required to trust IC estimates */
+/** Minimum trade ideas required to trust IC estimates */
 const MIN_SAMPLES = 20;
+
+/**
+ * Number of most-recent ideas used for the rolling recent IC.
+ * Small enough to detect regime changes quickly, large enough to avoid noise.
+ */
+const RECENT_WINDOW = 30;
 
 /**
  * EMA smoothing factor for IC values.
@@ -48,8 +60,11 @@ const MIN_SAMPLES = 20;
  */
 const IC_EMA_ALPHA = 0.1;
 
-/** Redis key prefix for persisted smoothed IC values */
-const IC_EMA_KEY_PREFIX = "ic_ema:";
+/**
+ * Redis key prefix for persisted smoothed IC values.
+ * Version suffix — bump when the outcome definition changes to discard stale EMA.
+ */
+const IC_EMA_KEY_PREFIX = "ic_ema_v3:";
 
 /**
  * Floor weight — no dimension drops below this even with poor IC.
@@ -140,6 +155,8 @@ async function saveSmoothedIc(asset: $Enums.Asset, ic: SmoothedIc): Promise<void
  * Each dimension gets `WEIGHT_SUM / N_DIMS` so the weights sum to 1
  * (= 0.25 each for 4 dims).
  */
+const ZERO_IC: Record<DimensionKey, number> = { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 };
+
 export const EQUAL_WEIGHTS: DimensionWeights = {
   derivatives: WEIGHT_SUM / DIMENSION_KEYS.length,
   etfs: WEIGHT_SUM / DIMENSION_KEYS.length,
@@ -147,12 +164,8 @@ export const EQUAL_WEIGHTS: DimensionWeights = {
   exchangeFlows: WEIGHT_SUM / DIMENSION_KEYS.length,
   calibrated: false,
   sampleCount: 0,
-  ic: {
-    derivatives: 0,
-    etfs: 0,
-    htf: 0,
-    exchangeFlows: 0,
-  },
+  ic: { ...ZERO_IC },
+  recentIc: { ...ZERO_IC },
 };
 
 function equalWeights(sampleCount: number = 0): DimensionWeights {
@@ -164,38 +177,42 @@ function equalWeights(sampleCount: number = 0): DimensionWeights {
 /**
  * Compute IC-based dimension weights from historical trade idea outcomes.
  *
- * For each resolved trade idea:
- * - Determines if the directional call was correct (first level to resolve:
- *   TARGET WIN = correct, INVALIDATION LOSS = incorrect)
- * - Records each dimension's conviction score from the stored confluence
+ * Uses all trade ideas that have return snapshots (not just resolved ones),
+ * with peak quality as the continuous outcome. Peak quality = the return
+ * snapshot with the highest absolute qualityAtPoint value, which is
+ * returnPct × exp(-hoursAfter/τ) — already direction-signed and time-decayed.
+ * Positive = price moved in the predicted direction.
  *
- * Then computes per-dimension:
- * - IC = Pearson correlation between scores and outcomes (+1/-1)
- * - σ = standard deviation of scores
+ * This avoids the survivorship bias of the resolved-level population (which
+ * skews toward stopped-out shorts) and uses the full available dataset.
+ *
+ * Per-dimension:
+ * - IC = Pearson correlation between dimension score and peak quality
+ * - σ = standard deviation of dimension scores
  * - Raw weight = max(IC, 0) / σ  (anti-predictive dims get floor weight)
  *
- * Weights are normalized to sum to 1, so the confluence total stays a weighted
- * average in -1..+1 invariant to dimension count. Per-dim scores are read from
- * the persisted (already normalized) confluence JSON.
+ * Weights are normalized to sum to 1 with a per-dim floor of WEIGHT_FLOOR.
  */
 export async function computeDimensionWeights(asset: $Enums.Asset): Promise<DimensionWeights> {
   const ideas = await prisma.tradeIdea.findMany({
     where: {
       asset,
-      levels: { some: { outcome: { not: "OPEN" } } },
+      returns: { some: {} },
     },
     include: {
-      levels: {
-        where: { outcome: { not: "OPEN" } },
-        orderBy: { resolvedAt: "asc" },
-      },
+      returns: { orderBy: { hoursAfter: "asc" } },
     },
     orderBy: { createdAt: "asc" },
   });
 
   if (ideas.length < MIN_SAMPLES) return equalWeights(ideas.length);
 
-  // Extract samples: per-dimension scores + binary outcome
+  // Extract samples: per-dimension scores + binary direction outcome.
+  // Peak quality snapshot = the one with the highest |qualityAtPoint|, where
+  // qualityAtPoint = returnPct × exp(-hoursAfter/τ), direction-signed.
+  // Binary outcome (+1 / -1): did price move in the predicted direction?
+  // Binary is used rather than the raw continuous value to avoid outlier
+  // distortion — extreme individual trades can flip the Pearson sign.
   const scores: Record<DimensionKey, number[]> = {
     derivatives: [],
     etfs: [],
@@ -206,22 +223,29 @@ export async function computeDimensionWeights(asset: $Enums.Asset): Promise<Dime
 
   for (const idea of ideas) {
     const conf = idea.confluence as Record<string, number> | null;
-    if (!conf) continue;
+    if (!conf || idea.returns.length === 0) continue;
 
-    // First resolved level determines correctness of the directional call
-    const firstResolved = idea.levels[0]; // already sorted by resolvedAt
-    if (!firstResolved) continue;
+    const peak = idea.returns.reduce((best, r) =>
+      Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
+    );
 
-    const correct = firstResolved.type === "TARGET" && firstResolved.outcome === "WIN";
-    const outcome = correct ? 1 : -1;
-
-    outcomes.push(outcome);
+    outcomes.push(peak.qualityAtPoint > 0 ? 1 : -1);
     for (const dim of DIMENSION_KEYS) {
       scores[dim].push(conf[dim] ?? 0);
     }
   }
 
   if (outcomes.length < MIN_SAMPLES) return equalWeights(outcomes.length);
+
+  // Recent-window IC — last RECENT_WINDOW samples only
+  const recentIc: Record<DimensionKey, number> = { ...ZERO_IC };
+  const windowStart = Math.max(0, outcomes.length - RECENT_WINDOW);
+  if (outcomes.length - windowStart >= 3) {
+    const recentOutcomes = outcomes.slice(windowStart);
+    for (const dim of DIMENSION_KEYS) {
+      recentIc[dim] = pearsonCorrelation(scores[dim].slice(windowStart), recentOutcomes);
+    }
+  }
 
   // Compute fresh IC and σ per dimension
   const freshIc: Record<DimensionKey, number> = {
@@ -314,6 +338,7 @@ export async function computeDimensionWeights(asset: $Enums.Asset): Promise<Dime
     calibrated: true,
     sampleCount: outcomes.length,
     ic,
+    recentIc,
   };
 }
 

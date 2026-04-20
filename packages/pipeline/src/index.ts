@@ -85,6 +85,10 @@ export type {
   ExchangeFlowsRegime,
 } from "./exchange_flows/types.js";
 
+// IC weights
+export type { DimensionKey, DimensionWeights } from "./orchestrator/trade-idea/ic-weights.js";
+export { computeDimensionWeights, DIMENSION_KEYS, EQUAL_WEIGHTS } from "./orchestrator/trade-idea/ic-weights.js";
+
 // Orchestrator
 export type {
   BarChartBlock,

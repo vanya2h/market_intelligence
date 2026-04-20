@@ -4,7 +4,7 @@
  * Endpoints for querying trade ideas, their returns curves, and aggregate stats.
  */
 
-import { prisma } from "@market-intel/pipeline";
+import { computeDimensionWeights, prisma } from "@market-intel/pipeline";
 import { describeRoute, validator } from "hono-openapi";
 import { z } from "zod";
 import { createController } from "../common/controller.js";
@@ -12,6 +12,7 @@ import { AssetParamSchema, PaginationQuerySchema } from "../common/schemas.js";
 import { AssetType } from "../lib/asset.js";
 import {
   DimensionEffectiveness,
+  IcWeights,
   IdeaSummary,
   MonthlyReturn,
   PerformanceMetrics,
@@ -229,6 +230,37 @@ export const GetStrategyCurvesController = createController({
       ),
 });
 
+// ─── GET /ic-weights/:asset ──────────────────────────────────────────────────
+
+const icWeightsRoute = describeRoute({
+  summary: "Get IC-based dimension weights",
+  description:
+    "Current Information Coefficient weights per dimension — calibrated from historical trade outcomes, or equal fallback if insufficient data",
+  tags: ["Trade Ideas"],
+  responses: {
+    200: { description: "IC weights per dimension" },
+  },
+});
+
+export const GetIcWeightsController = createController({
+  build: (factory) =>
+    factory.createApp().get("/ic-weights/:asset", icWeightsRoute, validator("param", AssetParamSchema), async (c) => {
+      const { asset } = c.req.valid("param");
+      const weights = await computeDimensionWeights(asset);
+      const response: IcWeights = {
+        derivatives: weights.derivatives,
+        etfs: weights.etfs,
+        htf: weights.htf,
+        exchangeFlows: weights.exchangeFlows,
+        calibrated: weights.calibrated,
+        sampleCount: weights.sampleCount,
+        ic: weights.ic,
+        recentIc: weights.recentIc,
+      };
+      return c.json(response);
+    }),
+});
+
 // ─── Composite controller ────────────────────────────────────────────────────
 
 export const TradeIdeasController = createController({
@@ -242,7 +274,8 @@ export const TradeIdeasController = createController({
       .route("/", GetTradeIdeaByBriefController.build(factory))
       .route("/", GetSignalEffectivenessController.build(factory))
       .route("/", GetPerformanceController.build(factory))
-      .route("/", GetStrategyCurvesController.build(factory)),
+      .route("/", GetStrategyCurvesController.build(factory))
+      .route("/", GetIcWeightsController.build(factory)),
 });
 
 export async function getTradeIdeaStats(asset: AssetType): Promise<TradeIdeaStats> {

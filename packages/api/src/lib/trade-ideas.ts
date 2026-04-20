@@ -136,6 +136,22 @@ export interface TradeIdeaStats {
   levels: TradeIdeaLevelStats[];
 }
 
+// ─── IC weights ─────────────────────────────────────────────────────────────
+
+export interface IcWeights {
+  derivatives: number;
+  etfs: number;
+  htf: number;
+  exchangeFlows: number;
+  /** true = computed from historical data, false = equal fallback */
+  calibrated: boolean;
+  sampleCount: number;
+  /** Full-history IC (EMA-smoothed) used to derive current weights */
+  ic: Record<string, number>;
+  /** IC from the most recent 30 ideas — leading indicator of regime change */
+  recentIc: Record<string, number>;
+}
+
 // ─── Signal effectiveness ───────────────────────────────────────────────────
 
 export interface SignalBucket {

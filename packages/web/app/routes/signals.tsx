@@ -1,10 +1,10 @@
 import type {
   AssetType,
   DimensionEffectiveness,
+  IcWeights,
   IdeaSummary,
   MonthlyReturn,
   PerformanceMetrics,
-  SignalBucket,
   StrategyCurvesData,
 } from "@market-intel/api";
 import type { LoaderFunctionArgs } from "react-router";
@@ -16,25 +16,26 @@ import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
 import { StrategyEquityCurve } from "../components/StrategyEquityCurve";
 import { type ConfluenceKey, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
-import { getPerformanceMetrics, getSignalEffectiveness, getStrategyCurves } from "../lib/trade-idea";
+import { getIcWeights, getPerformanceMetrics, getSignalEffectiveness, getStrategyCurves } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as AssetType;
-  const [data, performance, strategyCurves] = await Promise.all([
+  const [data, performance, strategyCurves, icWeights] = await Promise.all([
     getSignalEffectiveness(asset, api),
     getPerformanceMetrics(asset, api),
     getStrategyCurves(asset, api),
+    getIcWeights(asset, api),
   ]);
 
-  return { asset, data, performance, strategyCurves };
+  return { asset, data, performance, strategyCurves, icWeights };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Signals() {
-  const { asset, data, performance, strategyCurves } = useLoaderData<LoaderData>();
+  const { asset, data, performance, strategyCurves, icWeights } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -89,12 +90,8 @@ export default function Signals() {
               {/* Trade idea heatmap */}
               {data.ideas.length > 0 && <IdeaHeatmap ideas={data.ideas} />}
 
-              {/* Per-dimension bucket tables */}
-              <div className="flex flex-col gap-4">
-                {data.dimensions.map((dim) => (
-                  <DimensionTable key={dim.dimension} dim={dim} />
-                ))}
-              </div>
+              {/* IC weights */}
+              <IcWeightsPanel icWeights={icWeights} />
             </>
           )}
         </div>
@@ -387,8 +384,8 @@ function MethodologyGuide() {
             Correlation Chart
           </h3>
           <p>
-            Shows Pearson r between each dimension's confluence score (-100 to +100) and peak velocity across all trade
-            ideas.
+            Shows Pearson r between each dimension&apos;s confluence score (-100 to +100) and peak velocity across all
+            trade ideas.
           </p>
           <ul className="mt-2 flex flex-col gap-1 pl-4" style={{ listStyleType: "disc" }}>
             <li>
@@ -400,7 +397,7 @@ function MethodologyGuide() {
               adverse moves. The signal is contrarian — by the time it agrees, the move may be exhausted.
             </li>
             <li>
-              <span style={{ color: "var(--text-muted)" }}>Near zero</span> — the dimension's score has little
+              <span style={{ color: "var(--text-muted)" }}>Near zero</span> — the dimension&apos;s score has little
               relationship with outcome quality. It may be noise at the current pipeline cadence.
             </li>
           </ul>
@@ -412,8 +409,8 @@ function MethodologyGuide() {
             Bucket Tables
           </h3>
           <p>
-            Each dimension's score range is split into 5 buckets. For each bucket, the table shows how many ideas fell
-            in that range and the average peak velocity.
+            Each dimension&apos;s score range is split into 5 buckets. For each bucket, the table shows how many ideas
+            fell in that range and the average peak velocity.
           </p>
           <ul className="mt-2 flex flex-col gap-1 pl-4" style={{ listStyleType: "disc" }}>
             <li>
@@ -423,8 +420,8 @@ function MethodologyGuide() {
               <strong>Strong Against</strong> (-100 to -50) — dimension strongly disagrees
             </li>
             <li>
-              Look for a velocity gradient: if avg velocity increases from "Against" to "For", the dimension is
-              predictive. If it's flat or inverted, the dimension may need less weight.
+              Look for a velocity gradient: if avg velocity increases from &quot;Against&quot; to &quot;For&quot;, the
+              dimension is predictive. If it&apos;s flat or inverted, the dimension may need less weight.
             </li>
           </ul>
         </div>
@@ -641,106 +638,144 @@ function CorrelationRanking({ dimensions }: { dimensions: DimensionEffectiveness
   );
 }
 
-// ─── Per-dimension bucket table ─────────────────────────────────────────────
+// ─── IC weights panel ────────────────────────────────────────────────────────
 
-const BUCKET_LABELS: Record<string, string> = {
-  strong_against: "Strong Against",
-  weak_against: "Weak Against",
-  neutral: "Neutral",
-  weak_for: "Weak For",
-  strong_for: "Strong For",
+const CONFLUENCE_KEY_ORDER: ConfluenceKey[] = ["htf", "derivatives", "etfs", "exchangeFlows"];
+
+const FULL_LABELS: Record<ConfluenceKey, string> = {
+  htf: "HTF Structure",
+  derivatives: "Derivatives",
+  etfs: "ETFs",
+  exchangeFlows: "Exchange Flows",
 };
 
-function DimensionTable({ dim }: { dim: DimensionEffectiveness }) {
-  const label = DIMENSION_SHORT_LABELS[dim.dimension as ConfluenceKey] ?? dim.dimension;
-  const maxCount = Math.max(...dim.buckets.map((b) => b.count), 1);
-  const velocities = dim.buckets.map((b) => b.avgVelocity).filter((v): v is number => v !== null);
-  const maxVel = velocities.length > 0 ? Math.max(...velocities.map(Math.abs)) : 1;
+function IcWeightsPanel({ icWeights }: { icWeights: IcWeights }) {
+  const maxWeight = Math.max(...CONFLUENCE_KEY_ORDER.map((k) => icWeights[k]), 0.01);
 
   return (
     <div
       className="rounded-md p-4"
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-[0.6875rem] font-medium" style={{ color: "var(--text-secondary)" }}>
-          {label}
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-[0.6875rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          IC Weights
         </h2>
-        <span className="font-mono-jb text-[0.5625rem]" style={{ color: "var(--text-muted)" }}>
-          n={dim.sampleSize}
-        </span>
-        {dim.correlation !== null && (
+        {icWeights.calibrated ? (
           <span
-            className="font-mono-jb text-[0.5625rem]"
-            style={{ color: dim.correlation > 0 ? "var(--green)" : "var(--red)" }}
+            className="text-[0.5625rem] font-mono-jb px-1.5 py-0.5 rounded"
+            style={{
+              background: "color-mix(in srgb, var(--green) 12%, transparent)",
+              color: "var(--green)",
+              border: "1px solid color-mix(in srgb, var(--green) 25%, transparent)",
+            }}
           >
-            r={dim.correlation > 0 ? "+" : ""}
-            {dim.correlation.toFixed(2)}
+            calibrated · n={icWeights.sampleCount}
+          </span>
+        ) : (
+          <span
+            className="text-[0.5625rem] font-mono-jb px-1.5 py-0.5 rounded"
+            style={{
+              background: "color-mix(in srgb, var(--yellow, #f0c040) 12%, transparent)",
+              color: "var(--text-muted)",
+              border: "1px solid color-mix(in srgb, var(--yellow, #f0c040) 25%, transparent)",
+            }}
+          >
+            equal fallback · n={icWeights.sampleCount}
           </span>
         )}
       </div>
 
-      <div className="flex flex-col gap-1">
-        {/* Header */}
-        <div
-          className="grid grid-cols-[8rem_3rem_1fr_5rem] gap-2 items-center text-[0.5625rem] uppercase tracking-wider"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <span>Score Range</span>
-          <span className="text-right">n</span>
-          <span className="pl-2">Avg Velocity</span>
-          <span className="text-right">%/hr</span>
-        </div>
-
-        {dim.buckets.map((bucket) => (
-          <BucketRow key={bucket.range} bucket={bucket} maxCount={maxCount} maxVel={maxVel} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BucketRow({ bucket, maxCount, maxVel }: { bucket: SignalBucket; maxCount: number; maxVel: number }) {
-  const vel = bucket.avgVelocity;
-  const velColor = vel === null ? "var(--text-muted)" : vel > 0 ? "var(--green)" : "var(--red)";
-  const velBarWidth = vel !== null && maxVel > 0 ? (Math.abs(vel) / maxVel) * 100 : 0;
-
-  return (
-    <div
-      className="grid grid-cols-[8rem_3rem_1fr_5rem] gap-2 items-center py-1 rounded"
-      style={{ borderBottom: "1px solid var(--border-subtle)" }}
-    >
-      <span className="text-[0.625rem] font-medium" style={{ color: "var(--text-secondary)" }}>
-        {BUCKET_LABELS[bucket.range] ?? bucket.range}
-        <span className="font-mono-jb text-[0.5rem] ml-1" style={{ color: "var(--text-muted)" }}>
-          [{bucket.min}, {bucket.range === "strong_for" ? bucket.max : bucket.max})
-        </span>
-      </span>
-
-      <span
-        className="text-right font-mono-jb tabular-nums text-[0.625rem]"
-        style={{ color: bucket.count > 0 ? "var(--text-secondary)" : "var(--text-muted)" }}
+      {/* Header */}
+      <div
+        className="grid grid-cols-[9rem_1fr_3.5rem_3.5rem_3rem] gap-2 items-center text-[0.5625rem] uppercase tracking-wider mb-1"
+        style={{ color: "var(--text-muted)" }}
       >
-        {bucket.count}
-      </span>
-
-      {/* Velocity bar */}
-      <div className="relative h-4 flex items-center pl-2">
-        {vel !== null && (
-          <div
-            className="h-2.5 rounded-sm"
-            style={{
-              width: `${Math.max(velBarWidth, 2)}%`,
-              background: `color-mix(in srgb, ${velColor} 35%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${velColor} 55%, transparent)`,
-            }}
-          />
-        )}
+        <span>Dimension</span>
+        <span className="pl-2">Weight</span>
+        <span className="text-right">IC</span>
+        <span className="text-right">Recent</span>
+        <span className="text-right">Δ</span>
       </div>
 
-      <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: velColor }}>
-        {vel !== null ? `${vel > 0 ? "+" : ""}${vel.toFixed(3)}` : "—"}
-      </span>
+      <div className="flex flex-col gap-1">
+        {CONFLUENCE_KEY_ORDER.map((key) => {
+          const weight = icWeights[key];
+          const ic = icWeights.ic[key] ?? null;
+          const recent = icWeights.recentIc[key] ?? null;
+          const delta = ic !== null && recent !== null ? recent - ic : null;
+          const barWidth = (weight / maxWeight) * 100;
+
+          const weightColor =
+            ic === null
+              ? "var(--text-secondary)"
+              : ic > 0.05
+                ? "var(--green)"
+                : ic < -0.05
+                  ? "var(--red)"
+                  : "var(--text-secondary)";
+          const icColor =
+            ic === null ? "var(--text-muted)" : ic > 0 ? "var(--green)" : ic < 0 ? "var(--red)" : "var(--text-muted)";
+          const recentColor =
+            recent === null
+              ? "var(--text-muted)"
+              : recent > 0
+                ? "var(--green)"
+                : recent < 0
+                  ? "var(--red)"
+                  : "var(--text-muted)";
+          // Delta color: green = improving (recent IC rising), red = deteriorating
+          const deltaColor =
+            delta === null
+              ? "var(--text-muted)"
+              : delta > 0.05
+                ? "var(--green)"
+                : delta < -0.05
+                  ? "var(--red)"
+                  : "var(--text-muted)";
+
+          return (
+            <div
+              key={key}
+              className="grid grid-cols-[9rem_1fr_3.5rem_3.5rem_3rem] gap-2 items-center py-1"
+              style={{ borderBottom: "1px solid var(--border-subtle)" }}
+            >
+              <span className="text-[0.625rem] font-medium" style={{ color: "var(--text-secondary)" }}>
+                {FULL_LABELS[key]}
+              </span>
+
+              {/* Weight bar */}
+              <div className="relative h-4 flex items-center pl-2">
+                <div
+                  className="h-2.5 rounded-sm"
+                  style={{
+                    width: `${Math.max(barWidth, 2)}%`,
+                    background: `color-mix(in srgb, ${weightColor} 30%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${weightColor} 50%, transparent)`,
+                  }}
+                />
+              </div>
+
+              <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: icColor }}>
+                {ic !== null ? `${ic > 0 ? "+" : ""}${ic.toFixed(2)}` : "—"}
+              </span>
+
+              <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: recentColor }}>
+                {recent !== null ? `${recent > 0 ? "+" : ""}${recent.toFixed(2)}` : "—"}
+              </span>
+
+              <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: deltaColor }}>
+                {delta !== null ? `${delta > 0 ? "+" : ""}${delta.toFixed(2)}` : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[0.5625rem] mt-3" style={{ color: "var(--text-muted)" }}>
+        IC = Pearson r (all history, EMA-smoothed). Recent = last 30 ideas only. Δ = Recent − IC: positive means the
+        dimension is improving relative to its history.
+      </p>
     </div>
   );
 }
