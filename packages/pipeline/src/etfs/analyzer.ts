@@ -15,7 +15,16 @@
  *   GBTC premium_rate > +3%                            → gbtc_premium
  */
 
-import { EtfContext, EtfEvent, EtfFlowDay, EtfFlowMetrics, EtfRegime, EtfSnapshot, EtfState } from "./types.js";
+import {
+  EtfContext,
+  EtfDataFreshness,
+  EtfEvent,
+  EtfFlowDay,
+  EtfFlowMetrics,
+  EtfRegime,
+  EtfSnapshot,
+  EtfState,
+} from "./types.js";
 
 // ─── Flow metrics ─────────────────────────────────────────────────────────────
 
@@ -166,12 +175,58 @@ function determineRegime(metrics: EtfFlowMetrics, prevRegime: EtfRegime | null):
   return "ETF_NEUTRAL";
 }
 
+// ─── Data freshness ───────────────────────────────────────────────────────────
+
+// ETF data for day X is published on day X+1 at ~05:00 UTC
+const ETF_RELEASE_HOUR_UTC = 5;
+// Stale window: Sat 05:00 UTC → Tue 05:00 UTC (72 h, covering the full weekend + Monday)
+const STALE_WINDOW_HOURS = 72;
+
+function computeDataFreshness(now: Date): EtfDataFreshness {
+  const day = now.getUTCDay(); // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+  const hour = now.getUTCHours();
+
+  // Fresh: Tue after release, Wed–Fri, or Sat before Fri data drops (Thu data, <24h old)
+  if (
+    (day === 2 && hour >= ETF_RELEASE_HOUR_UTC) ||
+    (day >= 3 && day <= 5) ||
+    (day === 6 && hour < ETF_RELEASE_HOUR_UTC)
+  ) {
+    return { weight: 1.0, sigmaThreshold: 2.0 };
+  }
+
+  // Stale window: Sat 05:00 → Tue 05:00
+  // Compute hours elapsed since last Saturday 05:00 UTC (when Friday's data landed)
+  let elapsedHours: number;
+  if (day === 6) {
+    // Sat after 05:00: 0h at 05:00, up to 19h at midnight
+    elapsedHours = hour - ETF_RELEASE_HOUR_UTC;
+  } else if (day === 0) {
+    // Sun: 19h at midnight + hour
+    elapsedHours = 24 - ETF_RELEASE_HOUR_UTC + hour;
+  } else if (day === 1) {
+    // Mon: 43h at midnight + hour
+    elapsedHours = 48 - ETF_RELEASE_HOUR_UTC + hour;
+  } else {
+    // Tue before 05:00: 67h at midnight + hour
+    elapsedHours = 72 - ETF_RELEASE_HOUR_UTC + hour;
+  }
+
+  const progress = Math.min(elapsedHours / STALE_WINDOW_HOURS, 1.0);
+  const weight = parseFloat((1.0 - 0.9 * progress).toFixed(3));
+  // Sigma threshold rises from 2.0 (Sat morning, data just dropped) to 2.5 (Tue morning)
+  const sigmaThreshold = parseFloat((2.0 + 0.5 * progress).toFixed(2));
+  const staleDays = (elapsedHours / 24).toFixed(1);
+
+  return { weight, sigmaThreshold, note: `Friday ETF data ${staleDays}d stale (weight=${weight})` };
+}
+
 // ─── Event detection ──────────────────────────────────────────────────────────
 
-function detectEvents(snapshot: EtfSnapshot, metrics: EtfFlowMetrics): EtfEvent[] {
+function detectEvents(snapshot: EtfSnapshot, metrics: EtfFlowMetrics, freshness: EtfDataFreshness): EtfEvent[] {
   const events: EtfEvent[] = [];
 
-  if (Math.abs(metrics.todaySigma) >= 2) {
+  if (Math.abs(metrics.todaySigma) >= freshness.sigmaThreshold) {
     const isInflow = metrics.today > 0;
     events.push({
       type: isInflow ? "sigma_inflow" : "sigma_outflow",
@@ -221,7 +276,8 @@ export function analyze(
   const previousRegime =
     prevState?.regime !== regime ? (prevState?.regime ?? null) : (prevState?.previousRegime ?? null);
 
-  const events = detectEvents(snapshot, metrics);
+  const dataFreshness = computeDataFreshness(now);
+  const events = detectEvents(snapshot, metrics, dataFreshness);
 
   const context: EtfContext = {
     asset: snapshot.asset,
@@ -233,6 +289,7 @@ export function analyze(
     totalAumUsd: snapshot.totalAumUsd,
     gbtcPremiumRate: snapshot.gbtcPremiumRate,
     events,
+    dataFreshness,
   };
 
   const nextState: EtfState = {

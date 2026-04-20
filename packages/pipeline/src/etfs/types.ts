@@ -49,6 +49,15 @@ export interface EtfEvent {
   at: string;
 }
 
+export interface EtfDataFreshness {
+  /** 0.1 (stale Monday) → 1.0 (fresh weekday after release) */
+  weight: number;
+  /** Sigma threshold for event detection: 2.0 (fresh) → 2.5 (stale) */
+  sigmaThreshold: number;
+  /** Human-readable staleness note for the LLM agent, undefined when fresh */
+  note?: string;
+}
+
 // Structured context passed to the LLM agent
 export interface EtfContext {
   asset: AssetType;
@@ -60,6 +69,7 @@ export interface EtfContext {
   totalAumUsd: number;
   gbtcPremiumRate?: number;
   events: EtfEvent[];
+  dataFreshness: EtfDataFreshness;
 }
 
 // Persisted state
