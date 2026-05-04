@@ -13,6 +13,7 @@
 
 import chalk from "chalk";
 import { computeDelta } from "../orchestrator/delta.js";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { buildPrompt, buildSystemPrompt, synthesize } from "../orchestrator/synthesizer.js";
@@ -167,8 +168,10 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   // Trade decision gaps — flag dimensions actively opposing the chosen direction
   if (decision) {
     const conf = decision.confluence;
-    const opposing = (["derivatives", "etfs", "htf", "exchangeFlows"] as const)
-      .map((d) => ({ dim: d, score: conf[d] }))
+    const opposing = CONFLUENCE_DIMENSIONS.map((d) => ({
+      dim: CONFLUENCE_KEY_MAP[d],
+      score: conf[CONFLUENCE_KEY_MAP[d]],
+    }))
       .filter((d) => d.score < 0)
       .sort((a, b) => a.score - b.score);
     for (const o of opposing.slice(0, 2)) {
@@ -216,12 +219,15 @@ async function main() {
 
   if (htfOut) {
     const perDim = computeConfluence(outputs);
-    const total = (perDim.derivatives + perDim.etfs + perDim.htf + perDim.exchangeFlows) / 4;
+    const total =
+      CONFLUENCE_DIMENSIONS.reduce((sum, d) => sum + perDim[CONFLUENCE_KEY_MAP[d]], 0) / CONFLUENCE_DIMENSIONS.length;
     const direction: Direction = total >= 0 ? "LONG" : "SHORT";
     const confluence = { ...perDim, total };
 
-    const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-    const parts = dims.map((d) => `${d}=${scoreStr(perDim[d])}`).join("  ");
+    const parts = CONFLUENCE_DIMENSIONS.map((d) => {
+      const k = CONFLUENCE_KEY_MAP[d];
+      return `${k}=${scoreStr(perDim[k])}`;
+    }).join("  ");
     console.log(`  ${chalk.bold(direction.padEnd(6))} ${parts}`);
 
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);

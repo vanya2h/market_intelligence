@@ -6,11 +6,9 @@
  */
 
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "../orchestrator/dimensions.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
-
-const DIMENSIONS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-type Dim = (typeof DIMENSIONS)[number];
 
 interface Confluence {
   derivatives: number;
@@ -19,7 +17,7 @@ interface Confluence {
   exchangeFlows: number;
   total: number;
   bias?: { lean: string; strength: number };
-  weights?: Record<Dim, number>;
+  weights?: Record<DimensionEnum, number>;
   sizing?: { positionSizePct: number; conviction: number };
 }
 
@@ -181,20 +179,21 @@ async function main() {
     // Binary outcome: 1 if peak quality > 0, -1 otherwise
     const outcomes = assetIdeas.map((i) => (i.peakQuality > 0 ? 1 : -1));
 
-    for (const dim of DIMENSIONS) {
-      const scores = assetIdeas.map((i) => i.confluence[dim]);
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const k = CONFLUENCE_KEY_MAP[dim];
+      const scores = assetIdeas.map((i) => i.confluence[k]);
       const ic = pearson(scores, outcomes);
-      const absScores = assetIdeas.map((i) => Math.abs(i.confluence[dim]));
+      const absScores = assetIdeas.map((i) => Math.abs(i.confluence[k]));
       const avgAbs = avg(absScores);
 
       // Signal strength when correct vs wrong
-      const correctScores = assetIdeas.filter((i) => i.peakQuality > 0).map((i) => i.confluence[dim]);
-      const wrongScores = assetIdeas.filter((i) => i.peakQuality <= 0).map((i) => i.confluence[dim]);
+      const correctScores = assetIdeas.filter((i) => i.peakQuality > 0).map((i) => i.confluence[k]);
+      const wrongScores = assetIdeas.filter((i) => i.peakQuality <= 0).map((i) => i.confluence[k]);
 
       const icColor = Math.abs(ic) > 0.15 ? (ic > 0 ? chalk.green : chalk.red) : chalk.dim;
 
       console.log(
-        `    ${dim.padEnd(16)} IC=${icColor(ic.toFixed(3).padStart(7))}  ` +
+        `    ${k.padEnd(16)} IC=${icColor(ic.toFixed(3).padStart(7))}  ` +
           `|avg|=${(avgAbs * 100).toFixed(0).padStart(3)}%  ` +
           `correct_avg=${(avg(correctScores) * 100).toFixed(0).padStart(4)}%  ` +
           `wrong_avg=${(avg(wrongScores) * 100).toFixed(0).padStart(4)}%  ` +
@@ -251,7 +250,7 @@ async function main() {
 
     for (let nAgree = 0; nAgree <= 4; nAgree++) {
       const matching = assetIdeas.filter((i) => {
-        const count = DIMENSIONS.filter((d) => i.confluence[d] > 0).length;
+        const count = CONFLUENCE_DIMENSIONS.filter((d) => i.confluence[CONFLUENCE_KEY_MAP[d]] > 0).length;
         return count === nAgree;
       });
       if (matching.length === 0) continue;
@@ -274,10 +273,11 @@ async function main() {
     const assetIdeas = withPeak.filter((i) => i.asset === asset);
     subsection(`${asset} — when a dimension opposes, does it hurt?`);
 
-    for (const dim of DIMENSIONS) {
-      const opposing = assetIdeas.filter((i) => i.confluence[dim] < -0.1);
-      const aligned = assetIdeas.filter((i) => i.confluence[dim] > 0.1);
-      const neutral = assetIdeas.filter((i) => Math.abs(i.confluence[dim]) <= 0.1);
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const k = CONFLUENCE_KEY_MAP[dim];
+      const opposing = assetIdeas.filter((i) => i.confluence[k] < -0.1);
+      const aligned = assetIdeas.filter((i) => i.confluence[k] > 0.1);
+      const neutral = assetIdeas.filter((i) => Math.abs(i.confluence[k]) <= 0.1);
 
       if (opposing.length === 0 && aligned.length === 0) continue;
 
@@ -286,7 +286,7 @@ async function main() {
       const neuWin = neutral.filter((i) => i.peakQuality > 0);
 
       console.log(
-        `    ${dim.padEnd(16)} ` +
+        `    ${k.padEnd(16)} ` +
           `aligned: ${pct(aliWin.length, aligned.length).padStart(6)} (n=${aligned.length})  ` +
           `neutral: ${pct(neuWin.length, neutral.length).padStart(6)} (n=${neutral.length})  ` +
           `opposing: ${pct(oppWin.length, opposing.length).padStart(6)} (n=${opposing.length})`,

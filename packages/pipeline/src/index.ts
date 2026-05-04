@@ -85,6 +85,9 @@ export type {
   ExchangeFlowsRegime,
 } from "./exchange_flows/types.js";
 
+// Dimension enum + ordered array + confluence key map
+export { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "./orchestrator/dimensions.js";
+
 // Orchestrator
 export type {
   BarChartBlock,

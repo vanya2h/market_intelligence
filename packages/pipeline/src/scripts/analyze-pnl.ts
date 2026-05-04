@@ -9,6 +9,7 @@
  */
 
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
 
@@ -19,8 +20,6 @@ interface Confluence {
   exchangeFlows: number;
   total: number;
 }
-
-const DIMS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
 
 function avg(arr: number[]): number {
   return arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
@@ -144,11 +143,12 @@ async function main() {
 
     console.log(`\n  ${chalk.underline(asset)}\n`);
 
-    for (const dim of DIMS) {
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const k = CONFLUENCE_KEY_MAP[dim];
       // Split by dimension alignment
-      const aligned = assetIdeas.filter((i) => i.conf[dim] > 0.1);
-      const opposing = assetIdeas.filter((i) => i.conf[dim] < -0.1);
-      const neutral = assetIdeas.filter((i) => Math.abs(i.conf[dim]) <= 0.1);
+      const aligned = assetIdeas.filter((i) => i.conf[k] > 0.1);
+      const opposing = assetIdeas.filter((i) => i.conf[k] < -0.1);
+      const neutral = assetIdeas.filter((i) => Math.abs(i.conf[k]) <= 0.1);
 
       const aliPnL = aligned.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
       const oppPnL = opposing.map((i) => newMultiplier(i.conf.total) * i.peakReturn);

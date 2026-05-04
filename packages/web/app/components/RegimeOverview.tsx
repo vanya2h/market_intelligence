@@ -1,6 +1,7 @@
 import type { Brief } from "@market-intel/api";
+import { CONFLUENCE_DIMENSIONS } from "@market-intel/pipeline";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
-import { DIMENSION_LABELS, DIMENSIONS } from "../lib/dimensions";
+import { DIMENSION_LABELS } from "../lib/dimensions";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";
 import { Tooltip } from "./Tooltip";
 
@@ -110,7 +111,7 @@ export function RegimeOverview({ brief }: { brief: Brief }) {
             </div>
           );
         })()}
-      {DIMENSIONS.map((dim) => {
+      {CONFLUENCE_DIMENSIONS.map((dim) => {
         const bd = brief.dimensions.find((d) => d.dimension === dim);
         if (!bd) return null;
         const { color, arrow } = regimeColor(bd.regime);

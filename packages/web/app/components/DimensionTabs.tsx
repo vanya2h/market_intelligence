@@ -1,6 +1,7 @@
 import type { BriefDimension } from "@market-intel/api";
+import { CONFLUENCE_DIMENSIONS } from "@market-intel/pipeline";
 import { useState } from "react";
-import { DIMENSION_LABELS, DIMENSIONS } from "../lib/dimensions";
+import { DIMENSION_LABELS } from "../lib/dimensions";
 import { DimensionCard } from "./DimensionCard";
 import { TabBar } from "./TabBar";
 
@@ -9,7 +10,7 @@ interface DimensionTabsProps {
 }
 
 export function DimensionTabs({ dimensions }: DimensionTabsProps) {
-  const availableDims = DIMENSIONS.filter((dim) => dimensions.some((d) => d.dimension === dim));
+  const availableDims = CONFLUENCE_DIMENSIONS.filter((dim) => dimensions.some((d) => d.dimension === dim));
 
   const [activeTab, setActiveTab] = useState(availableDims[0] ?? "DERIVATIVES");
 

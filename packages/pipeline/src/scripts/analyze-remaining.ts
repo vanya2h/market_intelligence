@@ -11,6 +11,7 @@
  */
 
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "../orchestrator/dimensions.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
 
@@ -21,9 +22,6 @@ interface Confluence {
   exchangeFlows: number;
   total: number;
 }
-
-const DIMS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-type Dim = (typeof DIMS)[number];
 
 function avg(arr: number[]): number {
   return arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
@@ -91,9 +89,10 @@ async function main() {
 
     // Dimension scores for correct vs wrong SHORTs
     console.log(`    ${chalk.underline("Dimension scores: correct vs wrong SHORTs")}\n`);
-    for (const dim of DIMS) {
-      const cAvg = avg(shortCorrect.map((i) => i.conf[dim]));
-      const wAvg = avg(shortWrong.map((i) => i.conf[dim]));
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const k = CONFLUENCE_KEY_MAP[dim];
+      const cAvg = avg(shortCorrect.map((i) => i.conf[k]));
+      const wAvg = avg(shortWrong.map((i) => i.conf[k]));
       console.log(
         `      ${dim.padEnd(16)} correct=${(cAvg * 100).toFixed(0).padStart(4)}%  wrong=${(wAvg * 100).toFixed(0).padStart(4)}%  Δ=${((cAvg - wAvg) * 100).toFixed(0).padStart(4)}%`,
       );
@@ -210,11 +209,12 @@ async function main() {
 
       // What other dimensions overrode HTF?
       console.log(`\n      ${chalk.underline("What dims overrode HTF?")}\n`);
-      for (const dim of DIMS.filter((d) => d !== "htf")) {
-        const dimAgrees = htfOpposes.filter((i) => i.conf[dim] > 0.1);
+      for (const dim of CONFLUENCE_DIMENSIONS.filter((d) => d !== DimensionEnum.HTF)) {
+        const k = CONFLUENCE_KEY_MAP[dim];
+        const dimAgrees = htfOpposes.filter((i) => i.conf[k] > 0.1);
         const dimWins = dimAgrees.filter((i) => i.peakQ > 0);
         console.log(
-          `        ${dim.padEnd(16)} agreed: ${dimAgrees.length}/${htfOpposes.length}  win when agreed: ${pct(dimWins.length, dimAgrees.length)}`,
+          `        ${k.padEnd(16)} agreed: ${dimAgrees.length}/${htfOpposes.length}  win when agreed: ${pct(dimWins.length, dimAgrees.length)}`,
         );
       }
     }
@@ -395,15 +395,15 @@ async function main() {
 
     console.log(`\n  ${chalk.underline(asset)}\n`);
 
-    for (let a = 0; a < DIMS.length; a++) {
-      for (let b = a + 1; b < DIMS.length; b++) {
-        const dimA = DIMS[a]!;
-        const dimB = DIMS[b]!;
+    for (let a = 0; a < CONFLUENCE_DIMENSIONS.length; a++) {
+      for (let b = a + 1; b < CONFLUENCE_DIMENSIONS.length; b++) {
+        const kA = CONFLUENCE_KEY_MAP[CONFLUENCE_DIMENSIONS[a]!];
+        const kB = CONFLUENCE_KEY_MAP[CONFLUENCE_DIMENSIONS[b]!];
 
-        const bothAgree = assetIdeas.filter((i) => i.conf[dimA] > 0.05 && i.conf[dimB] > 0.05);
-        const bothOppose = assetIdeas.filter((i) => i.conf[dimA] < -0.05 && i.conf[dimB] < -0.05);
+        const bothAgree = assetIdeas.filter((i) => i.conf[kA] > 0.05 && i.conf[kB] > 0.05);
+        const bothOppose = assetIdeas.filter((i) => i.conf[kA] < -0.05 && i.conf[kB] < -0.05);
         const disagree = assetIdeas.filter(
-          (i) => (i.conf[dimA] > 0.05 && i.conf[dimB] < -0.05) || (i.conf[dimA] < -0.05 && i.conf[dimB] > 0.05),
+          (i) => (i.conf[kA] > 0.05 && i.conf[kB] < -0.05) || (i.conf[kA] < -0.05 && i.conf[kB] > 0.05),
         );
 
         if (bothAgree.length < 3 && bothOppose.length < 3 && disagree.length < 3) continue;
@@ -413,7 +413,7 @@ async function main() {
         const disagreeWin = disagree.filter((i) => i.peakQ > 0).length;
 
         console.log(
-          `    ${dimA.slice(0, 6)}+${dimB.slice(0, 6).padEnd(6)}  ` +
+          `    ${kA.slice(0, 6)}+${kB.slice(0, 6).padEnd(6)}  ` +
             `both+: ${pct(agreeWin, bothAgree.length).padStart(6)} (n=${bothAgree.length})  ` +
             `both-: ${pct(opposeWin, bothOppose.length).padStart(6)} (n=${bothOppose.length})  ` +
             `split: ${pct(disagreeWin, disagree.length).padStart(6)} (n=${disagree.length})`,

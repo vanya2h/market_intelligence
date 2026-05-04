@@ -151,7 +151,6 @@ function scoreFunding(signals: AnalysisSignals, htfCtx?: HtfContext): number {
 }
 
 function scoreDerivatives(ctx: DerivativesContext, htfCtx?: HtfContext): number {
-
   const { positioning, stress, signals } = ctx;
 
   // 1. Positioning — CROWDED states spike (60-100), continuous OI baseline otherwise.
@@ -264,7 +263,6 @@ const ETF_SATURATION_START_RATIO = 2;
 const MIN_PRIOR_STREAK_SIGMAS = 3;
 
 function scoreEtfs(ctx: EtfContext): number {
-
   const { regime, previousRegime, flow } = ctx;
 
   // 1. Flow sigma — strongest signal. σ > 2 is very significant.

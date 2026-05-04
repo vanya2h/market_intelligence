@@ -18,8 +18,7 @@
  * one-shot backfill script that rewrites the persisted JSON.
  */
 
-const DIMENSION_KEYS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-type DimKey = (typeof DIMENSION_KEYS)[number];
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../dimensions.js";
 
 /** Anything ≤ 1.5 in magnitude is treated as already-normalized. */
 const LEGACY_THRESHOLD = 1.5;
@@ -88,8 +87,8 @@ function num(v: unknown): number | null {
  * Heuristic: any per-dim or total value with magnitude > 1.5 is legacy.
  */
 function isLegacy(raw: Record<string, unknown>): boolean {
-  for (const key of DIMENSION_KEYS) {
-    const v = num(raw[key]);
+  for (const dim of CONFLUENCE_DIMENSIONS) {
+    const v = num(raw[CONFLUENCE_KEY_MAP[dim]]);
     if (v !== null && Math.abs(v) > LEGACY_THRESHOLD) return true;
   }
   const total = num(raw.total);
@@ -139,9 +138,9 @@ export function normalizeConfluenceShape(raw: unknown, force: boolean = false): 
   // Need these BEFORE per-dim conversion so we can recover unweighted scores.
   const weightsRaw = obj.weights as Record<string, unknown> | undefined;
 
-  const legacyWeight = (dim: DimKey): number => {
+  const legacyWeight = (key: string): number => {
     if (!weightsRaw) return 1;
-    const w = num(weightsRaw[dim]);
+    const w = num(weightsRaw[key]);
     return w !== null && w > 0 ? w : 1;
   };
 
@@ -183,13 +182,9 @@ export function normalizeConfluenceShape(raw: unknown, force: boolean = false): 
   }
 
   // ── Per-dim values ─────────────────────────────────────────────────────────
-  const dims: Record<DimKey, number> = {
-    derivatives: 0,
-    etfs: 0,
-    htf: 0,
-    exchangeFlows: 0,
-  };
-  for (const key of DIMENSION_KEYS) {
+  const dims: Record<string, number> = {};
+  for (const dim of CONFLUENCE_DIMENSIONS) {
+    const key = CONFLUENCE_KEY_MAP[dim];
     const v = num(obj[key]) ?? 0;
     if (legacy) {
       // Recover unweighted normalized score: stored = score × weight, where
@@ -245,10 +240,10 @@ export function normalizeConfluenceShape(raw: unknown, force: boolean = false): 
 
   return {
     confluence: {
-      derivatives: dims.derivatives,
-      etfs: dims.etfs,
-      htf: dims.htf,
-      exchangeFlows: dims.exchangeFlows,
+      derivatives: dims["derivatives"] ?? 0,
+      etfs: dims["etfs"] ?? 0,
+      htf: dims["htf"] ?? 0,
+      exchangeFlows: dims["exchangeFlows"] ?? 0,
       total,
       ...(normalizedBias ? { bias: normalizedBias } : {}),
       ...(normalizedSizing ? { sizing: normalizedSizing } : {}),

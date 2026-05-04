@@ -30,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { parseAssetType } from "../models.js";
 import type { DeltaSummary } from "../orchestrator/delta.js";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
@@ -571,15 +572,16 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   }
 
   const conf = computeConfluence(storedOutputs);
-  const total = (conf.derivatives + conf.etfs + conf.htf + conf.exchangeFlows) / 4;
+  const total =
+    CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + conf[CONFLUENCE_KEY_MAP[dim]], 0) / CONFLUENCE_DIMENSIONS.length;
   const fmtScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
 
   out += `${"Dimension".padEnd(16)} Score\n`;
   out += sep("─", 26) + "\n";
-  out += `${"derivatives".padEnd(16)} ${fmtScore(conf.derivatives)}\n`;
-  out += `${"etfs".padEnd(16)} ${fmtScore(conf.etfs)}\n`;
-  out += `${"htf".padEnd(16)} ${fmtScore(conf.htf)}\n`;
-  out += `${"exchangeFlows".padEnd(16)} ${fmtScore(conf.exchangeFlows)}\n`;
+  for (const dim of CONFLUENCE_DIMENSIONS) {
+    const k = CONFLUENCE_KEY_MAP[dim];
+    out += `${k.padEnd(16)} ${fmtScore(conf[k])}\n`;
+  }
   out += sep("─", 26) + "\n";
   out += `${"total (fallback)".padEnd(16)} ${fmtScore(total)}\n`;
 
@@ -622,8 +624,8 @@ function buildTradeIdea(tradeIdea: {
   if (conf) {
     out += subsection("Stored Confluence");
     const fmtPctScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
-    const dimKeys = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-    for (const dk of dimKeys) {
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const dk = CONFLUENCE_KEY_MAP[dim];
       if (dk in conf) out += kv(dk, fmtPctScore(conf[dk] ?? 0));
     }
     out += kv("Total", fmtPctScore(conf.total));

@@ -8,6 +8,7 @@
  */
 
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
 import type {
@@ -182,22 +183,23 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════════\n");
 
   const conf = computeConfluence(outputs);
-  const total = (conf.derivatives + conf.etfs + conf.htf + conf.exchangeFlows) / 4;
+  const total =
+    CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + conf[CONFLUENCE_KEY_MAP[dim]], 0) / CONFLUENCE_DIMENSIONS.length;
   const totalColor = total >= 0 ? chalk.green : chalk.red;
 
-  const dims = [
-    { name: "Derivatives", score: conf.derivatives },
-    { name: "ETFs       ", score: conf.etfs },
-    { name: "HTF        ", score: conf.htf },
-    { name: "Exch Flows ", score: conf.exchangeFlows },
-  ];
+  const dims = CONFLUENCE_DIMENSIONS.map((dim) => ({
+    name: CONFLUENCE_KEY_MAP[dim].padEnd(11),
+    score: conf[CONFLUENCE_KEY_MAP[dim]],
+  }));
 
   for (const dim of dims) {
     console.log(`    ${dim.name}  ${bar(dim.score, 1, 40)}  ${scoreStr(dim.score).padStart(12)}`);
   }
 
   console.log();
-  console.log(`    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalColor.bold(scoreStr(total).padStart(12))} / 100`);
+  console.log(
+    `    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalColor.bold(scoreStr(total).padStart(12))} / 100`,
+  );
   console.log(`    Direction: ${totalColor.bold(total >= 0 ? "LONG" : "SHORT")}`);
 
   console.log("\n═══════════════════════════════════════════════════════════════\n");

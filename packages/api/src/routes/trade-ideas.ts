@@ -4,7 +4,7 @@
  * Endpoints for querying trade ideas, their returns curves, and aggregate stats.
  */
 
-import { prisma } from "@market-intel/pipeline";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, prisma } from "@market-intel/pipeline";
 import { describeRoute, validator } from "hono-openapi";
 import { z } from "zod";
 import { createController } from "../common/controller.js";
@@ -326,8 +326,8 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
   const makeBucket = (): Bucket => ({ count: 0, wins: 0, losses: 0 });
 
   const buckets = new Map<string, { agreed: Bucket; disagreed: Bucket; neutral: Bucket }>();
-  for (const dim of DIMENSIONS) {
-    buckets.set(dim, { agreed: makeBucket(), disagreed: makeBucket(), neutral: makeBucket() });
+  for (const dim of CONFLUENCE_DIMENSIONS) {
+    buckets.set(CONFLUENCE_KEY_MAP[dim], { agreed: makeBucket(), disagreed: makeBucket(), neutral: makeBucket() });
   }
 
   for (const idea of ideas) {
@@ -338,9 +338,9 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
     if (!t2) continue;
     const isWin = t2.outcome === "WIN";
 
-    for (const dim of DIMENSIONS) {
-      const score = conf[dim] ?? 0;
-      const dimBuckets = buckets.get(dim)!;
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const score = conf[CONFLUENCE_KEY_MAP[dim]] ?? 0;
+      const dimBuckets = buckets.get(CONFLUENCE_KEY_MAP[dim])!;
 
       const bucket = score > 0 ? dimBuckets.agreed : score < 0 ? dimBuckets.disagreed : dimBuckets.neutral;
 
@@ -350,12 +350,13 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
     }
   }
 
-  const dimensions: ConfluenceDimensionStats[] = DIMENSIONS.map((dim) => {
-    const b = buckets.get(dim)!;
+  const dimensions: ConfluenceDimensionStats[] = CONFLUENCE_DIMENSIONS.map((dim) => {
+    const k = CONFLUENCE_KEY_MAP[dim];
+    const b = buckets.get(k)!;
     const winRate = (bucket: Bucket) => (bucket.count > 0 ? bucket.wins / bucket.count : null);
 
     return {
-      dimension: dim,
+      dimension: k,
       agreed: { ...b.agreed, winRate: winRate(b.agreed) },
       disagreed: { ...b.disagreed, winRate: winRate(b.disagreed) },
       neutral: { ...b.neutral, winRate: winRate(b.neutral) },
@@ -366,8 +367,6 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
 }
 
 // ─── Confluence stats ────────────────────────────────────────────────────────
-
-const DIMENSIONS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
 
 interface ConfluenceDimensionStats {
   dimension: string;
@@ -478,10 +477,11 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
     scored.push({ confluence: conf, velocity: v });
   }
 
-  const dimensions: DimensionEffectiveness[] = DIMENSIONS.map((dim) => {
+  const dimensions: DimensionEffectiveness[] = CONFLUENCE_DIMENSIONS.map((dim) => {
+    const k = CONFLUENCE_KEY_MAP[dim];
     const pairs: { score: number; velocity: number }[] = [];
     for (const s of scored) {
-      const score = s.confluence[dim] ?? 0;
+      const score = s.confluence[k] ?? 0;
       pairs.push({ score, velocity: s.velocity });
     }
 
@@ -498,7 +498,7 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
     );
 
     return {
-      dimension: dim,
+      dimension: k,
       buckets,
       sampleSize: pairs.length,
       correlation,

@@ -1,5 +1,6 @@
 import type { Confluence } from "@market-intel/api";
-import { CONFLUENCE_KEY_MAP, CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "@market-intel/pipeline";
+import { DIMENSION_LABELS, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
 
 /**
  * All confluence values now live in -1..+1 (per-dim are unweighted normalized
@@ -9,7 +10,7 @@ import { CONFLUENCE_KEY_MAP, CONFLUENCE_KEYS, DIMENSION_LABELS, DIMENSION_SHORT_
  */
 function readTotal(conf: Confluence): number {
   if (typeof conf.total === "number") return conf.total;
-  return CONFLUENCE_KEYS.reduce((sum, key) => sum + (conf[key] ?? 0), 0);
+  return CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + (conf[CONFLUENCE_KEY_MAP[dim]] ?? 0), 0);
 }
 
 /** Format a -1..+1 score as a signed integer percentage. */
@@ -17,13 +18,6 @@ function pctLabel(score: number): string {
   const v = Math.round(score * 100);
   return v >= 0 ? `+${v}` : `${v}`;
 }
-
-const LABELS: Record<string, string> = Object.fromEntries(
-  CONFLUENCE_KEYS.map((k) => {
-    const dim = Object.entries(CONFLUENCE_KEY_MAP).find(([, v]) => v === k)?.[0] as string;
-    return [k, DIMENSION_LABELS[dim as keyof typeof DIMENSION_LABELS]];
-  }),
-);
 
 function scoreColor(score: number): string {
   if (score >= 0.2) return "var(--green)";
@@ -43,8 +37,8 @@ export function ConfluenceBadges({ confluence }: { confluence: Confluence }) {
   const total = readTotal(confluence);
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {CONFLUENCE_KEYS.map((dim) => {
-        const score = confluence[dim] ?? 0;
+      {CONFLUENCE_DIMENSIONS.map((dim) => {
+        const score = confluence[CONFLUENCE_KEY_MAP[dim]] ?? 0;
         return (
           <span
             key={dim}
@@ -78,15 +72,15 @@ export function ConfluenceBreakdown({ confluence }: { confluence: Confluence }) 
   return (
     <div className="flex flex-col gap-2">
       {/* Per-dimension bars */}
-      {CONFLUENCE_KEYS.map((dim) => {
-        const score = confluence[dim] ?? 0;
+      {CONFLUENCE_DIMENSIONS.map((dim) => {
+        const score = confluence[CONFLUENCE_KEY_MAP[dim]] ?? 0;
         const absPct = Math.min(1, Math.abs(score));
         const isPositive = score >= 0;
 
         return (
           <div key={dim} className="flex items-center gap-2">
             <span className="w-20 shrink-0 text-[0.5625rem] font-medium" style={{ color: "var(--text-muted)" }}>
-              {LABELS[dim]}
+              {DIMENSION_LABELS[dim]}
             </span>
 
             {/* Bar container */}

@@ -1,6 +1,7 @@
 import type { Confluence, TradeIdea } from "@market-intel/api";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "@market-intel/pipeline";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
-import { CONFLUENCE_KEY_MAP, CONFLUENCE_KEYS, type ConfluenceKey, DIMENSION_LABELS } from "../lib/dimensions";
+import { DIMENSION_LABELS } from "../lib/dimensions";
 import { Tooltip } from "./Tooltip";
 
 /**
@@ -18,7 +19,7 @@ const CONVICTION_THRESHOLD = 0.5;
  */
 function readTotal(conf: Confluence): number {
   if (typeof conf.total === "number") return conf.total;
-  return CONFLUENCE_KEYS.reduce((sum, key) => sum + (conf[key] ?? 0), 0);
+  return CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + (conf[CONFLUENCE_KEY_MAP[dim]] ?? 0), 0);
 }
 
 /** Format a -1..+1 score as a signed integer percentage. */
@@ -27,12 +28,15 @@ function pctLabel(score: number): string {
   return v >= 0 ? `+${v}` : `${v}`;
 }
 
-const CONFLUENCE_TOOLTIPS: Record<ConfluenceKey, string> = {
-  htf: "HTF structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull.",
-  derivatives:
+const CONFLUENCE_TOOLTIPS: Record<DimensionEnum, string> = {
+  [DimensionEnum.HTF]:
+    "HTF structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull.",
+  [DimensionEnum.DERIVATIVES]:
     "Derivatives positioning: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel.",
-  etfs: "ETF institutional flows: flow sigma with regime contradiction, reversal confirmation after streaks, reversal ratio, and reversal regime.",
-  exchangeFlows: "Exchange flows: 7d/30d reserve changes (accumulation vs distribution) and 30-day reserve extremes.",
+  [DimensionEnum.ETFS]:
+    "ETF institutional flows: flow sigma with regime contradiction, reversal confirmation after streaks, reversal ratio, and reversal regime.",
+  [DimensionEnum.EXCHANGE_FLOWS]:
+    "Exchange flows: 7d/30d reserve changes (accumulation vs distribution) and 30-day reserve extremes.",
 };
 
 /**
@@ -149,16 +153,16 @@ function dimScoreColor(score: number): string {
 export function ConfluenceRows({ confluence }: { confluence: Confluence }) {
   return (
     <div className="space-y-1">
-      {CONFLUENCE_KEYS.map((key) => {
+      {CONFLUENCE_DIMENSIONS.map((dim) => {
+        const key = CONFLUENCE_KEY_MAP[dim];
         const score = confluence[key] ?? 0;
-        const dim = Object.entries(CONFLUENCE_KEY_MAP).find(([, v]) => v === key)?.[0] as string;
-        const label = DIMENSION_LABELS[dim as keyof typeof DIMENSION_LABELS];
-        const tooltip = CONFLUENCE_TOOLTIPS[key];
+        const label = DIMENSION_LABELS[dim];
+        const tooltip = CONFLUENCE_TOOLTIPS[dim];
         const color = dimScoreColor(score);
 
         return (
           <div
-            key={key}
+            key={dim}
             className="flex items-center justify-between py-1.5"
             style={{ borderBottom: "1px solid var(--border-subtle)" }}
           >

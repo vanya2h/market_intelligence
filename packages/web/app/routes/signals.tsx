@@ -6,6 +6,7 @@ import type {
   PerformanceMetrics,
   StrategyCurvesData,
 } from "@market-intel/api";
+import type { DimensionEnum } from "@market-intel/pipeline";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { Link } from "react-router";
@@ -14,7 +15,7 @@ import { AssetSelector } from "../components/AssetSelector";
 import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
 import { StrategyEquityCurve } from "../components/StrategyEquityCurve";
-import { type ConfluenceKey, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
+import { DIMENSION_SHORT_LABELS } from "../lib/dimensions";
 import { getPerformanceMetrics, getSignalEffectiveness, getStrategyCurves } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 
@@ -87,7 +88,6 @@ export default function Signals() {
 
               {/* Trade idea heatmap */}
               {data.ideas.length > 0 && <IdeaHeatmap ideas={data.ideas} />}
-
             </>
           )}
         </div>
@@ -591,7 +591,7 @@ function CorrelationRanking({ dimensions }: { dimensions: DimensionEffectiveness
       <div className="flex flex-col gap-2">
         {sorted.map((dim) => {
           const r = dim.correlation!;
-          const label = DIMENSION_SHORT_LABELS[dim.dimension as ConfluenceKey] ?? dim.dimension;
+          const label = DIMENSION_SHORT_LABELS[dim.dimension as DimensionEnum] ?? dim.dimension;
           const barWidth = maxAbs > 0 ? (Math.abs(r) / maxAbs) * 100 : 0;
           const color = r > 0 ? "var(--green)" : "var(--red)";
 
@@ -633,5 +633,3 @@ function CorrelationRanking({ dimensions }: { dimensions: DimensionEffectiveness
     </div>
   );
 }
-
-

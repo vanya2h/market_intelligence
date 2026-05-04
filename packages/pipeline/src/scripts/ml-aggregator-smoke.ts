@@ -9,6 +9,7 @@
 
 import chalk from "chalk";
 import type { $Enums } from "../generated/prisma/client.js";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { runMlAggregator } from "../orchestrator/trade-idea/ml-aggregator.js";
 import "../env.js";
 
@@ -27,7 +28,9 @@ async function main() {
   for (const asset of ["BTC", "ETH"] as $Enums.Asset[]) {
     console.log(chalk.bold(`  ${asset}`));
     for (const { label, scores } of SAMPLES) {
-      const heuristicTotal = (scores.derivatives + scores.etfs + scores.htf + scores.exchangeFlows) / 4;
+      const heuristicTotal =
+        CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + scores[CONFLUENCE_KEY_MAP[dim]], 0) /
+        CONFLUENCE_DIMENSIONS.length;
       const ml = await runMlAggregator(asset, scores);
       if (ml) {
         console.log(

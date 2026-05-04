@@ -9,6 +9,7 @@
  */
 
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { prisma } from "../storage/db.js";
 import type { AssetType } from "../types.js";
 import "../env.js";
@@ -128,13 +129,13 @@ async function main() {
     // Confluence
     if (idea.confluence) {
       const c = idea.confluence as Record<string, number>;
-      const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-      const parts = dims.map((k) => {
+      const parts = CONFLUENCE_DIMENSIONS.map((dim) => {
+        const k = CONFLUENCE_KEY_MAP[dim];
         const v = c[k] ?? 0;
         const icon = v > 0 ? chalk.green(`+${v}`) : v < 0 ? chalk.red(`${v}`) : chalk.dim("0");
         return `${k}=${icon}`;
       });
-      const total = c.total ?? dims.reduce((sum, k) => sum + (c[k] ?? 0), 0);
+      const total = c.total ?? CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + (c[CONFLUENCE_KEY_MAP[dim]] ?? 0), 0);
       const totalIcon = total >= 300 ? chalk.green.bold(total) : total > 0 ? chalk.yellow(total) : chalk.red(total);
       console.log(`  Confluence: ${parts.join("  ")}  total=${totalIcon}`);
     }

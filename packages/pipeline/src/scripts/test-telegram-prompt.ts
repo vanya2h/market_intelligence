@@ -5,6 +5,7 @@
  */
 import { callLlm } from "../llm.js";
 import { computeDelta } from "../orchestrator/delta.js";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
@@ -33,7 +34,9 @@ async function main() {
   let decision: TradeDecision | null = null;
   if (htfOut) {
     const perDim = computeConfluence(outputs);
-    const total = (perDim.derivatives + perDim.etfs + perDim.htf + perDim.exchangeFlows) / 4;
+    const total =
+      CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + perDim[CONFLUENCE_KEY_MAP[dim]], 0) /
+      CONFLUENCE_DIMENSIONS.length;
     const direction: Direction = total >= 0 ? "LONG" : "SHORT";
     const confluence = { ...perDim, total };
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);

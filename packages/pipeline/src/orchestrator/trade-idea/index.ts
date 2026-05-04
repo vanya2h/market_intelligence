@@ -16,6 +16,7 @@
 import chalk from "chalk";
 import type { $Enums } from "../../generated/prisma/client.js";
 import type { HtfContext } from "../../htf/types.js";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../dimensions.js";
 import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
 import { computeConfluence, type Confluence } from "./confluence.js";
@@ -37,7 +38,9 @@ export interface TradeDecision {
 
 /** Equal-weight fallback total when the ML model is unavailable. */
 function equalWeightTotal(perDim: Omit<Confluence, "total">): number {
-  return (perDim.derivatives + perDim.etfs + perDim.htf + perDim.exchangeFlows) / 4;
+  return (
+    CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + perDim[CONFLUENCE_KEY_MAP[dim]], 0) / CONFLUENCE_DIMENSIONS.length
+  );
 }
 
 /**
@@ -84,14 +87,12 @@ export async function processTradeIdea(
   };
 
   // ─── Console output ───────────────────────────────────────────────
-  const dimKeys = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-  const confStr = dimKeys
-    .map((k) => {
-      const s = confluence[k];
-      const icon = s > 0 ? chalk.green(`+${s}`) : s < 0 ? chalk.red(`${s}`) : chalk.dim("0");
-      return `${k}:${icon}`;
-    })
-    .join("  ");
+  const confStr = CONFLUENCE_DIMENSIONS.map((dim) => {
+    const k = CONFLUENCE_KEY_MAP[dim];
+    const s = confluence[k];
+    const icon = s > 0 ? chalk.green(`+${s}`) : s < 0 ? chalk.red(`${s}`) : chalk.dim("0");
+    return `${k}:${icon}`;
+  }).join("  ");
 
   const targetDist = Math.abs(compositeTarget - entryPrice);
   const stops = levels
@@ -103,9 +104,7 @@ export async function processTradeIdea(
     .map((l) => `${l.label}@${l.price.toFixed(0)}`)
     .join(" ");
 
-  const aggLabel = ml
-    ? chalk.magenta(`ml ${ml.modelVersion} pWin=${ml.pWin}`)
-    : chalk.yellow("equal-weight fallback");
+  const aggLabel = ml ? chalk.magenta(`ml ${ml.modelVersion} pWin=${ml.pWin}`) : chalk.yellow("equal-weight fallback");
 
   console.log(
     `      ${chalk.green("▸")} trade idea: ${chalk.bold(direction)} ` +

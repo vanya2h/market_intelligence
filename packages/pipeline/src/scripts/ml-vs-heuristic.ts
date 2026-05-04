@@ -18,6 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { runMlAggregator } from "../orchestrator/trade-idea/ml-aggregator.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
@@ -225,10 +226,10 @@ async function main() {
     );
 
     console.log(`\n  Per-dim Pearson IC (correlation with win outcome):`);
-    const dims = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-    for (const dim of dims) {
-      const ic = meta.pearson_ic_per_dim[dim] ?? 0;
-      const coef = meta.coefficients[dim] ?? 0;
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const k = CONFLUENCE_KEY_MAP[dim];
+      const ic = meta.pearson_ic_per_dim[k] ?? 0;
+      const coef = meta.coefficients[k] ?? 0;
       const icColor = ic > 0.1 ? chalk.green : ic > 0 ? chalk.yellow : ic < -0.1 ? chalk.red : chalk.dim;
       console.log(
         `    ${dim.padEnd(16)} IC=${icColor(ic.toFixed(3))}  ML coef=${coef > 0 ? chalk.green(coef.toFixed(3)) : chalk.red(coef.toFixed(3))}`,

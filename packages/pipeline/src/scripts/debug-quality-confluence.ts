@@ -6,6 +6,7 @@
  */
 
 import chalk from "chalk";
+import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "../orchestrator/dimensions.js";
 import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
 import "../env.js";
@@ -20,14 +21,11 @@ interface Confluence {
   total: number;
 }
 
-const DIMENSIONS = ["derivatives", "etfs", "htf", "exchangeFlows"] as const;
-type Dim = (typeof DIMENSIONS)[number];
-
-const DIM_LABELS: Record<Dim, string> = {
-  derivatives: "Derivatives",
-  etfs: "ETFs",
-  htf: "HTF",
-  exchangeFlows: "Exch Flows",
+const DIM_LABELS: Record<DimensionEnum, string> = {
+  [DimensionEnum.HTF]: "HTF",
+  [DimensionEnum.DERIVATIVES]: "Derivatives",
+  [DimensionEnum.ETFS]: "ETFs",
+  [DimensionEnum.EXCHANGE_FLOWS]: "Exch Flows",
 };
 
 const QUALITY_THRESHOLD = 2;
@@ -131,14 +129,15 @@ async function main() {
     console.log(`${"═".repeat(65)}`);
 
     // Average scores per dimension
-    const avgScores: Record<Dim, number> = { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 };
-    const absAvgScores: Record<Dim, number> = { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 };
-    const agreementCount: Record<Dim, number> = { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 };
-    const strongCount: Record<Dim, number> = { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 };
+    const zero = () => Object.fromEntries(CONFLUENCE_DIMENSIONS.map((d) => [d, 0])) as Record<DimensionEnum, number>;
+    const avgScores = zero();
+    const absAvgScores = zero();
+    const agreementCount = zero();
+    const strongCount = zero();
 
     for (const idea of group) {
-      for (const dim of DIMENSIONS) {
-        const score = idea.confluence[dim];
+      for (const dim of CONFLUENCE_DIMENSIONS) {
+        const score = idea.confluence[CONFLUENCE_KEY_MAP[dim]];
         avgScores[dim] += score;
         absAvgScores[dim] += Math.abs(score);
         if (score > 0) agreementCount[dim]++;
@@ -149,7 +148,7 @@ async function main() {
     const n = group.length;
 
     console.log(`\n  ${chalk.underline("Average Confluence Scores")}\n`);
-    for (const dim of DIMENSIONS) {
+    for (const dim of CONFLUENCE_DIMENSIONS) {
       const avg = avgScores[dim] / n;
       const absAvg = absAvgScores[dim] / n;
       console.log(
@@ -157,11 +156,11 @@ async function main() {
       );
     }
     console.log(
-      `    ${"Total".padEnd(14)} ${" ".repeat(30)}  avg: ${fmtScore(DIMENSIONS.reduce((s, d) => s + avgScores[d], 0) / n).padStart(14)}`,
+      `    ${"Total".padEnd(14)} ${" ".repeat(30)}  avg: ${fmtScore(CONFLUENCE_DIMENSIONS.reduce((s, d) => s + avgScores[d], 0) / n).padStart(14)}`,
     );
 
     console.log(`\n  ${chalk.underline("Agreement Rate (score > 0)")}\n`);
-    for (const dim of DIMENSIONS) {
+    for (const dim of CONFLUENCE_DIMENSIONS) {
       const rate = (agreementCount[dim] / n) * 100;
       const strongRate = (strongCount[dim] / n) * 100;
       console.log(
@@ -171,8 +170,8 @@ async function main() {
 
     // Contribution weight: which dimension contributed most to total conviction
     console.log(`\n  ${chalk.underline("Share of Total Conviction")}\n`);
-    const totalAbsAvg = DIMENSIONS.reduce((s, d) => s + absAvgScores[d], 0);
-    const shares = DIMENSIONS.map((d) => ({
+    const totalAbsAvg = CONFLUENCE_DIMENSIONS.reduce((s, d) => s + absAvgScores[d], 0);
+    const shares = CONFLUENCE_DIMENSIONS.map((d) => ({
       dim: d,
       share: totalAbsAvg > 0 ? (absAvgScores[d] / totalAbsAvg) * 100 : 25,
     })).sort((a, b) => b.share - a.share);
@@ -200,9 +199,10 @@ async function main() {
 
     console.log(`  ${chalk.underline("Avg Score Difference (correct - wrong)")}\n`);
 
-    for (const dim of DIMENSIONS) {
-      const correctAvg = highCorrect.reduce((s, i) => s + i.confluence[dim], 0) / highCorrect.length;
-      const wrongAvg = highWrong.reduce((s, i) => s + i.confluence[dim], 0) / highWrong.length;
+    for (const dim of CONFLUENCE_DIMENSIONS) {
+      const k = CONFLUENCE_KEY_MAP[dim];
+      const correctAvg = highCorrect.reduce((s, i) => s + i.confluence[k], 0) / highCorrect.length;
+      const wrongAvg = highWrong.reduce((s, i) => s + i.confluence[k], 0) / highWrong.length;
       const delta = correctAvg - wrongAvg;
       console.log(
         `    ${DIM_LABELS[dim].padEnd(14)} correct: ${fmtScore(correctAvg).padStart(8)}  wrong: ${fmtScore(wrongAvg).padStart(8)}  Δ: ${fmtScore(delta).padStart(8)}`,
@@ -230,8 +230,8 @@ async function main() {
       console.log(
         `\n  ${date}  ${dir}${skip}  peak: ${fmtPct(idea.peakReturnPct)} at ${idea.peakHoursAfter}h  quality: ${qColor.bold(idea.peakQuality.toFixed(2))}`,
       );
-      for (const dim of DIMENSIONS) {
-        console.log(`    ${DIM_LABELS[dim].padEnd(14)} ${fmtScore(idea.confluence[dim])}`);
+      for (const dim of CONFLUENCE_DIMENSIONS) {
+        console.log(`    ${DIM_LABELS[dim].padEnd(14)} ${fmtScore(idea.confluence[CONFLUENCE_KEY_MAP[dim]])}`);
       }
       console.log(`    ${"Total".padEnd(14)} ${fmtScore(idea.confluence.total)}`);
     }
