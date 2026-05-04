@@ -89,7 +89,7 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
   const lastReturn = tradeIdea.returns.length > 0 ? tradeIdea.returns[tradeIdea.returns.length - 1] : null;
 
   const sizePct = tradeIdea.positionSizePct;
-  const sizingInfo = (tradeIdea.confluence as { sizing?: { convictionMultiplier?: number } } | null)?.sizing;
+  const sizingInfo = tradeIdea.sizing;
 
   return (
     <SectionBlock
@@ -228,9 +228,9 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
               >
                 Confluence Scoring
               </span>
-              <AggregatorBadge aggregator={tradeIdea.confluence.aggregator} />
+              <AggregatorBadge aggregator={tradeIdea.aggregator ?? undefined} />
             </div>
-            <ConfluenceBreakdown confluence={tradeIdea.confluence} />
+            <ConfluenceBreakdown confluence={tradeIdea.confluence} total={tradeIdea.confluenceTotal ?? 0} />
           </div>
         </div>
       )}

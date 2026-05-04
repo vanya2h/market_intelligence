@@ -11,17 +11,10 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../orchestrator/dimensions.js";
+import { getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
-
-interface Confluence {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  total: number;
-}
 
 function avg(arr: number[]): number {
   return arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
@@ -47,6 +40,8 @@ async function main() {
   const ideas = rawIdeas
     .filter((i) => i.confluence && i.returns.length > 0)
     .map((i) => {
+      const { confluence: conf, total: storedTotal } = parseStoredConfluence(i.confluence);
+      const confTotal = storedTotal ?? getConfluenceTotal(conf);
       const peak = i.returns.reduce((best, r) =>
         Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
       );
@@ -54,7 +49,8 @@ async function main() {
       const maxAdv = i.returns.reduce((worst, r) => (r.returnPct < worst.returnPct ? r : worst));
       return {
         ...i,
-        conf: i.confluence as unknown as Confluence,
+        conf,
+        confTotal,
         peakQ: peak.qualityAtPoint,
         peakReturn: peak.returnPct,
         maxFav: maxFav.returnPct,
@@ -71,7 +67,6 @@ async function main() {
 
   for (const asset of ["BTC", "ETH"] as const) {
     const shorts = ideas.filter((i) => i.asset === asset && i.direction === "SHORT");
-    const longs = ideas.filter((i) => i.asset === asset && i.direction === "LONG");
     if (shorts.length === 0) continue;
 
     console.log(`\n  ${chalk.underline(`${asset} SHORTs (n=${shorts.length})`)}\n`);
@@ -90,9 +85,8 @@ async function main() {
     // Dimension scores for correct vs wrong SHORTs
     console.log(`    ${chalk.underline("Dimension scores: correct vs wrong SHORTs")}\n`);
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const k = CONFLUENCE_KEY_MAP[dim];
-      const cAvg = avg(shortCorrect.map((i) => i.conf[k]));
-      const wAvg = avg(shortWrong.map((i) => i.conf[k]));
+      const cAvg = avg(shortCorrect.map((i) => i.conf[dim]));
+      const wAvg = avg(shortWrong.map((i) => i.conf[dim]));
       console.log(
         `      ${dim.padEnd(16)} correct=${(cAvg * 100).toFixed(0).padStart(4)}%  wrong=${(wAvg * 100).toFixed(0).padStart(4)}%  Δ=${((cAvg - wAvg) * 100).toFixed(0).padStart(4)}%`,
       );
@@ -103,18 +97,19 @@ async function main() {
     for (const s of shortCorrect) {
       const date = s.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       console.log(
-        `      ${date}  total=${(s.conf.total * 100).toFixed(0)}%  peak=${s.peakReturn.toFixed(2)}%  deriv=${(s.conf.derivatives * 100).toFixed(0)}% etf=${(s.conf.etfs * 100).toFixed(0)}% htf=${(s.conf.htf * 100).toFixed(0)}% ef=${(s.conf.exchangeFlows * 100).toFixed(0)}%`,
+        `      ${date}  total=${(s.confTotal * 100).toFixed(0)}%  peak=${s.peakReturn.toFixed(2)}%  ` +
+          `deriv=${(s.conf[DimensionEnum.DERIVATIVES] * 100).toFixed(0)}% ` +
+          `etf=${(s.conf[DimensionEnum.ETFS] * 100).toFixed(0)}% ` +
+          `htf=${(s.conf[DimensionEnum.HTF] * 100).toFixed(0)}% ` +
+          `ef=${(s.conf[DimensionEnum.EXCHANGE_FLOWS] * 100).toFixed(0)}%`,
       );
     }
 
-    // Compare: SHORT total vs LONG total — was SHORT even the stronger signal?
+    // Compare: SHORT total vs LONG total
     console.log(`\n    ${chalk.underline("SHORT vs LONG total comparison")}\n`);
 
-    // For each SHORT idea, compute what the LONG total would have been
-    // SHORT total = -(LONG total) approximately (scores flip sign)
-    // If SHORT total > LONG total, it means more dims agreed with SHORT
-    const weakShorts = shorts.filter((i) => i.conf.total < 0.1);
-    const strongShorts = shorts.filter((i) => i.conf.total >= 0.1);
+    const weakShorts = shorts.filter((i) => i.confTotal < 0.1);
+    const strongShorts = shorts.filter((i) => i.confTotal >= 0.1);
     console.log(
       `    Weak SHORTs (total < 10%):  n=${weakShorts.length}  win=${pct(weakShorts.filter((i) => i.peakQ > 0).length, weakShorts.length)}`,
     );
@@ -135,9 +130,9 @@ async function main() {
     console.log(`\n  ${chalk.underline(`${asset} (n=${etfCtxs.length})`)}\n`);
 
     // ETF score distribution
-    const etfPositive = assetIdeas.filter((i) => i.conf.etfs > 0.05);
-    const etfNegative = assetIdeas.filter((i) => i.conf.etfs < -0.05);
-    const etfZero = assetIdeas.filter((i) => Math.abs(i.conf.etfs) <= 0.05);
+    const etfPositive = assetIdeas.filter((i) => i.conf[DimensionEnum.ETFS] > 0.05);
+    const etfNegative = assetIdeas.filter((i) => i.conf[DimensionEnum.ETFS] < -0.05);
+    const etfZero = assetIdeas.filter((i) => Math.abs(i.conf[DimensionEnum.ETFS]) <= 0.05);
 
     console.log(
       `    ETF > +5%:  n=${etfPositive.length}  win=${pct(etfPositive.filter((i) => i.peakQ > 0).length, etfPositive.length)}  avgQ=${avg(etfPositive.map((i) => i.peakQ)).toFixed(2)}`,
@@ -149,7 +144,7 @@ async function main() {
       `    ETF < -5%:  n=${etfNegative.length}  win=${pct(etfNegative.filter((i) => i.peakQ > 0).length, etfNegative.length)}  avgQ=${avg(etfNegative.map((i) => i.peakQ)).toFixed(2)}`,
     );
 
-    // ETH-specific: ETF data is BTC ETF data applied to ETH. Does ETH even follow BTC ETF flows?
+    // ETH-specific: ETF data is BTC ETF data applied to ETH.
     if (asset === "ETH") {
       console.log(`\n    ${chalk.dim("Note: ETF data is BTC-only. ETH ETF score comes from BTC ETF flows.")}`);
       console.log(`    ${chalk.dim("Question: Does ETH reliably follow BTC ETF flow direction?")}\n`);
@@ -191,8 +186,7 @@ async function main() {
     console.log(`\n  ${chalk.underline(`${asset} (n=${htfCtxs.length})`)}\n`);
 
     // Break down HTF bias components when HTF opposes
-    const htfOpposes = assetIdeas.filter((i) => i.conf.htf < -0.1);
-    const htfAgrees = assetIdeas.filter((i) => i.conf.htf > 0.1);
+    const htfOpposes = assetIdeas.filter((i) => i.conf[DimensionEnum.HTF] < -0.1);
 
     if (htfOpposes.length > 0 && htfCtxs.length > 0) {
       console.log(`    ${chalk.underline("When HTF opposes the chosen direction:")}\n`);
@@ -210,11 +204,10 @@ async function main() {
       // What other dimensions overrode HTF?
       console.log(`\n      ${chalk.underline("What dims overrode HTF?")}\n`);
       for (const dim of CONFLUENCE_DIMENSIONS.filter((d) => d !== DimensionEnum.HTF)) {
-        const k = CONFLUENCE_KEY_MAP[dim];
-        const dimAgrees = htfOpposes.filter((i) => i.conf[k] > 0.1);
+        const dimAgrees = htfOpposes.filter((i) => i.conf[dim] > 0.1);
         const dimWins = dimAgrees.filter((i) => i.peakQ > 0);
         console.log(
-          `        ${k.padEnd(16)} agreed: ${dimAgrees.length}/${htfOpposes.length}  win when agreed: ${pct(dimWins.length, dimAgrees.length)}`,
+          `        ${dim.padEnd(16)} agreed: ${dimAgrees.length}/${htfOpposes.length}  win when agreed: ${pct(dimWins.length, dimAgrees.length)}`,
         );
       }
     }
@@ -325,7 +318,7 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // 5. CONVICTION vs OUTCOME — does higher conviction = better results?
+  // 5. CONVICTION vs OUTCOME
   // ═══════════════════════════════════════════════════════════════════════
   section("5. CONVICTION (total) vs OUTCOME — margin between LONG and SHORT");
 
@@ -338,7 +331,7 @@ async function main() {
     // Since LONG total ≈ -SHORT total, margin ≈ 2 × chosen total
     const withMargin = assetIdeas.map((i) => ({
       ...i,
-      margin: i.conf.total * 2, // approximate margin
+      margin: i.confTotal * 2, // approximate margin
     }));
 
     const buckets = [
@@ -397,13 +390,13 @@ async function main() {
 
     for (let a = 0; a < CONFLUENCE_DIMENSIONS.length; a++) {
       for (let b = a + 1; b < CONFLUENCE_DIMENSIONS.length; b++) {
-        const kA = CONFLUENCE_KEY_MAP[CONFLUENCE_DIMENSIONS[a]!];
-        const kB = CONFLUENCE_KEY_MAP[CONFLUENCE_DIMENSIONS[b]!];
+        const dimA = CONFLUENCE_DIMENSIONS[a]!;
+        const dimB = CONFLUENCE_DIMENSIONS[b]!;
 
-        const bothAgree = assetIdeas.filter((i) => i.conf[kA] > 0.05 && i.conf[kB] > 0.05);
-        const bothOppose = assetIdeas.filter((i) => i.conf[kA] < -0.05 && i.conf[kB] < -0.05);
+        const bothAgree = assetIdeas.filter((i) => i.conf[dimA] > 0.05 && i.conf[dimB] > 0.05);
+        const bothOppose = assetIdeas.filter((i) => i.conf[dimA] < -0.05 && i.conf[dimB] < -0.05);
         const disagree = assetIdeas.filter(
-          (i) => (i.conf[kA] > 0.05 && i.conf[kB] < -0.05) || (i.conf[kA] < -0.05 && i.conf[kB] > 0.05),
+          (i) => (i.conf[dimA] > 0.05 && i.conf[dimB] < -0.05) || (i.conf[dimA] < -0.05 && i.conf[dimB] > 0.05),
         );
 
         if (bothAgree.length < 3 && bothOppose.length < 3 && disagree.length < 3) continue;
@@ -413,7 +406,7 @@ async function main() {
         const disagreeWin = disagree.filter((i) => i.peakQ > 0).length;
 
         console.log(
-          `    ${kA.slice(0, 6)}+${kB.slice(0, 6).padEnd(6)}  ` +
+          `    ${dimA.slice(0, 6)}+${dimB.slice(0, 6).padEnd(6)}  ` +
             `both+: ${pct(agreeWin, bothAgree.length).padStart(6)} (n=${bothAgree.length})  ` +
             `both-: ${pct(opposeWin, bothOppose.length).padStart(6)} (n=${bothOppose.length})  ` +
             `split: ${pct(disagreeWin, disagree.length).padStart(6)} (n=${disagree.length})`,

@@ -30,11 +30,11 @@ import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { parseAssetType } from "../models.js";
 import type { DeltaSummary } from "../orchestrator/delta.js";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { computeConfluence, type Confluence } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence, getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import {
   type DerivativesOutput,
@@ -572,15 +572,13 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
   }
 
   const conf = computeConfluence(storedOutputs);
-  const total =
-    CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + conf[CONFLUENCE_KEY_MAP[dim]], 0) / CONFLUENCE_DIMENSIONS.length;
+  const total = getConfluenceTotal(conf);
   const fmtScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
 
   out += `${"Dimension".padEnd(16)} Score\n`;
   out += sep("─", 26) + "\n";
   for (const dim of CONFLUENCE_DIMENSIONS) {
-    const k = CONFLUENCE_KEY_MAP[dim];
-    out += `${k.padEnd(16)} ${fmtScore(conf[k])}\n`;
+    out += `${dim.padEnd(16)} ${fmtScore(conf[dim])}\n`;
   }
   out += sep("─", 26) + "\n";
   out += `${"total (fallback)".padEnd(16)} ${fmtScore(total)}\n`;
@@ -620,15 +618,16 @@ function buildTradeIdea(tradeIdea: {
   );
   out += kv("Created", `${tradeIdea.createdAt.toISOString()} (${ago(tradeIdea.createdAt)})`);
 
-  const conf = tradeIdea.confluence as (Confluence & { bias?: Record<string, unknown> }) | null;
-  if (conf) {
+  const rawConf = tradeIdea.confluence as (Record<string, unknown> & { bias?: Record<string, unknown> }) | null;
+  if (rawConf) {
+    const { confluence: parsedConf, total: storedTotal } = parseStoredConfluence(rawConf);
     out += subsection("Stored Confluence");
     const fmtPctScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const dk = CONFLUENCE_KEY_MAP[dim];
-      if (dk in conf) out += kv(dk, fmtPctScore(conf[dk] ?? 0));
+      out += kv(dim, fmtPctScore(parsedConf[dim]));
     }
-    out += kv("Total", fmtPctScore(conf.total));
+    out += kv("Total", fmtPctScore(storedTotal ?? getConfluenceTotal(parsedConf)));
+    const conf = rawConf;
 
     if (conf.bias) {
       const b = conf.bias;
@@ -905,19 +904,20 @@ async function main() {
   // Reconstruct trade decision for LLM prompt rebuilding
   let promptDecision: TradeDecision | null = null;
   if (tradeIdea) {
-    const storedConf = tradeIdea.confluence as unknown as Confluence & {
-      sizing?: { positionSizePct: number; convictionMultiplier: number; dailyVolPct: number };
+    const rawBlob = tradeIdea.confluence as Record<string, unknown> | null;
+    const { confluence: storedConfluence, total: storedTotal } = parseStoredConfluence(rawBlob);
+    const sizing = (rawBlob?.sizing as { positionSizePct: number; convictionMultiplier: number; dailyVolPct: number } | undefined) ?? {
+      positionSizePct: tradeIdea.positionSizePct,
+      convictionMultiplier: 0,
+      dailyVolPct: 0,
     };
     promptDecision = {
       direction: tradeIdea.direction as Direction,
-      confluence: storedConf,
+      confluence: storedConfluence,
+      confluenceTotal: storedTotal ?? getConfluenceTotal(storedConfluence),
       entryPrice: tradeIdea.entryPrice,
       compositeTarget: tradeIdea.compositeTarget,
-      sizing: storedConf.sizing ?? {
-        positionSizePct: tradeIdea.positionSizePct,
-        convictionMultiplier: 0,
-        dailyVolPct: 0,
-      },
+      sizing,
       ml: null,
     };
   }

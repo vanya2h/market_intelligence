@@ -13,11 +13,12 @@
 
 import chalk from "chalk";
 import { computeDelta } from "../orchestrator/delta.js";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { buildPrompt, buildSystemPrompt, synthesize } from "../orchestrator/synthesizer.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
+import { getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
 import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
@@ -169,8 +170,8 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
   if (decision) {
     const conf = decision.confluence;
     const opposing = CONFLUENCE_DIMENSIONS.map((d) => ({
-      dim: CONFLUENCE_KEY_MAP[d],
-      score: conf[CONFLUENCE_KEY_MAP[d]],
+      dim: d,
+      score: conf[d],
     }))
       .filter((d) => d.score < 0)
       .sort((a, b) => a.score - b.score);
@@ -219,15 +220,11 @@ async function main() {
 
   if (htfOut) {
     const perDim = computeConfluence(outputs);
-    const total =
-      CONFLUENCE_DIMENSIONS.reduce((sum, d) => sum + perDim[CONFLUENCE_KEY_MAP[d]], 0) / CONFLUENCE_DIMENSIONS.length;
+    const total = getConfluenceTotal(perDim);
     const direction: Direction = total >= 0 ? "LONG" : "SHORT";
-    const confluence = { ...perDim, total };
+    const confluence = perDim;
 
-    const parts = CONFLUENCE_DIMENSIONS.map((d) => {
-      const k = CONFLUENCE_KEY_MAP[d];
-      return `${k}=${scoreStr(perDim[k])}`;
-    }).join("  ");
+    const parts = CONFLUENCE_DIMENSIONS.map((d) => `${d}=${scoreStr(perDim[d])}`).join("  ");
     console.log(`  ${chalk.bold(direction.padEnd(6))} ${parts}`);
 
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);
@@ -236,6 +233,7 @@ async function main() {
     decision = {
       direction,
       confluence,
+      confluenceTotal: total,
       entryPrice,
       compositeTarget,
       sizing,

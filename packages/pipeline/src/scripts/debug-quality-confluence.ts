@@ -6,20 +6,13 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../orchestrator/dimensions.js";
+import { parseStoredConfluence, type Confluence } from "../orchestrator/trade-idea/confluence.js";
 import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
 import "../env.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
-
-interface Confluence {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  total: number;
-}
 
 const DIM_LABELS: Record<DimensionEnum, string> = {
   [DimensionEnum.HTF]: "HTF",
@@ -75,6 +68,7 @@ async function main() {
     direction: string;
     skipped: boolean;
     confluence: Confluence;
+    confluenceTotal: number;
     createdAt: Date;
     peakQuality: number;
     peakReturnPct: number;
@@ -85,7 +79,7 @@ async function main() {
 
   for (const idea of ideas) {
     if (!idea.confluence || idea.returns.length === 0) continue;
-    const conf = idea.confluence as unknown as Confluence;
+    const { confluence: conf, total: storedTotal } = parseStoredConfluence(idea.confluence);
 
     const peak = idea.returns.reduce((best, r) =>
       Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
@@ -96,6 +90,7 @@ async function main() {
       direction: idea.direction,
       skipped: idea.skipped,
       confluence: conf,
+      confluenceTotal: storedTotal ?? 0,
       createdAt: idea.createdAt,
       peakQuality: peak.qualityAtPoint,
       peakReturnPct: peak.returnPct,
@@ -137,7 +132,7 @@ async function main() {
 
     for (const idea of group) {
       for (const dim of CONFLUENCE_DIMENSIONS) {
-        const score = idea.confluence[CONFLUENCE_KEY_MAP[dim]];
+        const score = idea.confluence[dim];
         avgScores[dim] += score;
         absAvgScores[dim] += Math.abs(score);
         if (score > 0) agreementCount[dim]++;
@@ -200,9 +195,8 @@ async function main() {
     console.log(`  ${chalk.underline("Avg Score Difference (correct - wrong)")}\n`);
 
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const k = CONFLUENCE_KEY_MAP[dim];
-      const correctAvg = highCorrect.reduce((s, i) => s + i.confluence[k], 0) / highCorrect.length;
-      const wrongAvg = highWrong.reduce((s, i) => s + i.confluence[k], 0) / highWrong.length;
+      const correctAvg = highCorrect.reduce((s, i) => s + i.confluence[dim], 0) / highCorrect.length;
+      const wrongAvg = highWrong.reduce((s, i) => s + i.confluence[dim], 0) / highWrong.length;
       const delta = correctAvg - wrongAvg;
       console.log(
         `    ${DIM_LABELS[dim].padEnd(14)} correct: ${fmtScore(correctAvg).padStart(8)}  wrong: ${fmtScore(wrongAvg).padStart(8)}  Δ: ${fmtScore(delta).padStart(8)}`,
@@ -231,9 +225,9 @@ async function main() {
         `\n  ${date}  ${dir}${skip}  peak: ${fmtPct(idea.peakReturnPct)} at ${idea.peakHoursAfter}h  quality: ${qColor.bold(idea.peakQuality.toFixed(2))}`,
       );
       for (const dim of CONFLUENCE_DIMENSIONS) {
-        console.log(`    ${DIM_LABELS[dim].padEnd(14)} ${fmtScore(idea.confluence[CONFLUENCE_KEY_MAP[dim]])}`);
+        console.log(`    ${DIM_LABELS[dim].padEnd(14)} ${fmtScore(idea.confluence[dim])}`);
       }
-      console.log(`    ${"Total".padEnd(14)} ${fmtScore(idea.confluence.total)}`);
+      console.log(`    ${"Total".padEnd(14)} ${fmtScore(idea.confluenceTotal)}`);
     }
   }
 

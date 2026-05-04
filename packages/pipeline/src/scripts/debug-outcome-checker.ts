@@ -9,7 +9,8 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
+import { parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { prisma } from "../storage/db.js";
 import type { AssetType } from "../types.js";
 import "../env.js";
@@ -128,14 +129,13 @@ async function main() {
 
     // Confluence
     if (idea.confluence) {
-      const c = idea.confluence as Record<string, number>;
+      const { confluence: c, total: storedTotal } = parseStoredConfluence(idea.confluence);
       const parts = CONFLUENCE_DIMENSIONS.map((dim) => {
-        const k = CONFLUENCE_KEY_MAP[dim];
-        const v = c[k] ?? 0;
+        const v = c[dim];
         const icon = v > 0 ? chalk.green(`+${v}`) : v < 0 ? chalk.red(`${v}`) : chalk.dim("0");
-        return `${k}=${icon}`;
+        return `${dim}=${icon}`;
       });
-      const total = c.total ?? CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + (c[CONFLUENCE_KEY_MAP[dim]] ?? 0), 0);
+      const total = storedTotal ?? CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + c[dim], 0);
       const totalIcon = total >= 300 ? chalk.green.bold(total) : total > 0 ? chalk.yellow(total) : chalk.red(total);
       console.log(`  Confluence: ${parts.join("  ")}  total=${totalIcon}`);
     }

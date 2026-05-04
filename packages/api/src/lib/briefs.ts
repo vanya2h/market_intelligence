@@ -1,12 +1,12 @@
-import {
+import type {
   $Enums,
-  type DerivativesEventType,
-  type EtfEventType,
-  type ExchangeFlowsEventType,
-  type HtfEventType,
+  DerivativesEventType,
+  EtfEventType,
+  ExchangeFlowsEventType,
+  HtfEventType,
   Prisma,
-  type RichBlock,
-  type SentimentEventType,
+  RichBlock,
+  SentimentEventType,
 } from "@market-intel/pipeline";
 import { Jsonify } from "../common/json.js";
 import { AssetType } from "./asset.js";

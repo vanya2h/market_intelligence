@@ -1,5 +1,5 @@
 import type { Confluence, TradeIdea } from "@market-intel/api";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "@market-intel/pipeline";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "@market-intel/pipeline/shared";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { DIMENSION_LABELS } from "../lib/dimensions";
 import { Tooltip } from "./Tooltip";
@@ -11,33 +11,11 @@ import { Tooltip } from "./Tooltip";
  */
 const CONVICTION_THRESHOLD = 0.5;
 
-/**
- * Read the persisted total directly. Confluence values are now in -1..+1
- * (per-dim are unweighted, total is the weighted average) and the API
- * normalizes legacy rows on read. Falls back to a per-dim sum only when the
- * total field is missing for some legacy reason.
- */
-function readTotal(conf: Confluence): number {
-  if (typeof conf.total === "number") return conf.total;
-  return CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + (conf[CONFLUENCE_KEY_MAP[dim]] ?? 0), 0);
-}
-
 /** Format a -1..+1 score as a signed integer percentage. */
 function pctLabel(score: number): string {
   const v = Math.round(score * 100);
   return v >= 0 ? `+${v}` : `${v}`;
 }
-
-const CONFLUENCE_TOOLTIPS: Record<DimensionEnum, string> = {
-  [DimensionEnum.HTF]:
-    "HTF structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull.",
-  [DimensionEnum.DERIVATIVES]:
-    "Derivatives positioning: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel.",
-  [DimensionEnum.ETFS]:
-    "ETF institutional flows: flow sigma with regime contradiction, reversal confirmation after streaks, reversal ratio, and reversal regime.",
-  [DimensionEnum.EXCHANGE_FLOWS]:
-    "Exchange flows: 7d/30d reserve changes (accumulation vs distribution) and 30-day reserve extremes.",
-};
 
 /**
  * Bipolar score color: green for buy, red for sell, muted near zero.
@@ -64,8 +42,8 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
   if (!conf) return null;
 
   // Bipolar score: -100 (strong sell) to +100 (strong buy).
-  // conf.total is already signed -1..+1 (positive = bullish).
-  const score = Math.round((conf.total ?? 0) * 100);
+  // confluenceTotal is already signed -1..+1 (positive = bullish).
+  const score = Math.round((tradeIdea.confluenceTotal ?? 0) * 100);
 
   const color = gaugeColor(score);
   const prefix = score > 0 ? "+" : "";
@@ -149,13 +127,23 @@ function dimScoreColor(score: number): string {
   return "var(--text-muted)";
 }
 
+const CONFLUENCE_TOOLTIPS: Record<DimensionEnum, string> = {
+  [DimensionEnum.HTF]:
+    "HTF structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull.",
+  [DimensionEnum.DERIVATIVES]:
+    "Derivatives positioning: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel.",
+  [DimensionEnum.ETFS]:
+    "ETF institutional flows: flow sigma with regime contradiction, reversal confirmation after streaks, reversal ratio, and reversal regime.",
+  [DimensionEnum.EXCHANGE_FLOWS]:
+    "Exchange flows: 7d/30d reserve changes (accumulation vs distribution) and 30-day reserve extremes.",
+};
+
 /** Per-dimension confluence breakdown — rows matching the Overview section style */
-export function ConfluenceRows({ confluence }: { confluence: Confluence }) {
+export function ConfluenceRows({ confluence, total }: { confluence: Confluence; total: number }) {
   return (
     <div className="space-y-1">
       {CONFLUENCE_DIMENSIONS.map((dim) => {
-        const key = CONFLUENCE_KEY_MAP[dim];
-        const score = confluence[key] ?? 0;
+        const score = confluence[dim] ?? 0;
         const label = DIMENSION_LABELS[dim];
         const tooltip = CONFLUENCE_TOOLTIPS[dim];
         const color = dimScoreColor(score);
@@ -181,25 +169,20 @@ export function ConfluenceRows({ confluence }: { confluence: Confluence }) {
           </div>
         );
       })}
-      {/* Total — read directly from the persisted (normalized) total field */}
-      {(() => {
-        const total = readTotal(confluence);
-        return (
-          <div className="flex items-center justify-between py-1.5">
-            <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-              Total
-            </span>
-            <span
-              className="font-mono-jb text-xs font-bold tabular-nums"
-              style={{
-                color: total >= CONVICTION_THRESHOLD ? "var(--green)" : total > 0 ? "var(--amber)" : "var(--red)",
-              }}
-            >
-              {pctLabel(total)} / 100
-            </span>
-          </div>
-        );
-      })()}
+      {/* Total — read from the persisted (normalized) total field */}
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          Total
+        </span>
+        <span
+          className="font-mono-jb text-xs font-bold tabular-nums"
+          style={{
+            color: total >= CONVICTION_THRESHOLD ? "var(--green)" : total > 0 ? "var(--amber)" : "var(--red)",
+          }}
+        >
+          {pctLabel(total)} / 100
+        </span>
+      </div>
     </div>
   );
 }

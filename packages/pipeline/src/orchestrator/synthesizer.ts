@@ -44,8 +44,8 @@ No HTF data available — trade idea could not be computed.`;
   }
   const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
   const c = decision.confluence;
-  return `### Trade Decision: ${decision.direction} (conviction=${pct(c.total)}/100, size=${decision.sizing.positionSizePct}% notional)
-**Breakdown:** Deriv=${pct(c.derivatives)}, ETFs=${pct(c.etfs)}, HTF=${pct(c.htf)}, Flows=${pct(c.exchangeFlows)}
+  return `### Trade Decision: ${decision.direction} (conviction=${pct(decision.confluenceTotal)}/100, size=${decision.sizing.positionSizePct}% notional)
+**Breakdown:** Deriv=${pct(c["DERIVATIVES"])}, ETFs=${pct(c["ETFS"])}, HTF=${pct(c["HTF"])}, Flows=${pct(c["EXCHANGE_FLOWS"])}
 **Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%)
 
 State the setup and the single biggest risk.`;

@@ -1,4 +1,4 @@
-import { DimensionEnum } from "@market-intel/pipeline";
+import { DimensionEnum } from "@market-intel/pipeline/shared";
 
 /** Full display labels */
 export const DIMENSION_LABELS: Record<DimensionEnum, string> = {

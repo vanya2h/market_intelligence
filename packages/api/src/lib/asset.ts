@@ -1,4 +1,4 @@
-import { $Enums } from "@market-intel/pipeline";
+import type { $Enums } from "@market-intel/pipeline";
 import { Jsonify } from "../common/json.js";
 
 export const Asset = {

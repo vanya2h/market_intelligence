@@ -4,16 +4,16 @@
   "version": "v1",
   "model_type": "logistic_regression",
   "features": [
-    "derivatives",
-    "etfs",
-    "htf",
-    "exchangeFlows"
+    "DERIVATIVES",
+    "ETFS",
+    "HTF",
+    "EXCHANGE_FLOWS"
   ],
   "feature_order": [
-    "derivatives",
-    "etfs",
-    "htf",
-    "exchangeFlows"
+    "DERIVATIVES",
+    "ETFS",
+    "HTF",
+    "EXCHANGE_FLOWS"
   ],
   "trained_at": "2026-05-04T13:11:30.147039+00:00",
   "n_samples": 241,
@@ -26,10 +26,10 @@
     "losses": 137
   },
   "coefficients": {
-    "derivatives": -0.7623441534680597,
-    "etfs": 0.26391855624554444,
-    "htf": -0.9706806235576474,
-    "exchangeFlows": 0.9686050372039737
+    "DERIVATIVES": -0.7623441534680597,
+    "ETFS": 0.26391855624554444,
+    "HTF": -0.9706806235576474,
+    "EXCHANGE_FLOWS": 0.9686050372039737
   },
   "intercept": 0.07657309588937627,
   "regularization": {
@@ -79,10 +79,10 @@
     }
   },
   "pearson_ic_per_dim": {
-    "derivatives": -0.05228510017165913,
-    "etfs": 0.051398049071450354,
-    "htf": -0.2128127977826531,
-    "exchangeFlows": 0.17831866289314152
+    "DERIVATIVES": -0.05228510017165913,
+    "ETFS": 0.051398049071450354,
+    "HTF": -0.2128127977826531,
+    "EXCHANGE_FLOWS": 0.17831866289314152
   },
   "heuristic_baseline_full": {
     "label": "heuristic_full (stored_total)",

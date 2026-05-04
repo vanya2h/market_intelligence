@@ -6,20 +6,10 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, DimensionEnum } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../orchestrator/dimensions.js";
+import { getConfluenceTotal, parseStoredConfluence, type Confluence } from "../orchestrator/trade-idea/confluence.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
-
-interface Confluence {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  total: number;
-  bias?: { lean: string; strength: number };
-  weights?: Record<DimensionEnum, number>;
-  sizing?: { positionSizePct: number; conviction: number };
-}
 
 interface IdeaRow {
   id: string;
@@ -28,6 +18,7 @@ interface IdeaRow {
   entryPrice: number;
   compositeTarget: number;
   confluence: Confluence;
+  confluenceTotal: number;
   createdAt: Date;
   positionSizePct: number;
   levels: {
@@ -104,7 +95,14 @@ async function main() {
 
   const ideas: IdeaRow[] = rawIdeas
     .filter((i) => i.confluence && i.returns.length > 0)
-    .map((i) => ({ ...i, confluence: i.confluence as unknown as Confluence }));
+    .map((i) => {
+      const { confluence, total: storedTotal } = parseStoredConfluence(i.confluence);
+      return {
+        ...i,
+        confluence,
+        confluenceTotal: storedTotal ?? getConfluenceTotal(confluence),
+      };
+    });
 
   console.log(`\n📊 Signal Performance Deep Analysis`);
   console.log(`   ${ideas.length} trade ideas with return data (${rawIdeas.length} total)\n`);
@@ -180,20 +178,19 @@ async function main() {
     const outcomes = assetIdeas.map((i) => (i.peakQuality > 0 ? 1 : -1));
 
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const k = CONFLUENCE_KEY_MAP[dim];
-      const scores = assetIdeas.map((i) => i.confluence[k]);
+      const scores = assetIdeas.map((i) => i.confluence[dim]);
       const ic = pearson(scores, outcomes);
-      const absScores = assetIdeas.map((i) => Math.abs(i.confluence[k]));
+      const absScores = assetIdeas.map((i) => Math.abs(i.confluence[dim]));
       const avgAbs = avg(absScores);
 
       // Signal strength when correct vs wrong
-      const correctScores = assetIdeas.filter((i) => i.peakQuality > 0).map((i) => i.confluence[k]);
-      const wrongScores = assetIdeas.filter((i) => i.peakQuality <= 0).map((i) => i.confluence[k]);
+      const correctScores = assetIdeas.filter((i) => i.peakQuality > 0).map((i) => i.confluence[dim]);
+      const wrongScores = assetIdeas.filter((i) => i.peakQuality <= 0).map((i) => i.confluence[dim]);
 
       const icColor = Math.abs(ic) > 0.15 ? (ic > 0 ? chalk.green : chalk.red) : chalk.dim;
 
       console.log(
-        `    ${k.padEnd(16)} IC=${icColor(ic.toFixed(3).padStart(7))}  ` +
+        `    ${dim.padEnd(16)} IC=${icColor(ic.toFixed(3).padStart(7))}  ` +
           `|avg|=${(avgAbs * 100).toFixed(0).padStart(3)}%  ` +
           `correct_avg=${(avg(correctScores) * 100).toFixed(0).padStart(4)}%  ` +
           `wrong_avg=${(avg(wrongScores) * 100).toFixed(0).padStart(4)}%  ` +
@@ -202,7 +199,7 @@ async function main() {
     }
 
     // Also compute IC for the total confluence score
-    const totalScores = assetIdeas.map((i) => i.confluence.total);
+    const totalScores = assetIdeas.map((i) => i.confluenceTotal);
     const totalIC = pearson(totalScores, outcomes);
     console.log(
       `    ${"TOTAL".padEnd(16)} IC=${(Math.abs(totalIC) > 0.15 ? (totalIC > 0 ? chalk.green : chalk.red) : chalk.dim)(totalIC.toFixed(3).padStart(7))}`,
@@ -227,7 +224,7 @@ async function main() {
     ];
 
     for (const b of buckets) {
-      const inBucket = assetIdeas.filter((i) => i.confluence.total >= b.min && i.confluence.total < b.max);
+      const inBucket = assetIdeas.filter((i) => i.confluenceTotal >= b.min && i.confluenceTotal < b.max);
       const correct = inBucket.filter((i) => i.peakQuality > 0);
       const avgQ = avg(inBucket.map((i) => i.peakQuality));
       if (inBucket.length === 0) continue;
@@ -250,7 +247,7 @@ async function main() {
 
     for (let nAgree = 0; nAgree <= 4; nAgree++) {
       const matching = assetIdeas.filter((i) => {
-        const count = CONFLUENCE_DIMENSIONS.filter((d) => i.confluence[CONFLUENCE_KEY_MAP[d]] > 0).length;
+        const count = CONFLUENCE_DIMENSIONS.filter((d) => i.confluence[d] > 0).length;
         return count === nAgree;
       });
       if (matching.length === 0) continue;
@@ -274,10 +271,9 @@ async function main() {
     subsection(`${asset} — when a dimension opposes, does it hurt?`);
 
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const k = CONFLUENCE_KEY_MAP[dim];
-      const opposing = assetIdeas.filter((i) => i.confluence[k] < -0.1);
-      const aligned = assetIdeas.filter((i) => i.confluence[k] > 0.1);
-      const neutral = assetIdeas.filter((i) => Math.abs(i.confluence[k]) <= 0.1);
+      const opposing = assetIdeas.filter((i) => i.confluence[dim] < -0.1);
+      const aligned = assetIdeas.filter((i) => i.confluence[dim] > 0.1);
+      const neutral = assetIdeas.filter((i) => Math.abs(i.confluence[dim]) <= 0.1);
 
       if (opposing.length === 0 && aligned.length === 0) continue;
 
@@ -286,7 +282,7 @@ async function main() {
       const neuWin = neutral.filter((i) => i.peakQuality > 0);
 
       console.log(
-        `    ${k.padEnd(16)} ` +
+        `    ${dim.padEnd(16)} ` +
           `aligned: ${pct(aliWin.length, aligned.length).padStart(6)} (n=${aligned.length})  ` +
           `neutral: ${pct(neuWin.length, neutral.length).padStart(6)} (n=${neutral.length})  ` +
           `opposing: ${pct(oppWin.length, opposing.length).padStart(6)} (n=${opposing.length})`,
@@ -387,9 +383,9 @@ async function main() {
     const assetIdeas = withPeak.filter((i) => i.asset === asset);
     subsection(`${asset}`);
 
-    const strongPositive = assetIdeas.filter((i) => i.confluence.exchangeFlows >= 0.5);
-    const strongNegative = assetIdeas.filter((i) => i.confluence.exchangeFlows <= -0.5);
-    const weak = assetIdeas.filter((i) => Math.abs(i.confluence.exchangeFlows) < 0.1);
+    const strongPositive = assetIdeas.filter((i) => i.confluence[DimensionEnum.EXCHANGE_FLOWS] >= 0.5);
+    const strongNegative = assetIdeas.filter((i) => i.confluence[DimensionEnum.EXCHANGE_FLOWS] <= -0.5);
+    const weak = assetIdeas.filter((i) => Math.abs(i.confluence[DimensionEnum.EXCHANGE_FLOWS]) < 0.1);
 
     const spWin = strongPositive.filter((i) => i.peakQuality > 0);
     const snWin = strongNegative.filter((i) => i.peakQuality > 0);
@@ -416,9 +412,9 @@ async function main() {
     subsection(`${asset}`);
 
     // When HTF agrees vs disagrees with final direction
-    const htfAgrees = assetIdeas.filter((i) => i.confluence.htf > 0.1);
-    const htfDisagrees = assetIdeas.filter((i) => i.confluence.htf < -0.1);
-    const htfNeutral = assetIdeas.filter((i) => Math.abs(i.confluence.htf) <= 0.1);
+    const htfAgrees = assetIdeas.filter((i) => i.confluence[DimensionEnum.HTF] > 0.1);
+    const htfDisagrees = assetIdeas.filter((i) => i.confluence[DimensionEnum.HTF] < -0.1);
+    const htfNeutral = assetIdeas.filter((i) => Math.abs(i.confluence[DimensionEnum.HTF]) <= 0.1);
 
     for (const [label, group] of [
       ["Agrees", htfAgrees],

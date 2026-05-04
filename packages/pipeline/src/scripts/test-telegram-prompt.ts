@@ -5,11 +5,10 @@
  */
 import { callLlm } from "../llm.js";
 import { computeDelta } from "../orchestrator/delta.js";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { computeConfluence, getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import type { HtfOutput } from "../orchestrator/types.js";
@@ -34,17 +33,15 @@ async function main() {
   let decision: TradeDecision | null = null;
   if (htfOut) {
     const perDim = computeConfluence(outputs);
-    const total =
-      CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + perDim[CONFLUENCE_KEY_MAP[dim]], 0) /
-      CONFLUENCE_DIMENSIONS.length;
+    const total = getConfluenceTotal(perDim);
     const direction: Direction = total >= 0 ? "LONG" : "SHORT";
-    const confluence = { ...perDim, total };
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);
     const sizing = computePositionSize(total, htfOut.context);
 
     decision = {
       direction,
-      confluence,
+      confluence: perDim,
+      confluenceTotal: total,
       entryPrice,
       compositeTarget,
       sizing,

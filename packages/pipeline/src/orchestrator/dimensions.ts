@@ -1,5 +1,3 @@
-import type { Confluence } from "./trade-idea/confluence.js";
-
 export enum DimensionEnum {
   HTF = "HTF",
   DERIVATIVES = "DERIVATIVES",
@@ -14,11 +12,3 @@ export const CONFLUENCE_DIMENSIONS: DimensionEnum[] = [
   DimensionEnum.ETFS,
   DimensionEnum.EXCHANGE_FLOWS,
 ];
-
-/** Maps each confluence dimension to its key in the Confluence object. */
-export const CONFLUENCE_KEY_MAP: Record<DimensionEnum, Exclude<keyof Confluence, "total">> = {
-  [DimensionEnum.HTF]: "htf",
-  [DimensionEnum.DERIVATIVES]: "derivatives",
-  [DimensionEnum.ETFS]: "etfs",
-  [DimensionEnum.EXCHANGE_FLOWS]: "exchangeFlows",
-};

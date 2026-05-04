@@ -22,7 +22,7 @@ export function BriefSidebar({ brief, tradeIdea }: { brief: Brief; tradeIdea: Tr
         >
           <OpportunityGauge tradeIdea={tradeIdea} />
           <div className="mt-4">
-            <ConfluenceRows confluence={tradeIdea.confluence} />
+            <ConfluenceRows confluence={tradeIdea.confluence} total={tradeIdea.confluenceTotal ?? 0} />
           </div>
         </SectionBlock>
       )}

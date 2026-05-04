@@ -9,16 +9,57 @@
 
 import chalk from "chalk";
 import type { $Enums } from "../generated/prisma/client.js";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { DimensionEnum } from "../orchestrator/dimensions.js";
+import { getConfluenceTotal, type Confluence } from "../orchestrator/trade-idea/confluence.js";
 import { runMlAggregator } from "../orchestrator/trade-idea/ml-aggregator.js";
 import "../env.js";
 
-const SAMPLES = [
-  { label: "neutral", scores: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 } },
-  { label: "bullish-mild", scores: { derivatives: 0.3, etfs: 0.2, htf: 0.4, exchangeFlows: 0.5 } },
-  { label: "bearish-mild", scores: { derivatives: -0.3, etfs: -0.2, htf: -0.4, exchangeFlows: -0.5 } },
-  { label: "ef-only-bullish", scores: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0.9 } },
-  { label: "extreme-bullish", scores: { derivatives: 0.9, etfs: 0.8, htf: 0.9, exchangeFlows: 0.9 } },
+const SAMPLES: { label: string; scores: Confluence }[] = [
+  {
+    label: "neutral",
+    scores: {
+      [DimensionEnum.DERIVATIVES]: 0,
+      [DimensionEnum.ETFS]: 0,
+      [DimensionEnum.HTF]: 0,
+      [DimensionEnum.EXCHANGE_FLOWS]: 0,
+    },
+  },
+  {
+    label: "bullish-mild",
+    scores: {
+      [DimensionEnum.DERIVATIVES]: 0.3,
+      [DimensionEnum.ETFS]: 0.2,
+      [DimensionEnum.HTF]: 0.4,
+      [DimensionEnum.EXCHANGE_FLOWS]: 0.5,
+    },
+  },
+  {
+    label: "bearish-mild",
+    scores: {
+      [DimensionEnum.DERIVATIVES]: -0.3,
+      [DimensionEnum.ETFS]: -0.2,
+      [DimensionEnum.HTF]: -0.4,
+      [DimensionEnum.EXCHANGE_FLOWS]: -0.5,
+    },
+  },
+  {
+    label: "ef-only-bullish",
+    scores: {
+      [DimensionEnum.DERIVATIVES]: 0,
+      [DimensionEnum.ETFS]: 0,
+      [DimensionEnum.HTF]: 0,
+      [DimensionEnum.EXCHANGE_FLOWS]: 0.9,
+    },
+  },
+  {
+    label: "extreme-bullish",
+    scores: {
+      [DimensionEnum.DERIVATIVES]: 0.9,
+      [DimensionEnum.ETFS]: 0.8,
+      [DimensionEnum.HTF]: 0.9,
+      [DimensionEnum.EXCHANGE_FLOWS]: 0.9,
+    },
+  },
 ];
 
 async function main() {
@@ -28,9 +69,7 @@ async function main() {
   for (const asset of ["BTC", "ETH"] as $Enums.Asset[]) {
     console.log(chalk.bold(`  ${asset}`));
     for (const { label, scores } of SAMPLES) {
-      const heuristicTotal =
-        CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + scores[CONFLUENCE_KEY_MAP[dim]], 0) /
-        CONFLUENCE_DIMENSIONS.length;
+      const heuristicTotal = getConfluenceTotal(scores);
       const ml = await runMlAggregator(asset, scores);
       if (ml) {
         console.log(
@@ -48,7 +87,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(chalk.red("Fatal:"), err);
+  .catch((e) => {
+    console.error(e);
     process.exit(1);
   });

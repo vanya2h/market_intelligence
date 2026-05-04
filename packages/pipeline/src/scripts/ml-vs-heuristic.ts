@@ -18,7 +18,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
+import { parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { runMlAggregator } from "../orchestrator/trade-idea/ml-aggregator.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
@@ -39,16 +40,6 @@ interface ModelMeta {
   heuristic_baseline_full: { accuracy: number; log_loss: number; brier: number };
   training_metrics_in_sample: { accuracy: number };
   pearson_ic_per_dim: Record<string, number>;
-}
-
-interface StoredConfluence {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  total: number;
-  mlTotal?: number;
-  aggregator?: { source: "ml" | "heuristic"; pWin?: number };
 }
 
 interface TradeRow {
@@ -125,8 +116,8 @@ async function loadRows(): Promise<TradeRow[]> {
 
   for (const idea of raw) {
     if (!idea.confluence) continue;
-    const conf = idea.confluence as unknown as StoredConfluence;
-    if (typeof conf.total !== "number") continue;
+    const { confluence: conf, total: storedTotal } = parseStoredConfluence(idea.confluence);
+    if (storedTotal === null) continue;
     if (!["BTC", "ETH"].includes(idea.asset)) continue;
     const asset = idea.asset as "BTC" | "ETH";
 
@@ -159,17 +150,12 @@ async function loadRows(): Promise<TradeRow[]> {
     }
 
     // Retrospective ML score (in-sample — model trained on this data)
-    const mlResult = await runMlAggregator(asset, {
-      derivatives: conf.derivatives ?? 0,
-      etfs: conf.etfs ?? 0,
-      htf: conf.htf ?? 0,
-      exchangeFlows: conf.exchangeFlows ?? 0,
-    });
+    const mlResult = await runMlAggregator(asset, conf);
 
     rows.push({
       id: idea.id,
       asset,
-      total: conf.total,
+      total: storedTotal,
       mlRetro: mlResult?.mlTotal ?? null,
       peakReturn,
       isWin,
@@ -227,9 +213,8 @@ async function main() {
 
     console.log(`\n  Per-dim Pearson IC (correlation with win outcome):`);
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const k = CONFLUENCE_KEY_MAP[dim];
-      const ic = meta.pearson_ic_per_dim[k] ?? 0;
-      const coef = meta.coefficients[k] ?? 0;
+      const ic = meta.pearson_ic_per_dim[dim] ?? 0;
+      const coef = meta.coefficients[dim] ?? 0;
       const icColor = ic > 0.1 ? chalk.green : ic > 0 ? chalk.yellow : ic < -0.1 ? chalk.red : chalk.dim;
       console.log(
         `    ${dim.padEnd(16)} IC=${icColor(ic.toFixed(3))}  ML coef=${coef > 0 ? chalk.green(coef.toFixed(3)) : chalk.red(coef.toFixed(3))}`,

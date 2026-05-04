@@ -1,5 +1,5 @@
 import type { Brief } from "@market-intel/api";
-import { CONFLUENCE_DIMENSIONS } from "@market-intel/pipeline";
+import { CONFLUENCE_DIMENSIONS } from "@market-intel/pipeline/shared";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { DIMENSION_LABELS } from "../lib/dimensions";
 import { regimeColor, regimeLabel } from "../lib/regime-colors";

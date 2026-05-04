@@ -9,14 +9,6 @@ import type { $Enums } from "../generated/prisma/client.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
 
-interface ConfluenceShape {
-  derivatives?: number;
-  etfs?: number;
-  htf?: number;
-  exchangeFlows?: number;
-  total?: number;
-}
-
 const ASSETS: $Enums.Asset[] = ["BTC", "ETH"];
 
 async function auditAsset(asset: $Enums.Asset): Promise<void> {
@@ -51,14 +43,14 @@ async function auditAsset(asset: $Enums.Asset): Promise<void> {
   const lastDate = ideas[ideas.length - 1]?.createdAt;
 
   for (const idea of ideas) {
-    const conf = idea.confluence as ConfluenceShape | null;
-    if (!conf) continue;
+    const raw = idea.confluence as Record<string, unknown> | null;
+    if (!raw) continue;
 
     const allDims =
-      typeof conf.derivatives === "number" &&
-      typeof conf.etfs === "number" &&
-      typeof conf.htf === "number" &&
-      typeof conf.exchangeFlows === "number";
+      (typeof raw.DERIVATIVES === "number" || typeof raw.derivatives === "number") &&
+      (typeof raw.ETFS === "number" || typeof raw.etfs === "number") &&
+      (typeof raw.HTF === "number" || typeof raw.htf === "number") &&
+      (typeof raw.EXCHANGE_FLOWS === "number" || typeof raw.exchangeFlows === "number");
     if (allDims) hasAllDims++;
 
     if (idea.returns.length === 0) continue;

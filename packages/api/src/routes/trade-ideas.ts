@@ -4,7 +4,7 @@
  * Endpoints for querying trade ideas, their returns curves, and aggregate stats.
  */
 
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP, prisma } from "@market-intel/pipeline";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum, parseStoredConfluence, prisma } from "@market-intel/pipeline";
 import { describeRoute, validator } from "hono-openapi";
 import { z } from "zod";
 import { createController } from "../common/controller.js";
@@ -325,22 +325,22 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
   type Bucket = { count: number; wins: number; losses: number };
   const makeBucket = (): Bucket => ({ count: 0, wins: 0, losses: 0 });
 
-  const buckets = new Map<string, { agreed: Bucket; disagreed: Bucket; neutral: Bucket }>();
+  const buckets = new Map<DimensionEnum, { agreed: Bucket; disagreed: Bucket; neutral: Bucket }>();
   for (const dim of CONFLUENCE_DIMENSIONS) {
-    buckets.set(CONFLUENCE_KEY_MAP[dim], { agreed: makeBucket(), disagreed: makeBucket(), neutral: makeBucket() });
+    buckets.set(dim, { agreed: makeBucket(), disagreed: makeBucket(), neutral: makeBucket() });
   }
 
   for (const idea of ideas) {
-    const conf = idea.confluence as ConfluenceJson | null;
-    if (!conf) continue;
+    if (!idea.confluence) continue;
 
     const t2 = idea.levels[0];
     if (!t2) continue;
     const isWin = t2.outcome === "WIN";
 
+    const { confluence } = parseStoredConfluence(idea.confluence);
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const score = conf[CONFLUENCE_KEY_MAP[dim]] ?? 0;
-      const dimBuckets = buckets.get(CONFLUENCE_KEY_MAP[dim])!;
+      const score = confluence[dim];
+      const dimBuckets = buckets.get(dim)!;
 
       const bucket = score > 0 ? dimBuckets.agreed : score < 0 ? dimBuckets.disagreed : dimBuckets.neutral;
 
@@ -351,12 +351,11 @@ export async function getConfluenceStats(asset: AssetType): Promise<ConfluenceSt
   }
 
   const dimensions: ConfluenceDimensionStats[] = CONFLUENCE_DIMENSIONS.map((dim) => {
-    const k = CONFLUENCE_KEY_MAP[dim];
-    const b = buckets.get(k)!;
+    const b = buckets.get(dim)!;
     const winRate = (bucket: Bucket) => (bucket.count > 0 ? bucket.wins / bucket.count : null);
 
     return {
-      dimension: k,
+      dimension: dim,
       agreed: { ...b.agreed, winRate: winRate(b.agreed) },
       disagreed: { ...b.disagreed, winRate: winRate(b.disagreed) },
       neutral: { ...b.neutral, winRate: winRate(b.neutral) },
@@ -382,12 +381,7 @@ export interface ConfluenceStats {
   dimensions: ConfluenceDimensionStats[];
 }
 
-interface ConfluenceJson {
-  derivatives?: number;
-  etfs?: number;
-  htf?: number;
-  exchangeFlows?: number;
-}
+type ConfluenceJson = Record<string, unknown>;
 
 // ─── Signal effectiveness ───────────────────────────────────────────────────
 
@@ -446,11 +440,11 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
     include: { returns: { orderBy: { hoursAfter: "asc" } } },
   });
 
-  const scored: { confluence: ConfluenceJson; velocity: number }[] = [];
+  type ScoredEntry = { confluence: ReturnType<typeof parseStoredConfluence>["confluence"]; velocity: number };
+  const scored: ScoredEntry[] = [];
   const ideaSummaries: IdeaSummary[] = [];
 
   for (const idea of ideas) {
-    const conf = idea.confluence as ConfluenceJson | null;
     const v = peakVelocity(idea.returns, idea.direction);
 
     // Find the peak quality return snapshot
@@ -473,16 +467,14 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
       peakQuality: peakReturn?.qualityAtPoint ?? null,
     });
 
-    if (!conf || v === null) continue;
-    scored.push({ confluence: conf, velocity: v });
+    if (!idea.confluence || v === null) continue;
+    scored.push({ confluence: parseStoredConfluence(idea.confluence).confluence, velocity: v });
   }
 
   const dimensions: DimensionEffectiveness[] = CONFLUENCE_DIMENSIONS.map((dim) => {
-    const k = CONFLUENCE_KEY_MAP[dim];
     const pairs: { score: number; velocity: number }[] = [];
     for (const s of scored) {
-      const score = s.confluence[k] ?? 0;
-      pairs.push({ score, velocity: s.velocity });
+      pairs.push({ score: s.confluence[dim], velocity: s.velocity });
     }
 
     const buckets: SignalBucket[] = SCORE_BUCKETS.map(({ range, min, max }) => {
@@ -498,7 +490,7 @@ async function getSignalEffectiveness(asset: AssetType): Promise<SignalEffective
     );
 
     return {
-      dimension: k,
+      dimension: dim,
       buckets,
       sampleSize: pairs.length,
       correlation,

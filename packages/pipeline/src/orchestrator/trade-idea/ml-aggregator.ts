@@ -19,6 +19,8 @@ import fs from "node:fs";
 import path from "node:path";
 import * as ort from "onnxruntime-node";
 import type { $Enums } from "../../generated/prisma/client.js";
+import { DimensionEnum } from "../dimensions.js";
+import type { Confluence } from "./confluence.js";
 
 const MODELS_DIR = path.resolve(import.meta.dirname, "../../../models");
 
@@ -38,13 +40,6 @@ interface LoadedModel {
   inputName: string;
   probabilityOutputName: string;
   winIndex: number;
-}
-
-export interface AggregatorScores {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
 }
 
 /** Result of a successful ML inference. */
@@ -120,11 +115,11 @@ function round3(n: number): number {
  *   - `null` on any failure (missing model, load error, inference error, bad output);
  *     a warning is logged and the caller falls back to the heuristic total.
  */
-export async function runMlAggregator(asset: $Enums.Asset, scores: AggregatorScores): Promise<MlResult | null> {
+export async function runMlAggregator(asset: $Enums.Asset, scores: Confluence): Promise<MlResult | null> {
   const model = await loadModel(asset);
   if (!model) return null;
 
-  const features = new Float32Array(model.meta.feature_order.map((k) => scores[k as keyof AggregatorScores] ?? 0));
+  const features = new Float32Array(model.meta.feature_order.map((k) => scores[k as DimensionEnum] ?? 0));
   const tensor = new ort.Tensor("float32", features, [1, features.length]);
 
   try {

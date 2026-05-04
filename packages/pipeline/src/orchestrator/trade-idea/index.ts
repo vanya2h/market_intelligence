@@ -16,10 +16,10 @@
 import chalk from "chalk";
 import type { $Enums } from "../../generated/prisma/client.js";
 import type { HtfContext } from "../../htf/types.js";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../dimensions.js";
 import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
-import { computeConfluence, type Confluence } from "./confluence.js";
+import { computeConfluence, type Confluence, getConfluenceTotal } from "./confluence.js";
 import { type MlResult, runMlAggregator } from "./ml-aggregator.js";
 import { saveTradeIdea } from "./persist.js";
 import { computePositionSize, type PositionSize } from "./sizing.js";
@@ -28,19 +28,14 @@ import { computePositionSize, type PositionSize } from "./sizing.js";
 export interface TradeDecision {
   direction: Direction;
   confluence: Confluence;
+  /** ML aggregator total, or equal-weight fallback. Signed -1..+1. */
+  confluenceTotal: number;
   entryPrice: number;
   compositeTarget: number;
   /** Recommended position size (% of account notional) and sizing diagnostics */
   sizing: PositionSize;
   /** ML aggregator diagnostics (pWin, modelVersion), or null if model unavailable. */
   ml: MlResult | null;
-}
-
-/** Equal-weight fallback total when the ML model is unavailable. */
-function equalWeightTotal(perDim: Omit<Confluence, "total">): number {
-  return (
-    CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + perDim[CONFLUENCE_KEY_MAP[dim]], 0) / CONFLUENCE_DIMENSIONS.length
-  );
 }
 
 /**
@@ -56,14 +51,13 @@ export async function processTradeIdea(
   htfContext: HtfContext,
   outputs: DimensionOutput[],
 ): Promise<{ id: string; decision: TradeDecision }> {
-  const perDim = computeConfluence(outputs);
-  const ml = await runMlAggregator(asset, perDim);
-  const total = ml?.mlTotal ?? equalWeightTotal(perDim);
-  const confluence: Confluence = { ...perDim, total };
-  const direction: Direction = total >= 0 ? "LONG" : "SHORT";
+  const confluence = computeConfluence(outputs);
+  const ml = await runMlAggregator(asset, confluence);
+  const confluenceTotal = ml?.mlTotal ?? getConfluenceTotal(confluence);
+  const direction: Direction = confluenceTotal >= 0 ? "LONG" : "SHORT";
 
-  const sizing = computePositionSize(total, htfContext);
-  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, direction, total);
+  const sizing = computePositionSize(confluenceTotal, htfContext);
+  const { entryPrice, compositeTarget, levels } = computeCompositeTarget(htfContext, direction, confluenceTotal);
 
   const id = await saveTradeIdea({
     briefId,
@@ -73,6 +67,7 @@ export async function processTradeIdea(
     compositeTarget,
     levels,
     confluence,
+    total: confluenceTotal,
     sizing,
     ml,
   });
@@ -80,6 +75,7 @@ export async function processTradeIdea(
   const decision: TradeDecision = {
     direction,
     confluence,
+    confluenceTotal,
     entryPrice,
     compositeTarget,
     sizing,
@@ -88,10 +84,9 @@ export async function processTradeIdea(
 
   // ─── Console output ───────────────────────────────────────────────
   const confStr = CONFLUENCE_DIMENSIONS.map((dim) => {
-    const k = CONFLUENCE_KEY_MAP[dim];
-    const s = confluence[k];
+    const s = confluence[dim];
     const icon = s > 0 ? chalk.green(`+${s}`) : s < 0 ? chalk.red(`${s}`) : chalk.dim("0");
-    return `${k}:${icon}`;
+    return `${dim}:${icon}`;
   }).join("  ");
 
   const targetDist = Math.abs(compositeTarget - entryPrice);
@@ -110,7 +105,7 @@ export async function processTradeIdea(
     `      ${chalk.green("▸")} trade idea: ${chalk.bold(direction)} ` +
       `entry=${entryPrice.toFixed(0)} ` +
       `target=${compositeTarget.toFixed(0)} (${targetDist.toFixed(0)}) ` +
-      `total=${chalk.bold(String(total))} ` +
+      `total=${chalk.bold(String(confluenceTotal))} ` +
       `size=${chalk.cyan(`${sizing.positionSizePct}%`)} (${sizing.convictionMultiplier}x) ` +
       `[${aggLabel}]`,
   );

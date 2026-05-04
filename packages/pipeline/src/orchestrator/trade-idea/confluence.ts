@@ -25,15 +25,36 @@ import type { EtfContext } from "../../etfs/types.js";
 import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { AnalysisSignals, DerivativesContext } from "../../types.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../dimensions.js";
 import type { DimensionOutput } from "../types.js";
 
-export interface Confluence {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  /** ML score in -1..+1, or equal-weight fallback when the model is unavailable. */
-  total: number;
+/** Per-dimension confluence scores in -1..+1. Keys are DimensionEnum values. */
+export type Confluence = Record<DimensionEnum, number>;
+
+/**
+ * Equal-weight arithmetic mean of all confluence dimensions.
+ * Use when the ML aggregator is unavailable; prefer the stored ML total otherwise.
+ */
+export function getConfluenceTotal(c: Confluence): number {
+  return CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + c[dim], 0) / CONFLUENCE_DIMENSIONS.length;
+}
+
+/**
+ * Parse a raw DB JSON blob (JsonValue from Prisma) into a typed Confluence object.
+ * Handles both legacy camelCase keys and current DimensionEnum keys.
+ * Also extracts the stored ML total (not re-computable from scores alone).
+ */
+export function parseStoredConfluence(json: unknown): { confluence: Confluence; total: number | null } {
+  const raw = (json != null && typeof json === "object" ? json : {}) as Record<string, unknown>;
+  return {
+    confluence: {
+      [DimensionEnum.DERIVATIVES]: Number(raw.DERIVATIVES ?? raw.derivatives ?? 0),
+      [DimensionEnum.ETFS]: Number(raw.ETFS ?? raw.etfs ?? 0),
+      [DimensionEnum.HTF]: Number(raw.HTF ?? raw.htf ?? 0),
+      [DimensionEnum.EXCHANGE_FLOWS]: Number(raw.EXCHANGE_FLOWS ?? raw.exchangeFlows ?? 0),
+    },
+    total: typeof raw.total === "number" ? raw.total : null,
+  };
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -422,7 +443,7 @@ function round3(n: number): number {
  * Returns unweighted normalized scores in -1..+1 for each dimension.
  * Aggregation into `total` is done by the caller (ML model or equal-weight fallback).
  */
-export function computeConfluence(outputs: DimensionOutput[]): Omit<Confluence, "total"> {
+export function computeConfluence(outputs: DimensionOutput[]): Confluence {
   const deriv = outputs.find((o) => o.dimension === "DERIVATIVES");
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");
@@ -430,15 +451,10 @@ export function computeConfluence(outputs: DimensionOutput[]): Omit<Confluence, 
 
   const htfCtx = htf?.context;
 
-  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, htfCtx) : 0) / 100;
-  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context) : 0) / 100;
-  const htfScore = convictionMap(htf ? scoreHtf(htf.context) : 0) / 100;
-  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context) : 0) / 100;
-
   return {
-    derivatives: round3(derivatives),
-    etfs: round3(etfScore),
-    htf: round3(htfScore),
-    exchangeFlows: round3(exchangeFlows),
+    [DimensionEnum.DERIVATIVES]: round3(convictionMap(deriv ? scoreDerivatives(deriv.context, htfCtx) : 0) / 100),
+    [DimensionEnum.ETFS]: round3(convictionMap(etfs ? scoreEtfs(etfs.context) : 0) / 100),
+    [DimensionEnum.HTF]: round3(convictionMap(htf ? scoreHtf(htf.context) : 0) / 100),
+    [DimensionEnum.EXCHANGE_FLOWS]: round3(convictionMap(ef ? scoreExchangeFlows(ef.context) : 0) / 100),
   };
 }

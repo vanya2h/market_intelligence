@@ -8,8 +8,9 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
+import { getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
 import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
 import type {
   DerivativesOutput,
@@ -183,13 +184,12 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════════\n");
 
   const conf = computeConfluence(outputs);
-  const total =
-    CONFLUENCE_DIMENSIONS.reduce((sum, dim) => sum + conf[CONFLUENCE_KEY_MAP[dim]], 0) / CONFLUENCE_DIMENSIONS.length;
+  const total = getConfluenceTotal(conf);
   const totalColor = total >= 0 ? chalk.green : chalk.red;
 
   const dims = CONFLUENCE_DIMENSIONS.map((dim) => ({
-    name: CONFLUENCE_KEY_MAP[dim].padEnd(11),
-    score: conf[CONFLUENCE_KEY_MAP[dim]],
+    name: dim.padEnd(11),
+    score: conf[dim],
   }));
 
   for (const dim of dims) {

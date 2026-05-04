@@ -20,6 +20,8 @@ interface SaveTradeIdeaInput {
   compositeTarget: number;
   levels: LevelResult[];
   confluence: Confluence;
+  /** ML total or equal-weight fallback — stored in the JSON blob alongside per-dim scores. */
+  total: number;
   sizing: PositionSize;
   ml: MlResult | null;
 }
@@ -35,6 +37,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       positionSizePct: input.sizing.positionSizePct,
       confluence: {
         ...input.confluence,
+        total: input.total,
         sizing: {
           positionSizePct: input.sizing.positionSizePct,
           convictionMultiplier: input.sizing.convictionMultiplier,

@@ -1,5 +1,5 @@
 import type { BriefDimension } from "@market-intel/api";
-import { CONFLUENCE_DIMENSIONS } from "@market-intel/pipeline";
+import { CONFLUENCE_DIMENSIONS } from "@market-intel/pipeline/shared";
 import { useState } from "react";
 import { DIMENSION_LABELS } from "../lib/dimensions";
 import { DimensionCard } from "./DimensionCard";

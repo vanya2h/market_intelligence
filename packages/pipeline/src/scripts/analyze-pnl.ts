@@ -9,17 +9,10 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS, CONFLUENCE_KEY_MAP } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
+import { getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import { prisma } from "../storage/db.js";
 import "../env.js";
-
-interface Confluence {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  total: number;
-}
 
 function avg(arr: number[]): number {
   return arr.length === 0 ? 0 : arr.reduce((a, b) => a + b, 0) / arr.length;
@@ -50,13 +43,15 @@ async function main() {
   const ideas = rawIdeas
     .filter((i) => i.confluence && i.returns.length > 0)
     .map((i) => {
-      const conf = i.confluence as unknown as Confluence;
+      const { confluence: conf, total: storedTotal } = parseStoredConfluence(i.confluence);
+      const confTotal = storedTotal ?? getConfluenceTotal(conf);
       const peak = i.returns.reduce((best, r) =>
         Math.abs(r.qualityAtPoint) > Math.abs(best.qualityAtPoint) ? r : best,
       );
       return {
         ...i,
         conf,
+        confTotal,
         peakQ: peak.qualityAtPoint,
         peakReturn: peak.returnPct,
       };
@@ -74,8 +69,8 @@ async function main() {
 
     console.log(`\n  ${chalk.underline(`${asset} (n=${assetIdeas.length})`)}\n`);
 
-    const oldPnLs = assetIdeas.map((i) => oldMultiplier(i.conf.total) * i.peakReturn);
-    const newPnLs = assetIdeas.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
+    const oldPnLs = assetIdeas.map((i) => oldMultiplier(i.confTotal) * i.peakReturn);
+    const newPnLs = assetIdeas.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
 
     console.log(
       `    Old sizing: total PnL=${sum(oldPnLs).toFixed(2)}  avg=${avg(oldPnLs).toFixed(2)}  sharpe≈${(avg(oldPnLs) / std(oldPnLs)).toFixed(2)}`,
@@ -89,8 +84,8 @@ async function main() {
       const dirIdeas = assetIdeas.filter((i) => i.direction === dir);
       if (dirIdeas.length === 0) continue;
 
-      const oldDir = dirIdeas.map((i) => oldMultiplier(i.conf.total) * i.peakReturn);
-      const newDir = dirIdeas.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
+      const oldDir = dirIdeas.map((i) => oldMultiplier(i.confTotal) * i.peakReturn);
+      const newDir = dirIdeas.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
 
       console.log(
         `    ${dir.padEnd(6)} old=${sum(oldDir).toFixed(2).padStart(8)}  new=${sum(newDir).toFixed(2).padStart(8)}  n=${dirIdeas.length}`,
@@ -117,11 +112,11 @@ async function main() {
     ];
 
     for (const b of buckets) {
-      const inBucket = assetIdeas.filter((i) => i.conf.total >= b.min && i.conf.total < b.max);
+      const inBucket = assetIdeas.filter((i) => i.confTotal >= b.min && i.confTotal < b.max);
       if (inBucket.length === 0) continue;
 
-      const oldPnL = inBucket.map((i) => oldMultiplier(i.conf.total) * i.peakReturn);
-      const newPnL = inBucket.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
+      const oldPnL = inBucket.map((i) => oldMultiplier(i.confTotal) * i.peakReturn);
+      const newPnL = inBucket.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
       const avgReturn = avg(inBucket.map((i) => i.peakReturn));
 
       console.log(
@@ -144,15 +139,14 @@ async function main() {
     console.log(`\n  ${chalk.underline(asset)}\n`);
 
     for (const dim of CONFLUENCE_DIMENSIONS) {
-      const k = CONFLUENCE_KEY_MAP[dim];
       // Split by dimension alignment
-      const aligned = assetIdeas.filter((i) => i.conf[k] > 0.1);
-      const opposing = assetIdeas.filter((i) => i.conf[k] < -0.1);
-      const neutral = assetIdeas.filter((i) => Math.abs(i.conf[k]) <= 0.1);
+      const aligned = assetIdeas.filter((i) => i.conf[dim] > 0.1);
+      const opposing = assetIdeas.filter((i) => i.conf[dim] < -0.1);
+      const neutral = assetIdeas.filter((i) => Math.abs(i.conf[dim]) <= 0.1);
 
-      const aliPnL = aligned.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
-      const oppPnL = opposing.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
-      const neuPnL = neutral.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
+      const aliPnL = aligned.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
+      const oppPnL = opposing.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
+      const neuPnL = neutral.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
 
       console.log(
         `    ${dim.padEnd(16)} ` +
@@ -181,11 +175,11 @@ async function main() {
     ];
 
     for (const b of buckets) {
-      const inBucket = shorts.filter((i) => i.conf.total >= b.min && i.conf.total < b.max);
+      const inBucket = shorts.filter((i) => i.confTotal >= b.min && i.confTotal < b.max);
       if (inBucket.length === 0) continue;
 
-      const oldPnL = inBucket.map((i) => oldMultiplier(i.conf.total) * i.peakReturn);
-      const newPnL = inBucket.map((i) => newMultiplier(i.conf.total) * i.peakReturn);
+      const oldPnL = inBucket.map((i) => oldMultiplier(i.confTotal) * i.peakReturn);
+      const newPnL = inBucket.map((i) => newMultiplier(i.confTotal) * i.peakReturn);
 
       console.log(
         `    ${b.label.padEnd(14)} n=${String(inBucket.length).padEnd(4)} ` +
@@ -197,8 +191,8 @@ async function main() {
       );
     }
 
-    const totalOld = sum(shorts.map((i) => oldMultiplier(i.conf.total) * i.peakReturn));
-    const totalNew = sum(shorts.map((i) => newMultiplier(i.conf.total) * i.peakReturn));
+    const totalOld = sum(shorts.map((i) => oldMultiplier(i.confTotal) * i.peakReturn));
+    const totalNew = sum(shorts.map((i) => newMultiplier(i.confTotal) * i.peakReturn));
     console.log(
       `\n    ${chalk.bold("Total SHORT PnL:")}  old=${totalOld.toFixed(2)}  new=${totalNew.toFixed(2)}  Δ=${(totalNew - totalOld).toFixed(2)}`,
     );
@@ -222,8 +216,8 @@ async function main() {
       weekCount = 0;
 
     for (const idea of assetIdeas) {
-      const oldPnL = oldMultiplier(idea.conf.total) * idea.peakReturn;
-      const newPnL = newMultiplier(idea.conf.total) * idea.peakReturn;
+      const oldPnL = oldMultiplier(idea.confTotal) * idea.peakReturn;
+      const newPnL = newMultiplier(idea.confTotal) * idea.peakReturn;
 
       // New week?
       if (weekStart && idea.createdAt.getTime() - weekStart.getTime() > 7 * 24 * 60 * 60 * 1000) {
