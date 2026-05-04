@@ -8,7 +8,7 @@
  * system (position sizing) is unchanged.
  */
 
-import type { Confluence } from "./confluence.js";
+import { type Confluence,decisionScore } from "./confluence.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ export type BiasDirection = "LONG" | "SHORT" | "NEUTRAL";
 
 /** A dimension actively supporting the lean */
 export interface BiasFactor {
-  dimension: keyof Omit<Confluence, "total">;
+  dimension: keyof Omit<Confluence, "total" | "mlTotal">;
   /** Score of the lean direction in this dimension (always > 0) */
   score: number;
 }
@@ -62,7 +62,9 @@ function round3(n: number): number {
  * No re-scoring — purely derived arithmetic.
  */
 export function computeBias(longConf: Confluence, shortConf: Confluence): DirectionalBias {
-  const margin = longConf.total - shortConf.total;
+  // Use the active decision score (mlTotal when present, else heuristic total)
+  // so bias agrees with what direction selection actually picks downstream.
+  const margin = decisionScore(longConf) - decisionScore(shortConf);
 
   const lean: BiasDirection = margin > LEAN_DEAD_ZONE ? "LONG" : margin < -LEAN_DEAD_ZONE ? "SHORT" : "NEUTRAL";
 
@@ -70,7 +72,12 @@ export function computeBias(longConf: Confluence, shortConf: Confluence): Direct
 
   const leanConf = lean === "SHORT" ? shortConf : longConf;
 
-  const dims: ReadonlyArray<keyof Omit<Confluence, "total">> = ["derivatives", "etfs", "htf", "exchangeFlows"];
+  const dims: ReadonlyArray<keyof Omit<Confluence, "total" | "mlTotal">> = [
+    "derivatives",
+    "etfs",
+    "htf",
+    "exchangeFlows",
+  ];
 
   const topFactors: BiasFactor[] =
     lean === "NEUTRAL"

@@ -11,6 +11,7 @@ import type { DirectionalBias } from "./bias.js";
 import type { Direction, LevelResult } from "./composite-target.js";
 import type { Confluence } from "./confluence.js";
 import type { DimensionWeights } from "./ic-weights.js";
+import type { MlResult } from "./ml-aggregator.js";
 import type { PositionSize } from "./sizing.js";
 
 interface SaveTradeIdeaInput {
@@ -24,6 +25,8 @@ interface SaveTradeIdeaInput {
   sizing: PositionSize;
   bias: DirectionalBias;
   weights: DimensionWeights;
+  /** ML aggregator output, or null when explicitly disabled. */
+  ml: MlResult | null;
 }
 
 export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> {
@@ -36,6 +39,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       compositeTarget: input.compositeTarget,
       positionSizePct: input.sizing.positionSizePct,
       confluence: {
+        // Per-dim scores + heuristic `total` + (when ML ran) `mlTotal`
         ...input.confluence,
         bias: input.bias,
         weights: {
@@ -52,6 +56,9 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
           convictionMultiplier: input.sizing.convictionMultiplier,
           dailyVolPct: input.sizing.dailyVolPct,
         },
+        aggregator: input.ml
+          ? { source: "ml", modelVersion: input.ml.modelVersion, pWin: input.ml.pWin }
+          : { source: "heuristic" },
       } as unknown as Prisma.InputJsonValue,
       levels: {
         create: input.levels.map((l) => ({

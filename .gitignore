@@ -9,3 +9,8 @@ packages/pipeline/src/generated/prisma
 .turbo
 build
 tmp/
+
+# Python training
+.venv/
+__pycache__/
+*.pyc

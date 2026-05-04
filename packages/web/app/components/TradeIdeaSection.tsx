@@ -1,5 +1,4 @@
-import type { TradeIdea } from "@market-intel/api";
-import type { OhlcvCandle } from "@market-intel/api";
+import type { AggregatorInfo, OhlcvCandle, TradeIdea } from "@market-intel/api";
 import { CandleReturnChart } from "./CandleReturnChart";
 import { ConfluenceBreakdown } from "./ConfluenceBadges";
 import { InlineLink } from "./InlineLink";
@@ -41,6 +40,39 @@ function sizeColor(pct: number): string {
   if (pct >= 80) return "var(--green)";
   if (pct >= 40) return "var(--amber)";
   return "var(--text-muted)";
+}
+
+/** Tells the user how the confluence total was produced — ML model or heuristic.
+ *  Missing `aggregator` = legacy record from before the ML aggregator existed,
+ *  so the total was the IC-weighted heuristic by definition. */
+function AggregatorBadge({ aggregator }: { aggregator: AggregatorInfo | undefined }) {
+  const isMl = aggregator?.source === "ml";
+  const color = isMl ? "var(--amber)" : "var(--text-muted)";
+  const versionLabel = isMl && aggregator?.modelVersion ? ` ${aggregator.modelVersion}` : "";
+  const pWinPct = typeof aggregator?.pWin === "number" ? Math.round(aggregator.pWin * 100) : null;
+  const title = isMl
+    ? `Total derived from learned logistic regression. P(win) = ${pWinPct}% mapped to [-1, +1] via 2p-1.`
+    : aggregator
+      ? "Total is the IC-weighted average of the four per-dim scores (heuristic fallback)."
+      : "Legacy record — predates the ML aggregator, so the total is the IC-weighted heuristic.";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5rem] font-mono-jb font-medium uppercase tracking-wider"
+      style={{
+        color,
+        background: "var(--bg-hover)",
+        border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
+      }}
+      title={title}
+    >
+      <span>{isMl ? `ML${versionLabel}` : "Heuristic"}</span>
+      {pWinPct !== null && (
+        <span className="font-mono-jb tabular-nums" style={{ opacity: 0.75 }}>
+          · pWin {pWinPct}%
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: TradeIdea; candles?: OhlcvCandle[] }) {
@@ -189,11 +221,14 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
             className="rounded-md p-3"
             style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
           >
-            <div
-              className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Confluence Scoring
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span
+                className="text-[0.5625rem] font-medium uppercase tracking-widest"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Confluence Scoring
+              </span>
+              <AggregatorBadge aggregator={tradeIdea.confluence.aggregator} />
             </div>
             <ConfluenceBreakdown confluence={tradeIdea.confluence} />
           </div>

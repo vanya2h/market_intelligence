@@ -34,7 +34,28 @@ export interface Confluence {
   etfs: number;
   htf: number;
   exchangeFlows: number;
+  /**
+   * IC-weighted heuristic total in -1..+1.
+   * Always computed (cheap, deterministic). Kept for back-compat with old
+   * consumers and as a shadow value next to `mlTotal`. Not used for decisions
+   * when `mlTotal` is set — see `decisionScore()`.
+   */
   total: number;
+  /**
+   * ML aggregator output in -1..+1. Set only when the ML aggregator ran
+   * successfully (model loadable + inference OK). Missing on failure;
+   * downstream prefers `mlTotal` over `total` via `decisionScore()`.
+   */
+  mlTotal?: number;
+}
+
+/**
+ * Active decision score: prefer ML when present, fall back to heuristic.
+ * Used everywhere a single -1..+1 conviction is consumed downstream
+ * (direction selection, sizing, composite targets, bias).
+ */
+export function decisionScore(c: Pick<Confluence, "total" | "mlTotal">): number {
+  return c.mlTotal ?? c.total;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

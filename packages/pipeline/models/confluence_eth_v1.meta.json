@@ -1,0 +1,132 @@
+{
+  "model_name": "confluence_eth_v1",
+  "asset": "ETH",
+  "version": "v1",
+  "model_type": "logistic_regression",
+  "features": [
+    "derivatives",
+    "etfs",
+    "htf",
+    "exchangeFlows"
+  ],
+  "feature_order": [
+    "derivatives",
+    "etfs",
+    "htf",
+    "exchangeFlows"
+  ],
+  "trained_at": "2026-05-04T13:11:33.545670+00:00",
+  "n_samples": 230,
+  "date_range": {
+    "start": "2026-03-27T17:17:49.974000",
+    "end": "2026-05-04T00:01:06.369000"
+  },
+  "class_balance": {
+    "wins": 122,
+    "losses": 108
+  },
+  "coefficients": {
+    "derivatives": 0.6395370614497854,
+    "etfs": -1.350275681782643,
+    "htf": -0.8960322500119571,
+    "exchangeFlows": 0.7653370607959916
+  },
+  "intercept": -0.16777535296747403,
+  "regularization": {
+    "penalty": "l2",
+    "C": 1.0,
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.5263157894736842,
+        "log_loss": 0.6898018618518829,
+        "brier": 0.2481592503291327
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.6578947368421053,
+        "log_loss": 0.6872230125293344,
+        "brier": 0.24668380295457337
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.6578947368421053,
+        "log_loss": 0.6831857938135935,
+        "brier": 0.24082929203923573
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.631578947368421,
+        "log_loss": 0.6474588789511856,
+        "brier": 0.22882404523059086
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.5526315789473685,
+        "log_loss": 0.6928648680652763,
+        "brier": 0.2496696583919639
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.6052631578947368,
+      "log_loss": 0.6801068830422545,
+      "brier": 0.2428332097890993
+    }
+  },
+  "pearson_ic_per_dim": {
+    "derivatives": 0.08308355205199698,
+    "etfs": -0.1596089583692003,
+    "htf": -0.22884978617741633,
+    "exchangeFlows": 0.14478247915084264
+  },
+  "heuristic_baseline_full": {
+    "label": "heuristic_full (stored_total)",
+    "accuracy": 0.48695652173913045,
+    "log_loss": 0.7114429955798063,
+    "brier": 0.25909487173913043
+  },
+  "heuristic_baseline_source": "stored_total",
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.6695652173913044,
+    "log_loss": 0.6383633411927032,
+    "brier": 0.22305589321754626
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    4
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "loss (qualityAtPoint <= 0)",
+    "1": "win (qualityAtPoint > 0)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.6695652173913044,
+      "log_loss": 0.6383633414322054,
+      "brier": 0.223055899143219
+    },
+    "first_5_probs": [
+      0.4548041820526123,
+      0.4548041820526123,
+      0.4548041820526123,
+      0.4548041820526123,
+      0.461508184671402
+    ]
+  }
+}

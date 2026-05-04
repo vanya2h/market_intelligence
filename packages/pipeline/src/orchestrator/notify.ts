@@ -135,9 +135,9 @@ const STAGE_HANDLERS: Record<NotifyStage, (ctx: StageCtx, idx: number, total: nu
 
     if (htfOut) {
       const briefId = await saveBrief(ctx.asset, "", outputs, null);
+      ctx.artifacts.briefId = briefId;
       const result = await processTradeIdea(briefId, ctx.asset, htfOut.context, outputs);
       ctx.artifacts.decision = result.decision;
-      ctx.artifacts.briefId = briefId;
     } else {
       note("no HTF output — trade idea skipped");
     }

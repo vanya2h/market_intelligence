@@ -44,19 +44,33 @@ export interface SizingInfo {
   dailyVolPct: number;
 }
 
+export interface AggregatorInfo {
+  /** "ml" = ONNX model produced the total; "heuristic" = IC-weighted average. */
+  source: "ml" | "heuristic";
+  /** Model version (e.g. "v1") when source = "ml". */
+  modelVersion?: string;
+  /** P(win) in [0,1] from the ML model when source = "ml". */
+  pWin?: number;
+}
+
 /**
- * Confluence values are in -1..+1 (per-dim are unweighted normalized scores;
- * total is the weighted average across dimensions). The UI renders them as
- * percentages.
+ * Confluence values are in -1..+1 (per-dim are unweighted normalized scores).
+ * `total` is the IC-weighted heuristic average (kept for back-compat).
+ * `mlTotal` is the ML aggregator output, set when the model ran successfully.
+ * Downstream consumers prefer `mlTotal` when present.
  */
 export interface Confluence {
   derivatives: number;
   etfs: number;
   htf: number;
   exchangeFlows: number;
+  /** IC-weighted heuristic total. Always present. */
   total: number;
+  /** ML aggregator output. Set only when the ML model ran successfully. */
+  mlTotal?: number;
   bias?: DirectionalBias;
   sizing?: SizingInfo;
+  aggregator?: AggregatorInfo;
 }
 
 export interface TradeIdeaLevel {

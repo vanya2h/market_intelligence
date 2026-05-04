@@ -1,0 +1,132 @@
+{
+  "model_name": "confluence_btc_v1",
+  "asset": "BTC",
+  "version": "v1",
+  "model_type": "logistic_regression",
+  "features": [
+    "derivatives",
+    "etfs",
+    "htf",
+    "exchangeFlows"
+  ],
+  "feature_order": [
+    "derivatives",
+    "etfs",
+    "htf",
+    "exchangeFlows"
+  ],
+  "trained_at": "2026-05-04T13:11:30.147039+00:00",
+  "n_samples": 241,
+  "date_range": {
+    "start": "2026-03-27T17:17:46.942000",
+    "end": "2026-05-04T00:00:13.392000"
+  },
+  "class_balance": {
+    "wins": 104,
+    "losses": 137
+  },
+  "coefficients": {
+    "derivatives": -0.7623441534680597,
+    "etfs": 0.26391855624554444,
+    "htf": -0.9706806235576474,
+    "exchangeFlows": 0.9686050372039737
+  },
+  "intercept": 0.07657309588937627,
+  "regularization": {
+    "penalty": "l2",
+    "C": 1.0,
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.45,
+        "log_loss": 0.7584586502724205,
+        "brier": 0.2814315549856105
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.55,
+        "log_loss": 0.6785617372021912,
+        "brier": 0.24304250649008105
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.675,
+        "log_loss": 0.6070739360607874,
+        "brier": 0.20816192066936043
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.575,
+        "log_loss": 0.6851995318775519,
+        "brier": 0.24528849237015998
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.275,
+        "log_loss": 0.7352623452782557,
+        "brier": 0.27097734057255635
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.505,
+      "log_loss": 0.6929112401382413,
+      "brier": 0.24978036301755366
+    }
+  },
+  "pearson_ic_per_dim": {
+    "derivatives": -0.05228510017165913,
+    "etfs": 0.051398049071450354,
+    "htf": -0.2128127977826531,
+    "exchangeFlows": 0.17831866289314152
+  },
+  "heuristic_baseline_full": {
+    "label": "heuristic_full (stored_total)",
+    "accuracy": 0.4024896265560166,
+    "log_loss": 0.7968997742066659,
+    "brier": 0.2971876566390041
+  },
+  "heuristic_baseline_source": "stored_total",
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.6099585062240664,
+    "log_loss": 0.6451853694300006,
+    "brier": 0.22719341275376956
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    4
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "loss (qualityAtPoint <= 0)",
+    "1": "win (qualityAtPoint > 0)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.6099585062240664,
+      "log_loss": 0.6451853725317394,
+      "brier": 0.2271934151649475
+    },
+    "first_5_probs": [
+      0.5191339254379272,
+      0.5191339254379272,
+      0.5167103409767151,
+      0.5167103409767151,
+      0.5167103409767151
+    ]
+  }
+}

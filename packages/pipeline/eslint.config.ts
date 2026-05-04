@@ -2,6 +2,9 @@ import { config } from "@vanya2h/eslint-config/node";
 import type { Linter } from "eslint";
 
 export default [
+  {
+    ignores: ["training/**", "models/**"],
+  },
   ...config,
   {
     rules: {
