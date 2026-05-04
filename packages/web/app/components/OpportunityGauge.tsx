@@ -59,13 +59,9 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
   const conf = tradeIdea.confluence;
   if (!conf) return null;
 
-  const bias = conf.bias;
-
   // Bipolar score: -100 (strong sell) to +100 (strong buy).
-  // bias.strength is now stored as 0..1; multiply by 100 here so the gauge's
-  // visual scale (which renders -100..+100) doesn't need to change.
-  const strengthPct = (bias?.strength ?? 0) * 100;
-  const score = bias?.lean === "LONG" ? strengthPct : bias?.lean === "SHORT" ? -strengthPct : 0;
+  // conf.total is already signed -1..+1 (positive = bullish).
+  const score = Math.round((conf.total ?? 0) * 100);
 
   const color = gaugeColor(score);
   const prefix = score > 0 ? "+" : "";
@@ -127,13 +123,13 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
             </span>{" "}
             taken — sized to conviction
           </span>
-        ) : bias && bias.lean !== "NEUTRAL" ? (
+        ) : score !== 0 ? (
           <span>
             Bias{" "}
             <span style={{ color }} className="font-medium">
-              {bias.lean}
+              {score > 0 ? "LONG" : "SHORT"}
             </span>{" "}
-            — strength {Math.round(bias.strength * 100)}/100
+            — strength {Math.abs(score)}/100
           </span>
         ) : (
           <span>No directional edge detected</span>

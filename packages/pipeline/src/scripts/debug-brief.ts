@@ -32,11 +32,8 @@ import { parseAssetType } from "../models.js";
 import type { DeltaSummary } from "../orchestrator/delta.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import type { DirectionalBias } from "../orchestrator/trade-idea/bias.js";
-import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
 import { computeConfluence, type Confluence } from "../orchestrator/trade-idea/confluence.js";
-import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import {
   type DerivativesOutput,
@@ -573,29 +570,18 @@ function buildConfluence(storedOutputs: DimensionOutput[]): string {
     return out + "Cannot reconstruct — no dimension data in brief\n";
   }
 
-  const directions: Direction[] = ["LONG", "SHORT", "FLAT"];
-  const scored = directions.map((dir) => ({
-    direction: dir,
-    confluence: computeConfluence(storedOutputs, dir, EQUAL_WEIGHTS),
-  }));
+  const conf = computeConfluence(storedOutputs);
+  const total = (conf.derivatives + conf.etfs + conf.htf + conf.exchangeFlows) / 4;
+  const fmtScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
 
-  out += `${"Direction".padEnd(8)} ${"derivatives".padEnd(14)} ${"etfs".padEnd(8)} ${"htf".padEnd(8)} ${"exchFlows".padEnd(12)} total\n`;
-  out += sep("─", 58) + "\n";
-  for (const s of scored) {
-    const c = s.confluence;
-    out += `${s.direction.padEnd(8)} ${String(c.derivatives).padEnd(14)} ${String(c.etfs).padEnd(8)} ${String(c.htf).padEnd(8)} ${String(c.exchangeFlows).padEnd(12)} ${c.total}\n`;
-  }
-
-  const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
-  const shortConf = scored.find((s) => s.direction === "SHORT")!.confluence;
-  const bias = computeBias(longConf, shortConf);
-
-  out += subsection("Directional Bias");
-  out += kv("Lean", bias.lean);
-  out += kv("Strength", `${Math.round(bias.strength * 100)}/100`);
-  if (bias.topFactors.length > 0) {
-    out += kv("Top Factors", bias.topFactors.map((f) => `${f.dimension}:+${Math.round(f.score * 100)}%`).join("  "));
-  }
+  out += `${"Dimension".padEnd(16)} Score\n`;
+  out += sep("─", 26) + "\n";
+  out += `${"derivatives".padEnd(16)} ${fmtScore(conf.derivatives)}\n`;
+  out += `${"etfs".padEnd(16)} ${fmtScore(conf.etfs)}\n`;
+  out += `${"htf".padEnd(16)} ${fmtScore(conf.htf)}\n`;
+  out += `${"exchangeFlows".padEnd(16)} ${fmtScore(conf.exchangeFlows)}\n`;
+  out += sep("─", 26) + "\n";
+  out += `${"total (fallback)".padEnd(16)} ${fmtScore(total)}\n`;
 
   return out;
 }
@@ -918,7 +904,6 @@ async function main() {
   let promptDecision: TradeDecision | null = null;
   if (tradeIdea) {
     const storedConf = tradeIdea.confluence as unknown as Confluence & {
-      bias?: DirectionalBias;
       sizing?: { positionSizePct: number; convictionMultiplier: number; dailyVolPct: number };
     };
     promptDecision = {
@@ -931,17 +916,7 @@ async function main() {
         convictionMultiplier: 0,
         dailyVolPct: 0,
       },
-      alternatives: [], // not persisted
-      bias: (storedConf?.bias ?? { lean: "NEUTRAL", strength: 0, topFactors: [] }) as DirectionalBias,
-      weights: {
-        derivatives: 1,
-        etfs: 1,
-        htf: 1,
-        exchangeFlows: 1,
-        calibrated: false,
-        sampleCount: 0,
-        ic: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 },
-      },
+      ml: null,
     };
   }
 

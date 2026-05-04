@@ -1,7 +1,6 @@
 import type {
   AssetType,
   DimensionEffectiveness,
-  IcWeights,
   IdeaSummary,
   MonthlyReturn,
   PerformanceMetrics,
@@ -16,26 +15,25 @@ import { Collapsible } from "../components/Collapsible";
 import { StickyFooter } from "../components/StickyFooter";
 import { StrategyEquityCurve } from "../components/StrategyEquityCurve";
 import { type ConfluenceKey, DIMENSION_SHORT_LABELS } from "../lib/dimensions";
-import { getIcWeights, getPerformanceMetrics, getSignalEffectiveness, getStrategyCurves } from "../lib/trade-idea";
+import { getPerformanceMetrics, getSignalEffectiveness, getStrategyCurves } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const asset = (url.searchParams.get("asset") || "BTC") as AssetType;
-  const [data, performance, strategyCurves, icWeights] = await Promise.all([
+  const [data, performance, strategyCurves] = await Promise.all([
     getSignalEffectiveness(asset, api),
     getPerformanceMetrics(asset, api),
     getStrategyCurves(asset, api),
-    getIcWeights(asset, api),
   ]);
 
-  return { asset, data, performance, strategyCurves, icWeights };
+  return { asset, data, performance, strategyCurves };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function Signals() {
-  const { asset, data, performance, strategyCurves, icWeights } = useLoaderData<LoaderData>();
+  const { asset, data, performance, strategyCurves } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -90,8 +88,6 @@ export default function Signals() {
               {/* Trade idea heatmap */}
               {data.ideas.length > 0 && <IdeaHeatmap ideas={data.ideas} />}
 
-              {/* IC weights */}
-              <IcWeightsPanel icWeights={icWeights} />
             </>
           )}
         </div>
@@ -638,144 +634,4 @@ function CorrelationRanking({ dimensions }: { dimensions: DimensionEffectiveness
   );
 }
 
-// ─── IC weights panel ────────────────────────────────────────────────────────
 
-const CONFLUENCE_KEY_ORDER: ConfluenceKey[] = ["htf", "derivatives", "etfs", "exchangeFlows"];
-
-const FULL_LABELS: Record<ConfluenceKey, string> = {
-  htf: "HTF Structure",
-  derivatives: "Derivatives",
-  etfs: "ETFs",
-  exchangeFlows: "Exchange Flows",
-};
-
-function IcWeightsPanel({ icWeights }: { icWeights: IcWeights }) {
-  const maxWeight = Math.max(...CONFLUENCE_KEY_ORDER.map((k) => icWeights[k]), 0.01);
-
-  return (
-    <div
-      className="rounded-md p-4"
-      style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
-    >
-      <div className="flex items-center gap-3 mb-3">
-        <h2 className="text-[0.6875rem] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-          IC Weights
-        </h2>
-        {icWeights.calibrated ? (
-          <span
-            className="text-[0.5625rem] font-mono-jb px-1.5 py-0.5 rounded"
-            style={{
-              background: "color-mix(in srgb, var(--green) 12%, transparent)",
-              color: "var(--green)",
-              border: "1px solid color-mix(in srgb, var(--green) 25%, transparent)",
-            }}
-          >
-            calibrated · n={icWeights.sampleCount}
-          </span>
-        ) : (
-          <span
-            className="text-[0.5625rem] font-mono-jb px-1.5 py-0.5 rounded"
-            style={{
-              background: "color-mix(in srgb, var(--yellow, #f0c040) 12%, transparent)",
-              color: "var(--text-muted)",
-              border: "1px solid color-mix(in srgb, var(--yellow, #f0c040) 25%, transparent)",
-            }}
-          >
-            equal fallback · n={icWeights.sampleCount}
-          </span>
-        )}
-      </div>
-
-      {/* Header */}
-      <div
-        className="grid grid-cols-[9rem_1fr_3.5rem_3.5rem_3rem] gap-2 items-center text-[0.5625rem] uppercase tracking-wider mb-1"
-        style={{ color: "var(--text-muted)" }}
-      >
-        <span>Dimension</span>
-        <span className="pl-2">Weight</span>
-        <span className="text-right">IC</span>
-        <span className="text-right">Recent</span>
-        <span className="text-right">Δ</span>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        {CONFLUENCE_KEY_ORDER.map((key) => {
-          const weight = icWeights[key];
-          const ic = icWeights.ic[key] ?? null;
-          const recent = icWeights.recentIc[key] ?? null;
-          const delta = ic !== null && recent !== null ? recent - ic : null;
-          const barWidth = (weight / maxWeight) * 100;
-
-          const weightColor =
-            ic === null
-              ? "var(--text-secondary)"
-              : ic > 0.05
-                ? "var(--green)"
-                : ic < -0.05
-                  ? "var(--red)"
-                  : "var(--text-secondary)";
-          const icColor =
-            ic === null ? "var(--text-muted)" : ic > 0 ? "var(--green)" : ic < 0 ? "var(--red)" : "var(--text-muted)";
-          const recentColor =
-            recent === null
-              ? "var(--text-muted)"
-              : recent > 0
-                ? "var(--green)"
-                : recent < 0
-                  ? "var(--red)"
-                  : "var(--text-muted)";
-          // Delta color: green = improving (recent IC rising), red = deteriorating
-          const deltaColor =
-            delta === null
-              ? "var(--text-muted)"
-              : delta > 0.05
-                ? "var(--green)"
-                : delta < -0.05
-                  ? "var(--red)"
-                  : "var(--text-muted)";
-
-          return (
-            <div
-              key={key}
-              className="grid grid-cols-[9rem_1fr_3.5rem_3.5rem_3rem] gap-2 items-center py-1"
-              style={{ borderBottom: "1px solid var(--border-subtle)" }}
-            >
-              <span className="text-[0.625rem] font-medium" style={{ color: "var(--text-secondary)" }}>
-                {FULL_LABELS[key]}
-              </span>
-
-              {/* Weight bar */}
-              <div className="relative h-4 flex items-center pl-2">
-                <div
-                  className="h-2.5 rounded-sm"
-                  style={{
-                    width: `${Math.max(barWidth, 2)}%`,
-                    background: `color-mix(in srgb, ${weightColor} 30%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${weightColor} 50%, transparent)`,
-                  }}
-                />
-              </div>
-
-              <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: icColor }}>
-                {ic !== null ? `${ic > 0 ? "+" : ""}${ic.toFixed(2)}` : "—"}
-              </span>
-
-              <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: recentColor }}>
-                {recent !== null ? `${recent > 0 ? "+" : ""}${recent.toFixed(2)}` : "—"}
-              </span>
-
-              <span className="text-right font-mono-jb tabular-nums text-[0.625rem]" style={{ color: deltaColor }}>
-                {delta !== null ? `${delta > 0 ? "+" : ""}${delta.toFixed(2)}` : "—"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <p className="text-[0.5625rem] mt-3" style={{ color: "var(--text-muted)" }}>
-        IC = Pearson r (all history, EMA-smoothed). Recent = last 30 ideas only. Δ = Recent − IC: positive means the
-        dimension is improving relative to its history.
-      </p>
-    </div>
-  );
-}

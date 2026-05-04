@@ -7,10 +7,8 @@ import { callLlm } from "../llm.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
 import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
-import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import type { HtfOutput } from "../orchestrator/types.js";
@@ -34,41 +32,20 @@ async function main() {
   const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
   let decision: TradeDecision | null = null;
   if (htfOut) {
-    const directions: Direction[] = ["LONG", "SHORT"];
-    const scored = directions.map((dir) => ({
-      direction: dir,
-      confluence: computeConfluence(outputs, dir, EQUAL_WEIGHTS),
-    }));
-    const sorted = [...scored].sort((a, b) => b.confluence.total - a.confluence.total);
-    const chosen = sorted[0]!;
-    const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, chosen.direction);
-    const longConf = scored.find((s) => s.direction === "LONG")!.confluence;
-    const shortConf = scored.find((s) => s.direction === "SHORT")!.confluence;
-    const bias = computeBias(longConf, shortConf);
-    const sizing = computePositionSize(chosen.confluence.total, htfOut.context);
+    const perDim = computeConfluence(outputs);
+    const total = (perDim.derivatives + perDim.etfs + perDim.htf + perDim.exchangeFlows) / 4;
+    const direction: Direction = total >= 0 ? "LONG" : "SHORT";
+    const confluence = { ...perDim, total };
+    const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);
+    const sizing = computePositionSize(total, htfOut.context);
 
     decision = {
-      direction: chosen.direction,
-      confluence: chosen.confluence,
+      direction,
+      confluence,
       entryPrice,
       compositeTarget,
       sizing,
-      alternatives: scored
-        .filter((s) => s.direction !== chosen.direction)
-        .map((s) => ({
-          direction: s.direction,
-          total: s.confluence.total,
-        })),
-      bias,
-      weights: {
-        derivatives: 1,
-        etfs: 1,
-        htf: 1,
-        exchangeFlows: 1,
-        calibrated: false,
-        sampleCount: 0,
-        ic: { derivatives: 0, etfs: 0, htf: 0, exchangeFlows: 0 },
-      },
+      ml: null,
     };
   }
 

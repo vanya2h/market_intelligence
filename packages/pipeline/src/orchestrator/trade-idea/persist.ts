@@ -7,10 +7,8 @@
 
 import type { $Enums, Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../storage/db.js";
-import type { DirectionalBias } from "./bias.js";
 import type { Direction, LevelResult } from "./composite-target.js";
 import type { Confluence } from "./confluence.js";
-import type { DimensionWeights } from "./ic-weights.js";
 import type { MlResult } from "./ml-aggregator.js";
 import type { PositionSize } from "./sizing.js";
 
@@ -23,9 +21,6 @@ interface SaveTradeIdeaInput {
   levels: LevelResult[];
   confluence: Confluence;
   sizing: PositionSize;
-  bias: DirectionalBias;
-  weights: DimensionWeights;
-  /** ML aggregator output, or null when explicitly disabled. */
   ml: MlResult | null;
 }
 
@@ -39,18 +34,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       compositeTarget: input.compositeTarget,
       positionSizePct: input.sizing.positionSizePct,
       confluence: {
-        // Per-dim scores + heuristic `total` + (when ML ran) `mlTotal`
         ...input.confluence,
-        bias: input.bias,
-        weights: {
-          derivatives: input.weights.derivatives,
-          etfs: input.weights.etfs,
-          htf: input.weights.htf,
-          exchangeFlows: input.weights.exchangeFlows,
-          calibrated: input.weights.calibrated,
-          sampleCount: input.weights.sampleCount,
-          ic: input.weights.ic,
-        },
         sizing: {
           positionSizePct: input.sizing.positionSizePct,
           convictionMultiplier: input.sizing.convictionMultiplier,
@@ -58,7 +42,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
         },
         aggregator: input.ml
           ? { source: "ml", modelVersion: input.ml.modelVersion, pWin: input.ml.pWin }
-          : { source: "heuristic" },
+          : { source: "fallback" },
       } as unknown as Prisma.InputJsonValue,
       levels: {
         create: input.levels.map((l) => ({

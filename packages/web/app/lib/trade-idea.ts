@@ -1,6 +1,5 @@
 import type {
   AssetType,
-  IcWeights,
   OhlcvCandle,
   PerformanceMetrics,
   SignalEffectiveness,
@@ -34,10 +33,6 @@ export async function getPerformanceMetrics(asset: AssetType, api: Api): Promise
 
 export async function getStrategyCurves(asset: AssetType, api: Api): Promise<StrategyCurvesData> {
   return parseResponse(api.api.trades.performance["strategy-curves"][":asset"].$get({ param: { asset } }));
-}
-
-export async function getIcWeights(asset: AssetType, api: Api): Promise<IcWeights> {
-  return parseResponse(api.api.trades["ic-weights"][":asset"].$get({ param: { asset } }));
 }
 
 export async function getHourlyCandles(asset: AssetType, since: number, api: Api): Promise<OhlcvCandle[]> {

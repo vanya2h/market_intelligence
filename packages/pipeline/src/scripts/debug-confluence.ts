@@ -9,9 +9,7 @@
 
 import chalk from "chalk";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
-import { computeBias } from "../orchestrator/trade-idea/bias.js";
 import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
-import { EQUAL_WEIGHTS } from "../orchestrator/trade-idea/ic-weights.js";
 import type {
   DerivativesOutput,
   EtfsOutput,
@@ -180,56 +178,27 @@ async function main() {
 
   // Score for each direction
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("  SCORING BY DIRECTION");
-  console.log("═══════════════════════════════════════════════════════════════");
-
-  const directions = ["LONG", "SHORT"] as const;
-
-  for (const dir of directions) {
-    const confluence = computeConfluence(outputs, dir, EQUAL_WEIGHTS);
-
-    console.log(`\n  ── ${chalk.bold(dir)} ────────────────────────`);
-    console.log();
-
-    // Per-dimension breakdown with visual bars
-    const dims = [
-      { name: "Derivatives", score: confluence.derivatives },
-      { name: "ETFs       ", score: confluence.etfs },
-      { name: "HTF        ", score: confluence.htf },
-      { name: "Exch Flows ", score: confluence.exchangeFlows },
-    ];
-
-    for (const dim of dims) {
-      console.log(`    ${dim.name}  ${bar(dim.score, 1, 40)}  ${scoreStr(dim.score).padStart(12)}`);
-    }
-
-    console.log();
-    const totalLabel = scoreStr(confluence.total);
-    console.log(`    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalLabel.padStart(12)} / 100`);
-  }
-
-  // Directional bias
-  const longConf = computeConfluence(outputs, "LONG", EQUAL_WEIGHTS);
-  const shortConf = computeConfluence(outputs, "SHORT", EQUAL_WEIGHTS);
-  const bias = computeBias(longConf, shortConf);
-
-  console.log("═══════════════════════════════════════════════════════════════");
-  console.log("  DIRECTIONAL BIAS");
+  console.log("  CONFLUENCE  (positive = bullish · negative = bearish)");
   console.log("═══════════════════════════════════════════════════════════════\n");
 
-  const leanColor = bias.lean === "LONG" ? chalk.green : bias.lean === "SHORT" ? chalk.red : chalk.yellow;
+  const conf = computeConfluence(outputs);
+  const total = (conf.derivatives + conf.etfs + conf.htf + conf.exchangeFlows) / 4;
+  const totalColor = total >= 0 ? chalk.green : chalk.red;
 
-  console.log(`  Lean      : ${leanColor.bold(bias.lean)}`);
-  console.log(`  Strength  : ${bar(bias.strength, 1, 40)}  ${scoreStr(bias.strength).padStart(12)} / 100`);
+  const dims = [
+    { name: "Derivatives", score: conf.derivatives },
+    { name: "ETFs       ", score: conf.etfs },
+    { name: "HTF        ", score: conf.htf },
+    { name: "Exch Flows ", score: conf.exchangeFlows },
+  ];
 
-  if (bias.topFactors.length > 0) {
-    console.log(`\n  Top driving dimensions:`);
-    for (const f of bias.topFactors) {
-      console.log(`    ${f.dimension.padEnd(16)} ${bar(f.score, 1, 40)}  ${scoreStr(f.score).padStart(12)}`);
-    }
-  } else {
-    console.log(`\n  (signals balanced — no dominant lean)`);
+  for (const dim of dims) {
+    console.log(`    ${dim.name}  ${bar(dim.score, 1, 40)}  ${scoreStr(dim.score).padStart(12)}`);
   }
+
+  console.log();
+  console.log(`    ${"Total      ".padEnd(11)}  ${" ".repeat(40)}  ${totalColor.bold(scoreStr(total).padStart(12))} / 100`);
+  console.log(`    Direction: ${totalColor.bold(total >= 0 ? "LONG" : "SHORT")}`);
 
   console.log("\n═══════════════════════════════════════════════════════════════\n");
 }

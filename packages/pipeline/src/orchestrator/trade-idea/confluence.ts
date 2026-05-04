@@ -26,45 +26,18 @@ import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { AnalysisSignals, DerivativesContext } from "../../types.js";
 import type { DimensionOutput } from "../types.js";
-import type { Direction } from "./composite-target.js";
-import type { DimensionWeights } from "./ic-weights.js";
 
 export interface Confluence {
   derivatives: number;
   etfs: number;
   htf: number;
   exchangeFlows: number;
-  /**
-   * IC-weighted heuristic total in -1..+1.
-   * Always computed (cheap, deterministic). Kept for back-compat with old
-   * consumers and as a shadow value next to `mlTotal`. Not used for decisions
-   * when `mlTotal` is set — see `decisionScore()`.
-   */
+  /** ML score in -1..+1, or equal-weight fallback when the model is unavailable. */
   total: number;
-  /**
-   * ML aggregator output in -1..+1. Set only when the ML aggregator ran
-   * successfully (model loadable + inference OK). Missing on failure;
-   * downstream prefers `mlTotal` over `total` via `decisionScore()`.
-   */
-  mlTotal?: number;
-}
-
-/**
- * Active decision score: prefer ML when present, fall back to heuristic.
- * Used everywhere a single -1..+1 conviction is consumed downstream
- * (direction selection, sizing, composite targets, bias).
- */
-export function decisionScore(c: Pick<Confluence, "total" | "mlTotal">): number {
-  return c.mlTotal ?? c.total;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
-}
-
-/** Flip score for SHORT direction (signals that agree with LONG disagree with SHORT) */
-function directional(score: number, direction: Direction): number {
-  return direction === "SHORT" ? -score : score;
 }
 
 // ─── Derivatives (-100 to +100) ─────────────────────────────────────────────
@@ -177,8 +150,7 @@ function scoreFunding(signals: AnalysisSignals, htfCtx?: HtfContext): number {
   return clamp(trendWeight * trendScore + (1 - trendWeight) * meanRevScore, -100, 100);
 }
 
-function scoreDerivatives(ctx: DerivativesContext, direction: Direction, htfCtx?: HtfContext): number {
-  if (direction === "FLAT") return 0;
+function scoreDerivatives(ctx: DerivativesContext, htfCtx?: HtfContext): number {
 
   const { positioning, stress, signals } = ctx;
 
@@ -259,7 +231,7 @@ function scoreDerivatives(ctx: DerivativesContext, direction: Direction, htfCtx?
     fundingScore * DERIV_W_FUNDING +
     cbScore * DERIV_W_CBPREMIUM;
 
-  return clamp(directional(rawScore, direction), -100, 100);
+  return clamp(rawScore, -100, 100);
 }
 
 // ─── ETFs (-100 to +100) ────────────────────────────────────────────────────
@@ -291,8 +263,7 @@ const ETF_SATURATION_START_RATIO = 2;
  */
 const MIN_PRIOR_STREAK_SIGMAS = 3;
 
-function scoreEtfs(ctx: EtfContext, direction: Direction): number {
-  if (direction === "FLAT") return 0;
+function scoreEtfs(ctx: EtfContext): number {
 
   const { regime, previousRegime, flow } = ctx;
 
@@ -373,7 +344,7 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
     reversalScore * ETF_W_REVERSAL +
     regimeScore * ETF_W_REGIME;
 
-  return clamp(directional(rawScore, direction), -100, 100);
+  return clamp(rawScore, -100, 100);
 }
 
 // ─── HTF (-100 to +100) ─────────────────────────────────────────────────────
@@ -388,30 +359,9 @@ function scoreEtfs(ctx: EtfContext, direction: Direction): number {
 // The analyzer computes direction-independent component scores once; here we just
 // scale to -100..+100 and flip for SHORT.
 
-function scoreHtf(ctx: HtfContext, direction: Direction): number {
-  if (direction === "FLAT") {
-    // FLAT scoring: low directional bias + low compression = supports flat
-    let flatScore = 0;
-    if (ctx.regime === "RANGING") flatScore += 30;
-    // Low absolute composite = no directional stretch
-    flatScore += (1 - Math.abs(ctx.bias.composite)) * 30;
-    // No CVD divergence supports flat
-    if (ctx.cvd.futures.divergence === "NONE") flatScore += 20;
-    // High compression = breakout imminent, penalize flat
-    if (ctx.bias.compression > 0.5) flatScore -= 20;
-    else if (ctx.bias.compression < 0.2) flatScore += 20;
-    // Price inside Value Area + thick POC = range-bound thesis
-    if (ctx.volumeProfile?.profile?.pricePosition === "INSIDE_VA" && ctx.volumeProfile.profile.pocVolumePct > 3) {
-      flatScore += 25;
-    }
-    return clamp(flatScore, -100, 100);
-  }
-
-  // Scale the composite bias (-1..+1) to conviction (-100..+100).
-  // The composite already incorporates compression as an amplifier.
-  const rawScore = ctx.bias.composite * 100;
-
-  return clamp(directional(rawScore, direction), -100, 100);
+function scoreHtf(ctx: HtfContext): number {
+  // composite is already -1..+1 (positive = bullish). Scale to -100..+100.
+  return clamp(ctx.bias.composite * 100, -100, 100);
 }
 
 // ─── Exchange Flows (-100 to +100) ───────────────────────────────────────────
@@ -423,11 +373,7 @@ function scoreHtf(ctx: HtfContext, direction: Direction): number {
 const EF_W_RESERVE = 0.65;
 const EF_W_EXTREME = 0.35;
 
-function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): number {
-  if (direction === "FLAT") {
-    return ctx.regime === "EF_NEUTRAL" ? 30 : 0;
-  }
-
+function scoreExchangeFlows(ctx: ExchangeFlowsContext): number {
   const m = ctx.metrics;
 
   // 1. Reserve change — continuous signal from 7d and 30d reserve movement.
@@ -453,7 +399,7 @@ function scoreExchangeFlows(ctx: ExchangeFlowsContext, direction: Direction): nu
 
   const rawScore = reserveScore * EF_W_RESERVE + extremeScore * EF_W_EXTREME;
 
-  return clamp(directional(rawScore, direction), -100, 100);
+  return clamp(rawScore, -100, 100);
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -473,44 +419,12 @@ function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
-// ─── Fire Function ────────────────────────────────────────────────────────────
-// When any single dimension fires at extreme conviction (|score| >= threshold),
-// the IC-derived weights may suppress it to near-zero (e.g., HTF with negative IC
-// gets floor weight 6%). The fire function prevents full cancellation by blending
-// the weighted average toward the dominant signal.
-//
-// Formula: total = (1 - α) × weighted_avg + α × dominant_score
-// At α = 0.5: even if IC weights fully oppose the fire dimension, it still
-// contributes half of its raw score to the total.
-//
-// Threshold 0.80 = clearly extreme conviction (not just a moderate lean).
-// Alpha 0.50 = dominant signal gets equal footing with the full IC-weighted rest.
-
-const FIRE_THRESHOLD = 0.8;
-const FIRE_ALPHA = 0.5;
-
 /**
- * Compute confluence scores for all dimensions in a given direction.
- *
- * Per-dim values are unweighted normalized scores in -1..+1: each dimension's
- * raw -100..+100 score is passed through the power curve, then divided by 100.
- *
- * The total is the weighted average across dimensions: Σ(score_i × weight_i),
- * where IC-based weights sum to 1 (so total ∈ [-1, +1] regardless of how many
- * dimensions exist).
- *
- * When any dimension fires at extreme conviction (|score| >= FIRE_THRESHOLD),
- * the total blends toward that dominant signal to prevent full cancellation by
- * IC weighting.
- *
- * Equal weights (0.25 each by default) are used when calibration data is
- * insufficient.
+ * Compute per-dimension confluence scores. Positive = bullish, negative = bearish.
+ * Returns unweighted normalized scores in -1..+1 for each dimension.
+ * Aggregation into `total` is done by the caller (ML model or equal-weight fallback).
  */
-export function computeConfluence(
-  outputs: DimensionOutput[],
-  direction: Direction,
-  weights: DimensionWeights,
-): Confluence {
+export function computeConfluence(outputs: DimensionOutput[]): Omit<Confluence, "total"> {
   const deriv = outputs.find((o) => o.dimension === "DERIVATIVES");
   const etfs = outputs.find((o) => o.dimension === "ETFS");
   const htf = outputs.find((o) => o.dimension === "HTF");
@@ -518,35 +432,15 @@ export function computeConfluence(
 
   const htfCtx = htf?.context;
 
-  // Unweighted normalized scores in -1..+1.
-  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, direction, htfCtx) : 0) / 100;
-  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context, direction) : 0) / 100;
-  const htfScore = convictionMap(htf ? scoreHtf(htf.context, direction) : 0) / 100;
-  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context, direction) : 0) / 100;
-
-  // Weighted average — weights sum to 1, so total ∈ [-1, +1].
-  const weightedTotal =
-    derivatives * weights.derivatives +
-    etfScore * weights.etfs +
-    htfScore * weights.htf +
-    exchangeFlows * weights.exchangeFlows;
-
-  // Fire function: find the dimension with the highest absolute conviction.
-  // If it exceeds FIRE_THRESHOLD, blend the weighted average toward that signal.
-  // This prevents IC weights from silencing a dimension that is screaming extreme.
-  const dimScores = [derivatives, etfScore, htfScore, exchangeFlows];
-  const maxAbsScore = Math.max(...dimScores.map(Math.abs));
-  let total = weightedTotal;
-  if (maxAbsScore >= FIRE_THRESHOLD) {
-    const dominantScore = dimScores.find((s) => Math.abs(s) === maxAbsScore) ?? 0;
-    total = (1 - FIRE_ALPHA) * weightedTotal + FIRE_ALPHA * dominantScore;
-  }
+  const derivatives = convictionMap(deriv ? scoreDerivatives(deriv.context, htfCtx) : 0) / 100;
+  const etfScore = convictionMap(etfs ? scoreEtfs(etfs.context) : 0) / 100;
+  const htfScore = convictionMap(htf ? scoreHtf(htf.context) : 0) / 100;
+  const exchangeFlows = convictionMap(ef ? scoreExchangeFlows(ef.context) : 0) / 100;
 
   return {
     derivatives: round3(derivatives),
     etfs: round3(etfScore),
     htf: round3(htfScore),
     exchangeFlows: round3(exchangeFlows),
-    total: round3(total),
   };
 }

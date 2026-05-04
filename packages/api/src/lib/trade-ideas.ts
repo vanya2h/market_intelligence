@@ -27,17 +27,6 @@ export type TradeDirection = "LONG" | "SHORT" | "FLAT";
 export type TradeOutcome = "OPEN" | "WIN" | "LOSS";
 export type LevelType = "INVALIDATION" | "TARGET";
 
-export interface BiasFactor {
-  dimension: string;
-  score: number;
-}
-
-export interface DirectionalBias {
-  lean: "LONG" | "SHORT" | "NEUTRAL";
-  strength: number;
-  topFactors: BiasFactor[];
-}
-
 export interface SizingInfo {
   positionSizePct: number;
   convictionMultiplier: number;
@@ -45,8 +34,8 @@ export interface SizingInfo {
 }
 
 export interface AggregatorInfo {
-  /** "ml" = ONNX model produced the total; "heuristic" = IC-weighted average. */
-  source: "ml" | "heuristic";
+  /** "ml" = ONNX model produced the total; "fallback" = equal-weight arithmetic average. */
+  source: "ml" | "fallback";
   /** Model version (e.g. "v1") when source = "ml". */
   modelVersion?: string;
   /** P(win) in [0,1] from the ML model when source = "ml". */
@@ -55,20 +44,15 @@ export interface AggregatorInfo {
 
 /**
  * Confluence values are in -1..+1 (per-dim are unweighted normalized scores).
- * `total` is the IC-weighted heuristic average (kept for back-compat).
- * `mlTotal` is the ML aggregator output, set when the model ran successfully.
- * Downstream consumers prefer `mlTotal` when present.
+ * `total` is the ML aggregator output, or equal-weight fallback when unavailable.
  */
 export interface Confluence {
   derivatives: number;
   etfs: number;
   htf: number;
   exchangeFlows: number;
-  /** IC-weighted heuristic total. Always present. */
+  /** ML score or equal-weight fallback. Always present. */
   total: number;
-  /** ML aggregator output. Set only when the ML model ran successfully. */
-  mlTotal?: number;
-  bias?: DirectionalBias;
   sizing?: SizingInfo;
   aggregator?: AggregatorInfo;
 }
@@ -148,22 +132,6 @@ export interface TradeIdeaLevelStats {
 export interface TradeIdeaStats {
   totalIdeas: number;
   levels: TradeIdeaLevelStats[];
-}
-
-// ─── IC weights ─────────────────────────────────────────────────────────────
-
-export interface IcWeights {
-  derivatives: number;
-  etfs: number;
-  htf: number;
-  exchangeFlows: number;
-  /** true = computed from historical data, false = equal fallback */
-  calibrated: boolean;
-  sampleCount: number;
-  /** Full-history IC (EMA-smoothed) used to derive current weights */
-  ic: Record<string, number>;
-  /** IC from the most recent 30 ideas — leading indicator of regime change */
-  recentIc: Record<string, number>;
 }
 
 // ─── Signal effectiveness ───────────────────────────────────────────────────

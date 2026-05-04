@@ -80,7 +80,9 @@ async function auditAsset(asset: $Enums.Asset): Promise<void> {
 
   if (firstDate && lastDate) {
     const days = Math.round((+lastDate - +firstDate) / (1000 * 60 * 60 * 24));
-    console.log(`  Date range:                  ${firstDate.toISOString().slice(0, 10)} → ${lastDate.toISOString().slice(0, 10)} (${days}d)`);
+    console.log(
+      `  Date range:                  ${firstDate.toISOString().slice(0, 10)} → ${lastDate.toISOString().slice(0, 10)} (${days}d)`,
+    );
   }
 
   if (usable > 0) {
@@ -89,14 +91,17 @@ async function auditAsset(asset: $Enums.Asset): Promise<void> {
     const meanQ = qualityValues.reduce((a, b) => a + b, 0) / qualityValues.length;
 
     const balanceColor = balance >= 0.6 ? chalk.green : balance >= 0.4 ? chalk.yellow : chalk.red;
-    console.log(`  Class balance (win/loss):    ${wins}/${losses} (${winRate.toFixed(1)}% wins, ${balanceColor(`balance=${balance.toFixed(2)}`)})`);
+    console.log(
+      `  Class balance (win/loss):    ${wins}/${losses} (${winRate.toFixed(1)}% wins, ${balanceColor(`balance=${balance.toFixed(2)}`)})`,
+    );
     console.log(`  Mean qualityAtPoint:         ${meanQ >= 0 ? "+" : ""}${meanQ.toFixed(3)}`);
 
     // Viability verdict
     let verdict: string;
     if (usable >= 100) verdict = chalk.green.bold("✓ VIABLE for L1 (logistic regression)");
     else if (usable >= 50) verdict = chalk.yellow.bold("⚠ MARGINAL — train but expect high variance");
-    else if (usable >= 20) verdict = chalk.red("⚠ MINIMAL — heavy regularization required, treat results as exploratory");
+    else if (usable >= 20)
+      verdict = chalk.red("⚠ MINIMAL — heavy regularization required, treat results as exploratory");
     else verdict = chalk.red.bold("✗ INSUFFICIENT — collect more data before training");
     console.log(`  Verdict:                     ${verdict}`);
   }
