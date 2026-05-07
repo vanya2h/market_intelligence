@@ -1,32 +1,65 @@
 // Orchestrator — Cron Scheduler
 //
-// Long-lived process that triggers the brief + notify pipeline
-// on a configurable cron schedule.
+// Long-lived process that triggers three independent jobs:
+//   - hourly snapshots (collect + analyze + persist, no LLM)
+//   - briefs (read snapshots, run agents, synthesize, notify) — offset 5min
+//     past the snapshot tick so the freshest snapshot row is available
+//   - outcome checks (trade idea win/loss tracking)
 //
 // Env vars:
-//   BRIEF_CRON — cron expression (default: "0 0,8,12,15,18,21 * * *")
-//   + all env vars required by notify.ts
+//   SNAPSHOT_CRON — default "0 * * * *"             (top of every hour)
+//   BRIEF_CRON    — default "5 0,8,12,15,18,21 * * *" (5 min after the hour)
+//   OUTCOME_CRON  — default "0 6,18 * * *"          (twice daily)
 //
 // Usage:
 //   pnpm schedule
-//   BRIEF_CRON="0 0,8,12,15,18,21 * * *" pnpm schedule
 
 import chalk from "chalk";
 import cron from "node-cron";
 import type { AssetType } from "../types.js";
 import { checkOutcomes } from "./trade-idea/outcome-checker.js";
 import { runNotify } from "./notify.js";
+import { snapshotAllDimensions } from "./snapshot.js";
 import "../env.js";
 
-const BRIEF_CRON = process.env.BRIEF_CRON ?? "0 0,8,12,15,18,21 * * *";
-const OUTCOME_CRON = process.env.OUTCOME_CRON ?? "0 6,18 * * *"; // 2x/day at 06:00 and 18:00 UTC
+const SNAPSHOT_CRON = process.env.SNAPSHOT_CRON ?? "0 * * * *";
+const BRIEF_CRON = process.env.BRIEF_CRON ?? "5 0,8,12,15,18,21 * * *";
+const OUTCOME_CRON = process.env.OUTCOME_CRON ?? "0 6,18 * * *";
 const ASSETS: AssetType[] = ["BTC", "ETH"];
 
+let runningSnapshot = false;
 let running = false;
 let runningOutcomes = false;
 let shuttingDown = false;
 
 // ─── Run wrappers ────────────────────────────────────────────────────────────
+
+async function snapshotTick(): Promise<void> {
+  if (runningSnapshot) {
+    console.log(chalk.yellow("Previous snapshot still in progress, skipping"));
+    return;
+  }
+
+  runningSnapshot = true;
+  const start = Date.now();
+  const ts = new Date();
+  console.log(`\n${chalk.bold.white("━".repeat(62))}`);
+  console.log(chalk.bold.white(`  SNAPSHOT  ${ts.toUTCString()}`));
+  console.log(chalk.bold.white("━".repeat(62)));
+
+  try {
+    for (const asset of ASSETS) {
+      console.log(`  ${chalk.bold(asset)}`);
+      await snapshotAllDimensions(asset, ts);
+    }
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    console.log(chalk.green.bold(`\n✓ Snapshot completed in ${elapsed}s`));
+  } catch (err) {
+    console.error(chalk.red.bold("\n✗ Snapshot failed:"), err);
+  } finally {
+    runningSnapshot = false;
+  }
+}
 
 async function tick(): Promise<void> {
   if (running) {
@@ -96,6 +129,8 @@ function validateEnv(): void {
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
 
 // eslint-disable-next-line prefer-const
+let snapshotTask!: cron.ScheduledTask;
+// eslint-disable-next-line prefer-const
 let briefTask!: cron.ScheduledTask;
 // eslint-disable-next-line prefer-const
 let outcomeTask!: cron.ScheduledTask;
@@ -106,13 +141,14 @@ function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
 
+  snapshotTask.stop();
   briefTask.stop();
   outcomeTask.stop();
 
-  if (running) {
-    console.log(chalk.yellow("Waiting for in-flight run to finish..."));
+  if (running || runningSnapshot) {
+    console.log(chalk.yellow("Waiting for in-flight job to finish..."));
     const check = setInterval(() => {
-      if (!running) {
+      if (!running && !runningSnapshot) {
         clearInterval(check);
         console.log(chalk.green("Clean shutdown"));
         process.exit(0);
@@ -128,17 +164,31 @@ function shutdown(signal: string): void {
 
 validateEnv();
 
-if (!cron.validate(BRIEF_CRON)) {
-  console.error(chalk.red.bold(`Invalid cron expression: "${BRIEF_CRON}"`));
-  process.exit(1);
+for (const [name, expr] of [
+  ["SNAPSHOT_CRON", SNAPSHOT_CRON],
+  ["BRIEF_CRON", BRIEF_CRON],
+  ["OUTCOME_CRON", OUTCOME_CRON],
+] as const) {
+  if (!cron.validate(expr)) {
+    console.error(chalk.red.bold(`Invalid cron expression for ${name}: "${expr}"`));
+    process.exit(1);
+  }
 }
 
 console.log(chalk.bold.cyan("\n  Market Intel Scheduler"));
-console.log(chalk.dim(`  brief cron:   ${BRIEF_CRON}`));
-console.log(chalk.dim(`  outcome cron: ${OUTCOME_CRON}`));
+console.log(chalk.dim(`  snapshot cron: ${SNAPSHOT_CRON}`));
+console.log(chalk.dim(`  brief cron:    ${BRIEF_CRON}`));
+console.log(chalk.dim(`  outcome cron:  ${OUTCOME_CRON}`));
 console.log(chalk.dim(`  assets: ${ASSETS.join(", ")}`));
 console.log(chalk.dim(`  started: ${new Date().toUTCString()}\n`));
 
+snapshotTask = cron.schedule(
+  SNAPSHOT_CRON,
+  () => {
+    snapshotTick();
+  },
+  { timezone: "UTC" },
+);
 briefTask = cron.schedule(
   BRIEF_CRON,
   () => {

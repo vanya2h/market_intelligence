@@ -1,340 +1,508 @@
 generator client {
-    provider = "prisma-client"
-    output   = "../src/generated/prisma"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
-    provider = "postgresql"
+  provider = "postgresql"
 }
 
 // ─── Core Enums ──────────────────────────────────────────────────────────────
 
 enum Asset {
-    BTC
-    ETH
+  BTC
+  ETH
 }
 
 enum Dimension {
-    DERIVATIVES
-    ETFS
-    HTF
-    SENTIMENT
-    EXCHANGE_FLOWS
+  DERIVATIVES
+  ETFS
+  HTF
+  SENTIMENT
+  EXCHANGE_FLOWS
 }
 
 // ─── Per-Dimension Regime Enums ──────────────────────────────────────────────
 
 enum PositioningRegime {
-    CROWDED_LONG
-    CROWDED_SHORT
-    HEATING_UP
-    POSITIONING_NEUTRAL
+  CROWDED_LONG
+  CROWDED_SHORT
+  HEATING_UP
+  POSITIONING_NEUTRAL
 }
 
 enum StressLevel {
-    CAPITULATION
-    UNWINDING
-    DELEVERAGING
-    STRESS_NONE
+  CAPITULATION
+  UNWINDING
+  DELEVERAGING
+  STRESS_NONE
 }
 
 enum EtfRegime {
-    STRONG_INFLOW
-    STRONG_OUTFLOW
-    REVERSAL_TO_INFLOW
-    REVERSAL_TO_OUTFLOW
-    ETF_NEUTRAL
-    MIXED
+  STRONG_INFLOW
+  STRONG_OUTFLOW
+  REVERSAL_TO_INFLOW
+  REVERSAL_TO_OUTFLOW
+  ETF_NEUTRAL
+  MIXED
 }
 
 enum HtfRegime {
-    MACRO_BULLISH
-    BULL_EXTENDED
-    MACRO_BEARISH
-    BEAR_EXTENDED
-    RECLAIMING
-    RANGING
-    ACCUMULATION
-    DISTRIBUTION
+  MACRO_BULLISH
+  BULL_EXTENDED
+  MACRO_BEARISH
+  BEAR_EXTENDED
+  RECLAIMING
+  RANGING
+  ACCUMULATION
+  DISTRIBUTION
 }
 
 enum MarketStructure {
-    HH_HL
-    LH_LL
-    HH_LL
-    LH_HL
-    STRUCTURE_UNKNOWN
+  HH_HL
+  LH_LL
+  HH_LL
+  LH_HL
+  STRUCTURE_UNKNOWN
 }
 
 enum OiSignal {
-    EXTREME
-    ELEVATED
-    OI_NORMAL
-    DEPRESSED
+  EXTREME
+  ELEVATED
+  OI_NORMAL
+  DEPRESSED
 }
 
 enum ExchangeFlowsRegime {
-    ACCUMULATION
-    DISTRIBUTION
-    EF_NEUTRAL
-    HEAVY_INFLOW
-    HEAVY_OUTFLOW
+  ACCUMULATION
+  DISTRIBUTION
+  EF_NEUTRAL
+  HEAVY_INFLOW
+  HEAVY_OUTFLOW
 }
 
 enum SentimentRegime {
-    EXTREME_FEAR
-    FEAR
-    SENTIMENT_NEUTRAL
-    GREED
-    EXTREME_GREED
-    CONSENSUS_BULLISH
-    CONSENSUS_BEARISH
-    SENTIMENT_DIVERGENCE
+  EXTREME_FEAR
+  FEAR
+  SENTIMENT_NEUTRAL
+  GREED
+  EXTREME_GREED
+  CONSENSUS_BULLISH
+  CONSENSUS_BEARISH
+  SENTIMENT_DIVERGENCE
 }
 
 // ─── Notify Run (resumable pipeline tracking) ───────────────────────────────
 
 enum NotifyStage {
-    DIMENSIONS
-    TRADE_IDEA
-    SYNTHESIS
-    PERSIST
-    TELEGRAM
-    TWITTER
+  DIMENSIONS
+  TRADE_IDEA
+  SYNTHESIS
+  PERSIST
+  TELEGRAM
+  TWITTER
 }
 
 enum RunStatus {
-    RUNNING
-    COMPLETED
-    FAILED
+  RUNNING
+  COMPLETED
+  FAILED
 }
 
 model NotifyRun {
-    id            String       @id @default(cuid())
-    asset         Asset
-    status        RunStatus    @default(RUNNING)
-    lastCompleted NotifyStage?
-    failedStage   NotifyStage?
-    error         String?
-    artifacts     Json?
-    briefId       String?
-    brief         Brief?       @relation(fields: [briefId], references: [id], onDelete: SetNull)
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
+  id            String       @id @default(cuid())
+  asset         Asset
+  status        RunStatus    @default(RUNNING)
+  lastCompleted NotifyStage?
+  failedStage   NotifyStage?
+  error         String?
+  artifacts     Json?
+  briefId       String?
+  brief         Brief?       @relation(fields: [briefId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-    @@index([asset, createdAt])
-    @@index([status])
-    @@map("notify_runs")
+  @@index([asset, createdAt])
+  @@index([status])
+  @@map("notify_runs")
 }
 
 // ─── Dimension Regime State (mutable singleton per asset+dimension) ──────────
 
 model DimensionState {
-    id             String    @id @default(cuid())
-    asset          Asset
-    dimension      Dimension
-    regime         String
-    since          DateTime
-    previousRegime String?
-    lastUpdated    DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  asset          Asset
+  dimension      Dimension
+  regime         String
+  since          DateTime
+  previousRegime String?
+  lastUpdated    DateTime  @updatedAt
 
-    // Derivatives-specific
-    stress         String?
-    previousStress String?
+  // Derivatives-specific
+  stress         String?
+  previousStress String?
 
-    // HTF-specific
-    lastStructure String?
+  // HTF-specific
+  lastStructure String?
 
-    @@unique([asset, dimension])
-    @@index([asset])
-    @@map("dimension_states")
+  @@unique([asset, dimension])
+  @@index([asset])
+  @@map("dimension_states")
 }
 
 // ─── Dimension Snapshots (raw time-series data) ──────────────────────────────
+// Legacy generic snapshot table — only derivatives writes here, kept for backfill
+// and removed in a follow-up after per-dim snapshot tables are the source of truth.
 
 model DimensionSnapshot {
-    id        String    @id @default(cuid())
-    asset     Asset
-    dimension Dimension
-    timestamp DateTime
-    data      Json
+  id        String    @id @default(cuid())
+  asset     Asset
+  dimension Dimension
+  timestamp DateTime
+  data      Json
 
-    @@index([asset, dimension, timestamp])
-    @@map("dimension_snapshots")
+  @@index([asset, dimension, timestamp])
+  @@map("dimension_snapshots")
+}
+
+// ─── Per-Dimension Snapshots (typed time-series, source of truth for ML + briefs) ──
+//
+// Cadence: hourly. Each row = one collect+analyze pass at the top of an hour.
+// Scalar columns mirror the metrics in orchestrator/delta.ts METRIC_REGISTRY,
+// so multi-horizon delta and ML feature engineering can use SQL directly.
+// `context` keeps the full analyzer output for brief generation.
+
+model DerivativesSnapshot {
+  id             String             @id @default(cuid())
+  asset          Asset
+  timestamp      DateTime
+  regime         PositioningRegime
+  stress         StressLevel?
+  previousRegime PositioningRegime?
+  previousStress StressLevel?
+  oiSignal       OiSignal?
+  since          DateTime
+
+  // Flattened scalar features
+  fundingPct1m          Float?
+  oiZScore30d           Float?
+  oiChange24h           Float?
+  oiChange7d            Float?
+  liqPct1m              Float?
+  fundingPressureCycles Float?
+  fundingCurrent        Float?
+  fundingPercentile1m   Float?
+  oiCurrent             Float?
+  oiPercentile1m        Float?
+  liq8h                 Float?
+  cbPremiumCurrent      Float?
+  cbPremiumPercentile1m Float?
+
+  context Json
+  briefs  DerivativesDimension[]
+
+  @@unique([asset, timestamp])
+  @@index([asset, timestamp])
+  @@map("derivatives_snapshots")
+}
+
+model EtfsSnapshot {
+  id             String     @id @default(cuid())
+  asset          Asset
+  timestamp      DateTime
+  regime         EtfRegime
+  previousRegime EtfRegime?
+  since          DateTime
+
+  flowTodaySigma         Float?
+  flowPercentile1m       Float?
+  flowToday              Float?
+  flowD3Sum              Float?
+  flowD7Sum              Float?
+  consecutiveInflowDays  Float?
+  consecutiveOutflowDays Float?
+  reversalRatio          Float?
+  totalAumUsd            Float?
+
+  context Json
+  briefs  EtfsDimension[]
+
+  @@unique([asset, timestamp])
+  @@index([asset, timestamp])
+  @@map("etfs_snapshots")
+}
+
+model HtfSnapshot {
+  id             String           @id @default(cuid())
+  asset          Asset
+  timestamp      DateTime
+  regime         HtfRegime
+  previousRegime HtfRegime?
+  since          DateTime
+  lastStructure  MarketStructure?
+  snapshotPrice  Float?
+
+  priceVsSma50Pct    Float?
+  priceVsSma200Pct   Float?
+  rsiDaily           Float?
+  rsiH4              Float?
+  cvdFutShortSlope   Float?
+  cvdFutShortR2      Float?
+  cvdFutLongSlope    Float?
+  cvdSpotShortSlope  Float?
+  cvdSpotLongSlope   Float?
+  atrPercentile      Float?
+  atrRatio           Float?
+  recentDisplacement Float?
+  priceVsPocPct      Float?
+
+  context Json
+  briefs  HtfDimension[]
+
+  @@unique([asset, timestamp])
+  @@index([asset, timestamp])
+  @@map("htf_snapshots")
+}
+
+model SentimentSnapshot {
+  id             String           @id @default(cuid())
+  asset          Asset
+  timestamp      DateTime
+  regime         SentimentRegime
+  previousRegime SentimentRegime?
+  since          DateTime
+
+  compositeIndex     Float?
+  compositeLabel     String?
+  positioning        Float?
+  trend              Float?
+  momentumDivergence Float?
+  institutionalFlows Float?
+  exchangeFlows      Float?
+  expertConsensus    Float?
+  consensusIndex     Float?
+  sentZScore         Float?
+  bullishRatio       Float?
+
+  context Json
+  briefs  SentimentDimension[]
+
+  @@unique([asset, timestamp])
+  @@index([asset, timestamp])
+  @@map("sentiment_snapshots")
+}
+
+model ExchangeFlowsSnapshot {
+  id             String               @id @default(cuid())
+  asset          Asset
+  timestamp      DateTime
+  regime         ExchangeFlowsRegime
+  previousRegime ExchangeFlowsRegime?
+  since          DateTime
+
+  flowTodaySigma      Float?
+  flowPercentile1m    Float?
+  reserveChange1dPct  Float?
+  reserveChange7dPct  Float?
+  reserveChange30dPct Float?
+  netFlow1d           Float?
+  netFlow7d           Float?
+
+  context Json
+  briefs  ExchangeFlowsDimension[]
+
+  @@unique([asset, timestamp])
+  @@index([asset, timestamp])
+  @@map("exchange_flows_snapshots")
 }
 
 // ─── Briefs ──────────────────────────────────────────────────────────────────
 
 model Brief {
-    id         String      @id @default(cuid())
-    asset      Asset
-    timestamp  DateTime    @default(now())
-    brief      String
-    richBrief  Json?
-    dimensions Dimension[]
+  id         String      @id @default(cuid())
+  asset      Asset
+  timestamp  DateTime    @default(now())
+  brief      String
+  richBrief  Json?
+  dimensions Dimension[]
 
-    // Relations to per-dimension models
-    derivatives   DerivativesDimension?
-    etfs          EtfsDimension?
-    htf           HtfDimension?
-    sentiment     SentimentDimension?
-    exchangeFlows ExchangeFlowsDimension?
-    tradeIdea     TradeIdea?
-    notifyRuns    NotifyRun[]
+  // Relations to per-dimension models
+  derivatives   DerivativesDimension?
+  etfs          EtfsDimension?
+  htf           HtfDimension?
+  sentiment     SentimentDimension?
+  exchangeFlows ExchangeFlowsDimension?
+  tradeIdea     TradeIdea?
+  notifyRuns    NotifyRun[]
 
-    @@index([asset, timestamp])
-    @@map("briefs")
+  @@index([asset, timestamp])
+  @@map("briefs")
 }
 
 // ─── Per-Dimension Brief Models ──────────────────────────────────────────────
 
 model DerivativesDimension {
-    id             String             @id @default(cuid())
-    briefId        String             @unique
-    brief          Brief              @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    regime         PositioningRegime
-    stress         StressLevel?
-    previousRegime PositioningRegime?
-    previousStress StressLevel?
-    oiSignal       OiSignal?
-    since          DateTime
-    context        Json
-    interpretation String
+  id             String               @id @default(cuid())
+  briefId        String               @unique
+  brief          Brief                @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  snapshotId     String?
+  snapshot       DerivativesSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  regime         PositioningRegime
+  stress         StressLevel?
+  previousRegime PositioningRegime?
+  previousStress StressLevel?
+  oiSignal       OiSignal?
+  since          DateTime
+  context        Json
+  interpretation String
 
-    @@map("brief_derivatives")
+  @@index([snapshotId])
+  @@map("brief_derivatives")
 }
 
 model EtfsDimension {
-    id             String     @id @default(cuid())
-    briefId        String     @unique
-    brief          Brief      @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    regime         EtfRegime
-    previousRegime EtfRegime?
-    since          DateTime
-    context        Json
-    interpretation String
+  id             String        @id @default(cuid())
+  briefId        String        @unique
+  brief          Brief         @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  snapshotId     String?
+  snapshot       EtfsSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  regime         EtfRegime
+  previousRegime EtfRegime?
+  since          DateTime
+  context        Json
+  interpretation String
 
-    @@map("brief_etfs")
+  @@index([snapshotId])
+  @@map("brief_etfs")
 }
 
 model HtfDimension {
-    id             String           @id @default(cuid())
-    briefId        String           @unique
-    brief          Brief            @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    regime         HtfRegime
-    previousRegime HtfRegime?
-    since          DateTime
-    lastStructure  MarketStructure?
-    snapshotPrice  Float?
-    context        Json
-    interpretation String
+  id             String           @id @default(cuid())
+  briefId        String           @unique
+  brief          Brief            @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  snapshotId     String?
+  snapshot       HtfSnapshot?     @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  regime         HtfRegime
+  previousRegime HtfRegime?
+  since          DateTime
+  lastStructure  MarketStructure?
+  snapshotPrice  Float?
+  context        Json
+  interpretation String
 
-    @@map("brief_htf")
+  @@index([snapshotId])
+  @@map("brief_htf")
 }
 
 model SentimentDimension {
-    id                 String           @id @default(cuid())
-    briefId            String           @unique
-    brief              Brief            @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    regime             SentimentRegime
-    previousRegime     SentimentRegime?
-    since              DateTime
-    compositeIndex     Float?
-    compositeLabel     String?
-    positioning        Float?
-    trend              Float?
-    institutionalFlows Float?
-    exchangeFlows      Float?
-    expertConsensus    Float?
-    context            Json
-    interpretation     String
+  id                 String             @id @default(cuid())
+  briefId            String             @unique
+  brief              Brief              @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  snapshotId         String?
+  snapshot           SentimentSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  regime             SentimentRegime
+  previousRegime     SentimentRegime?
+  since              DateTime
+  compositeIndex     Float?
+  compositeLabel     String?
+  positioning        Float?
+  trend              Float?
+  institutionalFlows Float?
+  exchangeFlows      Float?
+  expertConsensus    Float?
+  context            Json
+  interpretation     String
 
-    @@map("brief_sentiment")
+  @@index([snapshotId])
+  @@map("brief_sentiment")
 }
 
 model ExchangeFlowsDimension {
-    id             String               @id @default(cuid())
-    briefId        String               @unique
-    brief          Brief                @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    regime         ExchangeFlowsRegime
-    previousRegime ExchangeFlowsRegime?
-    since          DateTime
-    context        Json
-    interpretation String
+  id             String                 @id @default(cuid())
+  briefId        String                 @unique
+  brief          Brief                  @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  snapshotId     String?
+  snapshot       ExchangeFlowsSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+  regime         ExchangeFlowsRegime
+  previousRegime ExchangeFlowsRegime?
+  since          DateTime
+  context        Json
+  interpretation String
 
-    @@map("brief_exchange_flows")
+  @@index([snapshotId])
+  @@map("brief_exchange_flows")
 }
 
 // ─── Trade Idea Enums ────────────────────────────────────────────────────────
 
 enum TradeDirection {
-    LONG
-    SHORT
-    FLAT
+  LONG
+  SHORT
+  FLAT
 }
 
 enum TradeOutcome {
-    OPEN
-    WIN
-    LOSS
+  OPEN
+  WIN
+  LOSS
 }
 
 enum LevelType {
-    INVALIDATION
-    TARGET
+  INVALIDATION
+  TARGET
 }
 
 // ─── Trade Idea Tracking ─────────────────────────────────────────────────────
 
 model TradeIdea {
-    id              String         @id @default(cuid())
-    briefId         String         @unique
-    brief           Brief          @relation(fields: [briefId], references: [id], onDelete: Cascade)
-    asset           Asset
-    direction       TradeDirection
-    entryPrice      Float
-    compositeTarget Float
-    confluence      Json? // { derivatives, etfs, htf, exchangeFlows, total, bias, weights, sizing } — per-dim and total in -1..+1
-    positionSizePct Float          @default(0) // recommended position size as % of account notional (5–150)
-    // deprecated
-    skipped         Boolean        @default(false) // true when conviction < threshold
-    createdAt       DateTime       @default(now())
+  id              String         @id @default(cuid())
+  briefId         String         @unique
+  brief           Brief          @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  asset           Asset
+  direction       TradeDirection
+  entryPrice      Float
+  compositeTarget Float
+  confluence      Json? // { derivatives, etfs, htf, exchangeFlows, total, bias, weights, sizing } — per-dim and total in -1..+1
+  positionSizePct Float          @default(0) // recommended position size as % of account notional (5–150)
+  // deprecated
+  skipped         Boolean        @default(false) // true when conviction < threshold
+  createdAt       DateTime       @default(now())
 
-    levels  TradeIdeaLevel[]
-    returns TradeIdeaReturn[]
+  levels  TradeIdeaLevel[]
+  returns TradeIdeaReturn[]
 
-    @@index([asset, createdAt])
-    @@map("trade_ideas")
+  @@index([asset, createdAt])
+  @@map("trade_ideas")
 }
 
 model TradeIdeaLevel {
-    id           String       @id @default(cuid())
-    tradeIdeaId  String
-    tradeIdea    TradeIdea    @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
-    type         LevelType // INVALIDATION (stop loss) or TARGET (take profit)
-    label        String // e.g. "1:3" for invalidation, "T1" / "T2" / "T3" for target
-    price        Float // the price level (or distance for FLAT ideas)
-    outcome      TradeOutcome @default(OPEN)
-    qualityScore Float?
-    resolvedAt   DateTime?
+  id           String       @id @default(cuid())
+  tradeIdeaId  String
+  tradeIdea    TradeIdea    @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
+  type         LevelType // INVALIDATION (stop loss) or TARGET (take profit)
+  label        String // e.g. "1:3" for invalidation, "T1" / "T2" / "T3" for target
+  price        Float // the price level (or distance for FLAT ideas)
+  outcome      TradeOutcome @default(OPEN)
+  qualityScore Float?
+  resolvedAt   DateTime?
 
-    @@unique([tradeIdeaId, type, label])
-    @@index([tradeIdeaId])
-    @@index([outcome])
-    @@index([type, outcome])
-    @@map("trade_idea_levels")
+  @@unique([tradeIdeaId, type, label])
+  @@index([tradeIdeaId])
+  @@index([outcome])
+  @@index([type, outcome])
+  @@map("trade_idea_levels")
 }
 
 model TradeIdeaReturn {
-    id             String    @id @default(cuid())
-    tradeIdeaId    String
-    tradeIdea      TradeIdea @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
-    hoursAfter     Int
-    price          Float
-    returnPct      Float
-    qualityAtPoint Float
+  id             String    @id @default(cuid())
+  tradeIdeaId    String
+  tradeIdea      TradeIdea @relation(fields: [tradeIdeaId], references: [id], onDelete: Cascade)
+  hoursAfter     Int
+  price          Float
+  returnPct      Float
+  qualityAtPoint Float
 
-    @@unique([tradeIdeaId, hoursAfter])
-    @@index([tradeIdeaId])
-    @@map("trade_idea_returns")
+  @@unique([tradeIdeaId, hoursAfter])
+  @@index([tradeIdeaId])
+  @@map("trade_idea_returns")
 }

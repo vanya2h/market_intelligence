@@ -1,38 +1,34 @@
 /**
- * Orchestrator — Dimension Pipeline Runner
+ * Orchestrator — Brief-side Dimension Runner
  *
- * Runs all implemented dimensions (collect → analyze → agent) in parallel
- * and returns their outputs for the orchestrator LLM to synthesize.
+ * Reads the latest snapshot row per dimension (written by the hourly snapshot
+ * job in orchestrator/snapshot.ts), runs each agent on the snapshot's analyzer
+ * context, and returns DimensionOutput[] for the synthesizer.
+ *
+ * If a snapshot is missing or older than SNAPSHOT_FRESHNESS_MS we fall back
+ * to a live snapshot run for that dim — that path also writes a fresh row,
+ * so the next brief tick will see it.
  */
 
-import fs from "node:fs";
-import path from "node:path";
 import chalk from "chalk";
 import { runAgent as runDerivativesAgent } from "../derivatives_structure/agent.js";
-import { analyze as analyzeDerivatives } from "../derivatives_structure/analyzer.js";
-import { collect as collectDerivatives } from "../derivatives_structure/collector.js";
 import { runAgent as runEtfsAgent } from "../etfs/agent.js";
-import { analyze as analyzeEtfs } from "../etfs/analyzer.js";
-import { collect as collectEtfs } from "../etfs/collector.js";
-import type { EtfState } from "../etfs/types.js";
 import { runAgent as runExchangeFlowsAgent } from "../exchange_flows/agent.js";
-import { analyze as analyzeExchangeFlows } from "../exchange_flows/analyzer.js";
-import { collect as collectExchangeFlows } from "../exchange_flows/collector.js";
-import type { ExchangeFlowsState } from "../exchange_flows/types.js";
+import type { ExchangeFlowsContext } from "../exchange_flows/types.js";
 import { runAgent as runHtfAgent } from "../htf/agent.js";
-import { analyze as analyzeHtf } from "../htf/analyzer.js";
-import { collect as collectHtf } from "../htf/collector.js";
-import type { HtfState } from "../htf/types.js";
+import type { HtfContext } from "../htf/types.js";
 import { runAgent as runSentimentAgent } from "../sentiment/agent.js";
-import { analyze as analyzeSentiment } from "../sentiment/analyzer.js";
-import { collect as collectSentiment } from "../sentiment/collector.js";
-import type { SentimentState } from "../sentiment/types.js";
+import type { SentimentContext } from "../sentiment/types.js";
+import { prisma } from "../storage/db.js";
+import type { AssetType, DerivativesContext } from "../types.js";
+import type { EtfContext } from "../etfs/types.js";
 import {
-  appendSnapshot,
-  loadState as loadDerivativesState,
-  saveState as saveDerivativesState,
-} from "../storage/json.js";
-import type { AssetType } from "../types.js";
+  snapshotDerivatives,
+  snapshotEtfs,
+  snapshotExchangeFlows,
+  snapshotHtf,
+  snapshotSentiment,
+} from "./snapshot.js";
 import type {
   DerivativesOutput,
   DimensionOutput,
@@ -42,36 +38,35 @@ import type {
   SentimentOutput,
 } from "./types.js";
 
-// ─── State helpers ───────────────────────────────────────────────────────────
+/** Brief tick reuses a snapshot if it's at most this old. Snapshot cron is
+ *  hourly at :00 and brief cron is :05, so 10 min is plenty for the normal
+ *  path and small enough to force a fresh fetch when the snapshot job missed. */
+const SNAPSHOT_FRESHNESS_MS = 10 * 60 * 1000;
 
-function loadJsonState<T>(file: string, key?: string): T | null {
-  const fullPath = path.resolve("data", file);
-  if (!fs.existsSync(fullPath)) return null;
-  const all = JSON.parse(fs.readFileSync(fullPath, "utf-8"));
-  return key ? (all[key] ?? null) : all;
+function isFresh(timestamp: Date): boolean {
+  return Date.now() - timestamp.getTime() <= SNAPSHOT_FRESHNESS_MS;
 }
 
-function saveJsonState<T>(file: string, key: string, state: T): void {
-  const fullPath = path.resolve("data", file);
-  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-  const all = fs.existsSync(fullPath) ? JSON.parse(fs.readFileSync(fullPath, "utf-8")) : {};
-  all[key] = state;
-  fs.writeFileSync(fullPath, JSON.stringify(all, null, 2));
-}
-
-// ─── Dimension runners ───────────────────────────────────────────────────────
+// ─── Per-dim brief runners ───────────────────────────────────────────────────
 
 async function runDerivatives(asset: AssetType): Promise<DerivativesOutput | null> {
   try {
-    console.log(`      ${chalk.cyan("▸")} derivatives (${asset})...`);
-    const snapshot = await collectDerivatives(asset);
-    const history = await appendSnapshot(asset, snapshot);
-    const prevState = await loadDerivativesState(asset);
-    const { context, nextState } = analyzeDerivatives(snapshot, prevState);
-    saveDerivativesState(asset, nextState);
+    let row = await prisma.derivativesSnapshot.findFirst({
+      where: { asset },
+      orderBy: { timestamp: "desc" },
+    });
+    if (!row || !isFresh(row.timestamp)) {
+      console.log(`      ${chalk.yellow("⟳")} derivatives (${asset}) snapshot stale — refreshing`);
+      const id = await snapshotDerivatives(asset);
+      row = await prisma.derivativesSnapshot.findUniqueOrThrow({ where: { id } });
+    } else {
+      console.log(`      ${chalk.cyan("▸")} derivatives (${asset}) reading snapshot`);
+    }
+    const context = row.context as unknown as DerivativesContext;
     const interpretation = await runDerivativesAgent(context);
     return {
       dimension: "DERIVATIVES",
+      snapshotId: row.id,
       regime: context.positioning.state,
       stress: context.stress.state,
       previousRegime: context.previousPositioning,
@@ -89,14 +84,22 @@ async function runDerivatives(asset: AssetType): Promise<DerivativesOutput | nul
 
 async function runEtfs(asset: AssetType): Promise<EtfsOutput | null> {
   try {
-    console.log(`      ${chalk.cyan("▸")} etfs (${asset})...`);
-    const snapshot = await collectEtfs(asset);
-    const prevState = loadJsonState<EtfState>("etfs_state.json", asset);
-    const { context, nextState } = analyzeEtfs(snapshot, prevState);
-    saveJsonState("etfs_state.json", asset, nextState);
+    let row = await prisma.etfsSnapshot.findFirst({
+      where: { asset },
+      orderBy: { timestamp: "desc" },
+    });
+    if (!row || !isFresh(row.timestamp)) {
+      console.log(`      ${chalk.yellow("⟳")} etfs (${asset}) snapshot stale — refreshing`);
+      const id = await snapshotEtfs(asset);
+      row = await prisma.etfsSnapshot.findUniqueOrThrow({ where: { id } });
+    } else {
+      console.log(`      ${chalk.cyan("▸")} etfs (${asset}) reading snapshot`);
+    }
+    const context = row.context as unknown as EtfContext;
     const interpretation = await runEtfsAgent(context);
     return {
       dimension: "ETFS",
+      snapshotId: row.id,
       regime: context.regime,
       previousRegime: context.previousRegime,
       since: context.since,
@@ -111,14 +114,22 @@ async function runEtfs(asset: AssetType): Promise<EtfsOutput | null> {
 
 async function runHtf(asset: AssetType): Promise<HtfOutput | null> {
   try {
-    console.log(`      ${chalk.cyan("▸")} htf (${asset})...`);
-    const snapshot = await collectHtf(asset);
-    const prevState = loadJsonState<HtfState>("htf_state.json", asset);
-    const { context, nextState } = analyzeHtf(snapshot, prevState);
-    saveJsonState("htf_state.json", asset, nextState);
+    let row = await prisma.htfSnapshot.findFirst({
+      where: { asset },
+      orderBy: { timestamp: "desc" },
+    });
+    if (!row || !isFresh(row.timestamp)) {
+      console.log(`      ${chalk.yellow("⟳")} htf (${asset}) snapshot stale — refreshing`);
+      const id = await snapshotHtf(asset);
+      row = await prisma.htfSnapshot.findUniqueOrThrow({ where: { id } });
+    } else {
+      console.log(`      ${chalk.cyan("▸")} htf (${asset}) reading snapshot`);
+    }
+    const context = row.context as unknown as HtfContext;
     const interpretation = await runHtfAgent(context);
     return {
       dimension: "HTF",
+      snapshotId: row.id,
       regime: context.regime,
       previousRegime: context.previousRegime,
       since: context.since,
@@ -135,14 +146,22 @@ async function runHtf(asset: AssetType): Promise<HtfOutput | null> {
 
 async function runSentimentDim(asset: AssetType): Promise<SentimentOutput | null> {
   try {
-    console.log(`      ${chalk.cyan("▸")} sentiment (${asset})...`);
-    const snapshot = await collectSentiment(asset);
-    const prevState = loadJsonState<SentimentState>("sentiment_state.json", asset);
-    const { context, nextState } = analyzeSentiment(snapshot, prevState);
-    saveJsonState("sentiment_state.json", asset, nextState);
+    let row = await prisma.sentimentSnapshot.findFirst({
+      where: { asset },
+      orderBy: { timestamp: "desc" },
+    });
+    if (!row || !isFresh(row.timestamp)) {
+      console.log(`      ${chalk.yellow("⟳")} sentiment (${asset}) snapshot stale — refreshing`);
+      const id = await snapshotSentiment(asset);
+      row = await prisma.sentimentSnapshot.findUniqueOrThrow({ where: { id } });
+    } else {
+      console.log(`      ${chalk.cyan("▸")} sentiment (${asset}) reading snapshot`);
+    }
+    const context = row.context as unknown as SentimentContext;
     const interpretation = await runSentimentAgent(context);
     return {
       dimension: "SENTIMENT",
+      snapshotId: row.id,
       regime: context.regime,
       previousRegime: context.previousRegime,
       since: context.since,
@@ -164,14 +183,22 @@ async function runSentimentDim(asset: AssetType): Promise<SentimentOutput | null
 
 async function runExchangeFlowsDim(asset: AssetType): Promise<ExchangeFlowsOutput | null> {
   try {
-    console.log(`      ${chalk.cyan("▸")} exchange flows (${asset})...`);
-    const snapshot = await collectExchangeFlows(asset);
-    const prevState = loadJsonState<ExchangeFlowsState>("exchange_flows_state.json", asset);
-    const { context, nextState } = analyzeExchangeFlows(snapshot, prevState);
-    saveJsonState("exchange_flows_state.json", asset, nextState);
+    let row = await prisma.exchangeFlowsSnapshot.findFirst({
+      where: { asset },
+      orderBy: { timestamp: "desc" },
+    });
+    if (!row || !isFresh(row.timestamp)) {
+      console.log(`      ${chalk.yellow("⟳")} exchange flows (${asset}) snapshot stale — refreshing`);
+      const id = await snapshotExchangeFlows(asset);
+      row = await prisma.exchangeFlowsSnapshot.findUniqueOrThrow({ where: { id } });
+    } else {
+      console.log(`      ${chalk.cyan("▸")} exchange flows (${asset}) reading snapshot`);
+    }
+    const context = row.context as unknown as ExchangeFlowsContext;
     const interpretation = await runExchangeFlowsAgent(context);
     return {
       dimension: "EXCHANGE_FLOWS",
+      snapshotId: row.id,
       regime: context.regime,
       previousRegime: context.previousRegime,
       since: context.since,
@@ -187,8 +214,8 @@ async function runExchangeFlowsDim(asset: AssetType): Promise<ExchangeFlowsOutpu
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Run all implemented dimension pipelines in parallel for a given asset.
- * Returns only successful outputs (failed dimensions are logged and skipped).
+ * Run all dimension agents for an asset, reading from the latest snapshots
+ * (and refreshing them when stale). Returns only successful outputs.
  */
 export async function runAllDimensions(asset: AssetType): Promise<DimensionOutput[]> {
   const results = await Promise.all([

@@ -69,6 +69,7 @@ async function main(): Promise<void> {
   if (latest.derivatives) {
     outputs.push({
       dimension: "DERIVATIVES",
+      snapshotId: latest.derivatives.snapshotId ?? "",
       regime: latest.derivatives.regime,
       stress: latest.derivatives.stress,
       previousRegime: latest.derivatives.previousRegime,
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
   if (latest.etfs) {
     outputs.push({
       dimension: "ETFS",
+      snapshotId: latest.etfs.snapshotId ?? "",
       regime: latest.etfs.regime,
       previousRegime: latest.etfs.previousRegime,
       since: latest.etfs.since.toISOString(),
@@ -94,6 +96,7 @@ async function main(): Promise<void> {
   if (latest.htf) {
     outputs.push({
       dimension: "HTF",
+      snapshotId: latest.htf.snapshotId ?? "",
       regime: latest.htf.regime,
       previousRegime: latest.htf.previousRegime,
       since: latest.htf.since.toISOString(),
@@ -107,6 +110,7 @@ async function main(): Promise<void> {
   if (latest.sentiment) {
     outputs.push({
       dimension: "SENTIMENT",
+      snapshotId: latest.sentiment.snapshotId ?? "",
       regime: latest.sentiment.regime,
       previousRegime: latest.sentiment.previousRegime,
       since: latest.sentiment.since.toISOString(),
@@ -125,6 +129,7 @@ async function main(): Promise<void> {
   if (latest.exchangeFlows) {
     outputs.push({
       dimension: "EXCHANGE_FLOWS",
+      snapshotId: latest.exchangeFlows.snapshotId ?? "",
       regime: latest.exchangeFlows.regime,
       previousRegime: latest.exchangeFlows.previousRegime,
       since: latest.exchangeFlows.since.toISOString(),

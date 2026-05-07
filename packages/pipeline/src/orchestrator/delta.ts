@@ -1,48 +1,61 @@
 /**
- * Orchestrator — Delta Analysis
+ * Orchestrator — Multi-horizon Delta Analysis
  *
- * Compares current dimension contexts against the previous brief's contexts
- * to compute per-metric deltas normalized by historical sigma.
+ * Compares the current snapshot against snapshots at three time horizons —
+ * 1 hour, 4 hours, 24 hours — using the per-dim snapshot tables that the
+ * hourly snapshot job (orchestrator/snapshot.ts) writes.
  *
- * Produces a DeltaSummary that drives brief generation:
- *   - High significance  → full brief (standard path)
- *   - Medium significance → delta-focused brief (LLM emphasizes changes)
- *   - Low significance   → deterministic one-liner (no LLM call)
+ * For each metric we compute one HorizonDelta per horizon. Sigma at horizon H
+ * is the stdev of (v_t − v_{t−H}) pairs across the rolling 30-day history.
+ * The headline z-score is the max |z| across the three horizons; the
+ * `MetricDelta.prev/delta/sigma/zScore` fields surface that headline so the
+ * existing synthesizer prompt and debug scripts keep working without churn.
+ *
+ * Tier:
+ *   maxZ > HIGH_THRESHOLD  → "high"   (full brief)
+ *   maxZ > LOW_THRESHOLD   → "medium" (delta-focused brief)
+ *   else                   → "low"    (deterministic one-liner)
  */
-
 import type { $Enums } from "../generated/prisma/client.js";
 import { prisma } from "../storage/db.js";
 import type { DimensionOutput } from "./types.js";
 
-// ─── Thresholds ──────────────────────────────────────────────────────────────
+// ─── Tunables ───────────────────────────────────────────────────────────────
 
-/** Max z-score above which we produce a full brief */
 const HIGH_THRESHOLD = 3.5;
-/** Max z-score below which we produce a one-liner */
 const LOW_THRESHOLD = 0.5;
-/** Number of historical briefs to use for sigma calculation */
-const HISTORY_DEPTH = 20;
-/** Minimum sigma to avoid division by near-zero */
+/** How many hourly snapshots to load for sigma computation (30 days × 24h). */
+const HISTORY_HOURS = 30 * 24;
 const MIN_SIGMA = 1e-9;
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 export type SignificanceTier = "high" | "medium" | "low";
+export type Horizon = "h1" | "h4" | "h24";
+
+const HORIZON_HOURS: Record<Horizon, number> = { h1: 1, h4: 4, h24: 24 };
+const HORIZON_LABELS: Record<Horizon, string> = { h1: "1h", h4: "4h", h24: "24h" };
+
+export interface HorizonDelta {
+  prev: number;
+  delta: number;
+  sigma: number;
+  zScore: number;
+}
 
 export interface MetricDelta {
-  /** Dot-path into the dimension context (e.g. "signals.fundingPct1m") */
+  /** Snapshot column name (kept as `path` for synthesizer/debug-script compat). */
   path: string;
-  /** Human-readable label */
   label: string;
-  /** Previous value */
-  prev: number;
-  /** Current value */
   curr: number;
-  /** Absolute delta */
+  /** Per-horizon breakdown. Missing horizons (insufficient history) are zeroed. */
+  horizons: Record<Horizon, HorizonDelta>;
+  /** Horizon that produced the headline z-score. */
+  headlineHorizon: Horizon;
+  // Headline values (mirror of horizons[headlineHorizon]) for back-compat.
+  prev: number;
   delta: number;
-  /** Historical standard deviation of run-to-run deltas */
   sigma: number;
-  /** |delta| / sigma */
   zScore: number;
 }
 
@@ -55,337 +68,257 @@ export interface DimensionDelta {
 }
 
 export interface DeltaSummary {
-  /** Overall significance tier */
   tier: SignificanceTier;
-  /** Max z-score across all metrics */
   maxZ: number;
-  /** Per-dimension deltas */
   dimensions: DimensionDelta[];
-  /** Human-readable summary of what changed (for injection into LLM prompt) */
   changeSummary: string;
-  /** The single most significant tension (for the one-liner) */
   topTension: string;
 }
 
-// ─── Metric Registry ─────────────────────────────────────────────────────────
-//
-// Each entry: [dot-path into context, human-readable label]
-// We only track metrics that are meaningful for detecting market changes.
-// Skipping: absolute prices (they always move), array fields, string/enum fields.
+// ─── Per-dim column registry ────────────────────────────────────────────────
 
-type MetricSpec = [path: string, label: string];
+type ColumnSpec = [column: string, label: string];
 
-const DERIVATIVES_METRICS: MetricSpec[] = [
-  ["signals.fundingPct1m", "Funding percentile (1m)"],
-  ["signals.oiZScore30d", "OI z-score (30d)"],
-  ["signals.oiChange24h", "OI change (24h)"],
-  ["signals.oiChange7d", "OI change (7d)"],
-  ["signals.liqPct1m", "Liquidation percentile (1m)"],
-  ["signals.fundingPressureCycles", "Funding pressure cycles"],
-  ["funding.current", "Funding rate"],
-  ["funding.percentile.1m", "Funding percentile rank (1m)"],
-  ["openInterest.current", "Open interest"],
-  ["openInterest.percentile.1m", "OI percentile rank (1m)"],
-  ["liquidations.current8h", "Liquidations (8h)"],
-  ["coinbasePremium.current", "Coinbase premium"],
-  ["coinbasePremium.percentile.1m", "CB premium percentile (1m)"],
+const DERIVATIVES_COLUMNS: ColumnSpec[] = [
+  ["fundingPct1m", "Funding percentile (1m)"],
+  ["oiZScore30d", "OI z-score (30d)"],
+  ["oiChange24h", "OI change (24h)"],
+  ["oiChange7d", "OI change (7d)"],
+  ["liqPct1m", "Liquidation percentile (1m)"],
+  ["fundingPressureCycles", "Funding pressure cycles"],
+  ["fundingCurrent", "Funding rate"],
+  ["fundingPercentile1m", "Funding percentile rank (1m)"],
+  ["oiCurrent", "Open interest"],
+  ["oiPercentile1m", "OI percentile rank (1m)"],
+  ["liq8h", "Liquidations (8h)"],
+  ["cbPremiumCurrent", "Coinbase premium"],
+  ["cbPremiumPercentile1m", "CB premium percentile (1m)"],
 ];
 
-const ETFS_METRICS: MetricSpec[] = [
-  ["flow.todaySigma", "ETF flow z-score (today)"],
-  ["flow.percentile1m", "ETF flow percentile (1m)"],
-  ["flow.today", "ETF flow (today)"],
-  ["flow.d3Sum", "ETF flow (3d sum)"],
-  ["flow.d7Sum", "ETF flow (7d sum)"],
-  ["flow.consecutiveInflowDays", "Consecutive inflow days"],
-  ["flow.consecutiveOutflowDays", "Consecutive outflow days"],
-  ["flow.reversalRatio", "ETF reversal ratio"],
+const ETFS_COLUMNS: ColumnSpec[] = [
+  ["flowTodaySigma", "ETF flow z-score (today)"],
+  ["flowPercentile1m", "ETF flow percentile (1m)"],
+  ["flowToday", "ETF flow (today)"],
+  ["flowD3Sum", "ETF flow (3d sum)"],
+  ["flowD7Sum", "ETF flow (7d sum)"],
+  ["consecutiveInflowDays", "Consecutive inflow days"],
+  ["consecutiveOutflowDays", "Consecutive outflow days"],
+  ["reversalRatio", "ETF reversal ratio"],
   ["totalAumUsd", "Total AUM"],
 ];
 
-const HTF_METRICS: MetricSpec[] = [
-  ["ma.priceVsSma50Pct", "Price vs SMA50 (%)"],
-  ["ma.priceVsSma200Pct", "Price vs SMA200 (%)"],
-  ["rsi.daily", "RSI (daily)"],
-  ["rsi.h4", "RSI (4h)"],
-  ["cvd.futures.short.slope", "CVD futures short slope"],
-  ["cvd.futures.short.r2", "CVD futures short R²"],
-  ["cvd.futures.long.slope", "CVD futures long slope"],
-  ["cvd.spot.short.slope", "CVD spot short slope"],
-  ["cvd.spot.long.slope", "CVD spot long slope"],
-  ["volatility.atrPercentile", "ATR percentile"],
-  ["volatility.atrRatio", "ATR ratio"],
-  ["volatility.recentDisplacement", "Recent displacement"],
-  ["volumeProfile.profile.priceVsPocPct", "Price vs POC (%)"],
+const HTF_COLUMNS: ColumnSpec[] = [
+  ["priceVsSma50Pct", "Price vs SMA50 (%)"],
+  ["priceVsSma200Pct", "Price vs SMA200 (%)"],
+  ["rsiDaily", "RSI (daily)"],
+  ["rsiH4", "RSI (4h)"],
+  ["cvdFutShortSlope", "CVD futures short slope"],
+  ["cvdFutShortR2", "CVD futures short R²"],
+  ["cvdFutLongSlope", "CVD futures long slope"],
+  ["cvdSpotShortSlope", "CVD spot short slope"],
+  ["cvdSpotLongSlope", "CVD spot long slope"],
+  ["atrPercentile", "ATR percentile"],
+  ["atrRatio", "ATR ratio"],
+  ["recentDisplacement", "Recent displacement"],
+  ["priceVsPocPct", "Price vs POC (%)"],
 ];
 
-const SENTIMENT_METRICS: MetricSpec[] = [
-  ["metrics.compositeIndex", "Composite F&G index"],
-  ["metrics.components.positioning", "Positioning score"],
-  ["metrics.components.trend", "Trend score"],
-  ["metrics.components.momentumDivergence", "Momentum divergence score"],
-  ["metrics.components.institutionalFlows", "Institutional flows score"],
-  ["metrics.components.exchangeFlows", "Exchange flows score"],
-  ["metrics.consensusIndex", "Consensus index"],
-  ["metrics.zScore", "Sentiment z-score"],
-  ["metrics.bullishRatio", "Bullish ratio"],
+const SENTIMENT_COLUMNS: ColumnSpec[] = [
+  ["compositeIndex", "Composite F&G index"],
+  ["positioning", "Positioning score"],
+  ["trend", "Trend score"],
+  ["momentumDivergence", "Momentum divergence score"],
+  ["institutionalFlows", "Institutional flows score"],
+  ["exchangeFlows", "Exchange flows score"],
+  ["consensusIndex", "Consensus index"],
+  ["sentZScore", "Sentiment z-score"],
+  ["bullishRatio", "Bullish ratio"],
 ];
 
-const EXCHANGE_FLOWS_METRICS: MetricSpec[] = [
-  ["metrics.todaySigma", "Exchange flow z-score"],
-  ["metrics.flowPercentile1m", "Flow percentile (1m)"],
-  ["metrics.reserveChange1dPct", "Reserve change (1d %)"],
-  ["metrics.reserveChange7dPct", "Reserve change (7d %)"],
-  ["metrics.reserveChange30dPct", "Reserve change (30d %)"],
-  ["metrics.netFlow1d", "Net flow (1d)"],
-  ["metrics.netFlow7d", "Net flow (7d)"],
+const EXCHANGE_FLOWS_COLUMNS: ColumnSpec[] = [
+  ["flowTodaySigma", "Exchange flow z-score"],
+  ["flowPercentile1m", "Flow percentile (1m)"],
+  ["reserveChange1dPct", "Reserve change (1d %)"],
+  ["reserveChange7dPct", "Reserve change (7d %)"],
+  ["reserveChange30dPct", "Reserve change (30d %)"],
+  ["netFlow1d", "Net flow (1d)"],
+  ["netFlow7d", "Net flow (7d)"],
 ];
 
-const METRIC_REGISTRY: Record<DimensionOutput["dimension"], MetricSpec[]> = {
-  DERIVATIVES: DERIVATIVES_METRICS,
-  ETFS: ETFS_METRICS,
-  HTF: HTF_METRICS,
-  SENTIMENT: SENTIMENT_METRICS,
-  EXCHANGE_FLOWS: EXCHANGE_FLOWS_METRICS,
+const COLUMNS: Record<DimensionOutput["dimension"], ColumnSpec[]> = {
+  DERIVATIVES: DERIVATIVES_COLUMNS,
+  ETFS: ETFS_COLUMNS,
+  HTF: HTF_COLUMNS,
+  SENTIMENT: SENTIMENT_COLUMNS,
+  EXCHANGE_FLOWS: EXCHANGE_FLOWS_COLUMNS,
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Snapshot history loaders ───────────────────────────────────────────────
 
-/** Safely get a nested numeric value from an object by dot-path */
-function getByPath(obj: unknown, path: string): number | null {
-  const val = getByPathRaw(obj, path);
-  return typeof val === "number" && Number.isFinite(val) ? val : null;
-}
+/** Snapshot row reduced to `{ timestamp, regime, [col]: number | null }`. */
+type SnapshotRow = { timestamp: Date; regime: string } & Record<string, unknown>;
 
-/** Safely get a nested string value from an object by dot-path */
-function getStringByPath(obj: unknown, path: string): string | null {
-  const val = getByPathRaw(obj, path);
-  return typeof val === "string" ? val : null;
-}
-
-function getByPathRaw(obj: unknown, path: string): unknown {
-  let current: unknown = obj;
-  for (const key of path.split(".")) {
-    if (current == null || typeof current !== "object") return null;
-    current = (current as Record<string, unknown>)[key];
+async function loadHistory(
+  dimension: DimensionOutput["dimension"],
+  asset: $Enums.Asset,
+): Promise<SnapshotRow[]> {
+  const args = { where: { asset }, orderBy: { timestamp: "desc" as const }, take: HISTORY_HOURS };
+  switch (dimension) {
+    case "DERIVATIVES":
+      return (await prisma.derivativesSnapshot.findMany(args)) as unknown as SnapshotRow[];
+    case "ETFS":
+      return (await prisma.etfsSnapshot.findMany(args)) as unknown as SnapshotRow[];
+    case "HTF":
+      return (await prisma.htfSnapshot.findMany(args)) as unknown as SnapshotRow[];
+    case "SENTIMENT":
+      return (await prisma.sentimentSnapshot.findMany(args)) as unknown as SnapshotRow[];
+    case "EXCHANGE_FLOWS":
+      return (await prisma.exchangeFlowsSnapshot.findMany(args)) as unknown as SnapshotRow[];
   }
-  return current ?? null;
 }
 
-/** Compute standard deviation of an array of numbers */
+// ─── Math helpers ───────────────────────────────────────────────────────────
+
+function asNumber(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 function stdev(values: number[]): number {
   if (values.length < 2) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (values.length - 1);
+  const variance = values.reduce((s, x) => s + (x - mean) ** 2, 0) / (values.length - 1);
   return Math.sqrt(variance);
 }
 
-// ─── Previous brief loading ──────────────────────────────────────────────────
-
-interface PreviousBriefContexts {
-  derivatives: Record<string, unknown> | null;
-  etfs: Record<string, unknown> | null;
-  htf: Record<string, unknown> | null;
-  sentiment: Record<string, unknown> | null;
-  exchangeFlows: Record<string, unknown> | null;
+/**
+ * Find the snapshot in `history` (sorted desc by timestamp) whose timestamp
+ * is closest-but-not-after `target`. Returns null if the oldest row is still
+ * newer than target.
+ */
+function findAtOrBefore(history: SnapshotRow[], target: number): SnapshotRow | null {
+  for (const row of history) {
+    if (row.timestamp.getTime() <= target) return row;
+  }
+  return null;
 }
-
-async function loadPreviousBriefContexts(asset: $Enums.Asset): Promise<PreviousBriefContexts | null> {
-  const brief = await prisma.brief.findFirst({
-    where: { asset },
-    orderBy: { timestamp: "desc" },
-    select: {
-      derivatives: { select: { context: true } },
-      etfs: { select: { context: true } },
-      htf: { select: { context: true } },
-      sentiment: { select: { context: true } },
-      exchangeFlows: { select: { context: true } },
-    },
-  });
-
-  if (!brief) return null;
-
-  return {
-    derivatives: brief.derivatives?.context as Record<string, unknown> | null,
-    etfs: brief.etfs?.context as Record<string, unknown> | null,
-    htf: brief.htf?.context as Record<string, unknown> | null,
-    sentiment: brief.sentiment?.context as Record<string, unknown> | null,
-    exchangeFlows: brief.exchangeFlows?.context as Record<string, unknown> | null,
-  };
-}
-
-/** Load a specific brief's contexts by ID */
-async function loadBriefContextsById(briefId: string): Promise<PreviousBriefContexts | null> {
-  const brief = await prisma.brief.findUnique({
-    where: { id: briefId },
-    select: {
-      derivatives: { select: { context: true } },
-      etfs: { select: { context: true } },
-      htf: { select: { context: true } },
-      sentiment: { select: { context: true } },
-      exchangeFlows: { select: { context: true } },
-    },
-  });
-
-  if (!brief) return null;
-
-  return {
-    derivatives: brief.derivatives?.context as Record<string, unknown> | null,
-    etfs: brief.etfs?.context as Record<string, unknown> | null,
-    htf: brief.htf?.context as Record<string, unknown> | null,
-    sentiment: brief.sentiment?.context as Record<string, unknown> | null,
-    exchangeFlows: brief.exchangeFlows?.context as Record<string, unknown> | null,
-  };
-}
-
-/** Load the last N brief contexts for sigma computation */
-async function loadHistoricalContexts(asset: $Enums.Asset, limit: number): Promise<PreviousBriefContexts[]> {
-  const briefs = await prisma.brief.findMany({
-    where: { asset },
-    orderBy: { timestamp: "desc" },
-    take: limit,
-    select: {
-      derivatives: { select: { context: true } },
-      etfs: { select: { context: true } },
-      htf: { select: { context: true } },
-      sentiment: { select: { context: true } },
-      exchangeFlows: { select: { context: true } },
-    },
-  });
-
-  return briefs.map((b) => ({
-    derivatives: b.derivatives?.context as Record<string, unknown> | null,
-    etfs: b.etfs?.context as Record<string, unknown> | null,
-    htf: b.htf?.context as Record<string, unknown> | null,
-    sentiment: b.sentiment?.context as Record<string, unknown> | null,
-    exchangeFlows: b.exchangeFlows?.context as Record<string, unknown> | null,
-  }));
-}
-
-// ─── Sigma computation ───────────────────────────────────────────────────────
-
-type DimensionKey = "derivatives" | "etfs" | "htf" | "sentiment" | "exchangeFlows";
-
-const DIMENSION_TO_KEY: Record<DimensionOutput["dimension"], DimensionKey> = {
-  DERIVATIVES: "derivatives",
-  ETFS: "etfs",
-  HTF: "htf",
-  SENTIMENT: "sentiment",
-  EXCHANGE_FLOWS: "exchangeFlows",
-};
-
-/** Dot-path to the regime field within each dimension's context JSON.
- *  Derivatives is special: it has positioning.state, not regime. */
-const REGIME_PATH: Record<DimensionOutput["dimension"], string> = {
-  DERIVATIVES: "positioning.state",
-  ETFS: "regime",
-  HTF: "regime",
-  SENTIMENT: "regime",
-  EXCHANGE_FLOWS: "regime",
-};
 
 /**
- * For each metric in a dimension, compute the historical sigma of run-to-run deltas.
- * Returns a map of dot-path → sigma.
+ * Stdev of (v_t − v_{t−H}) pairs across history. Steps the index by H hours
+ * (history is hourly), pairing each row with the row H steps later in the
+ * desc-sorted array.
  */
-function computeSigmas(
-  history: PreviousBriefContexts[],
-  dimKey: DimensionKey,
-  metrics: MetricSpec[],
-): Map<string, number> {
-  const sigmas = new Map<string, number>();
-
-  for (const [path] of metrics) {
-    // Extract the time-series of values for this metric across historical briefs
-    const values: number[] = [];
-    for (const h of history) {
-      const ctx = h[dimKey];
-      if (!ctx) continue;
-      const v = getByPath(ctx, path);
-      if (v !== null) values.push(v);
-    }
-
-    // Compute consecutive deltas
-    const deltas: number[] = [];
-    for (let i = 1; i < values.length; i++) {
-      deltas.push(values[i - 1]! - values[i]!); // newer - older (history is desc)
-    }
-
-    sigmas.set(path, deltas.length >= 2 ? stdev(deltas) : 0);
+function horizonSigma(history: SnapshotRow[], column: string, horizonHours: number): number {
+  const deltas: number[] = [];
+  for (let i = 0; i + horizonHours < history.length; i++) {
+    const newer = asNumber(history[i]![column]);
+    const older = asNumber(history[i + horizonHours]![column]);
+    if (newer === null || older === null) continue;
+    deltas.push(newer - older);
   }
-
-  return sigmas;
+  return stdev(deltas);
 }
 
-// ─── Delta computation ───────────────────────────────────────────────────────
+// ─── Per-dim delta ──────────────────────────────────────────────────────────
+
+const REGIME_HEADLINE_HORIZON: Horizon = "h4";
+
+function buildHorizonDelta(
+  curr: number,
+  history: SnapshotRow[],
+  column: string,
+  horizon: Horizon,
+  nowMs: number,
+): HorizonDelta {
+  const targetMs = nowMs - HORIZON_HOURS[horizon] * 60 * 60 * 1000;
+  const prevRow = findAtOrBefore(history, targetMs);
+  const prev = prevRow ? asNumber(prevRow[column]) : null;
+  if (prev === null) return { prev: 0, delta: 0, sigma: 0, zScore: 0 };
+
+  const delta = curr - prev;
+  const sigma = horizonSigma(history, column, HORIZON_HOURS[horizon]);
+  const zScore = sigma > MIN_SIGMA ? Math.abs(delta) / sigma : 0;
+  return { prev, delta, sigma, zScore };
+}
 
 function computeDimensionDelta(
-  dimension: DimensionOutput["dimension"],
-  currentCtx: Record<string, unknown>,
-  prevCtx: Record<string, unknown> | null,
-  sigmas: Map<string, number>,
-  currRegime: string,
-  prevRegime: string | null,
+  output: DimensionOutput,
+  history: SnapshotRow[],
+  nowMs: number,
 ): DimensionDelta {
-  const metrics = METRIC_REGISTRY[dimension];
   const movers: MetricDelta[] = [];
+  const current = history[0];
 
-  if (prevCtx) {
-    for (const [path, label] of metrics) {
-      const curr = getByPath(currentCtx, path);
-      const prev = getByPath(prevCtx, path);
-      if (curr === null || prev === null) continue;
+  for (const [column, label] of COLUMNS[output.dimension]) {
+    const curr = current ? asNumber(current[column]) : null;
+    if (curr === null) continue;
 
-      const delta = curr - prev;
-      const sigma = sigmas.get(path) ?? 0;
-      // When sigma is unknown (insufficient history), treat as non-significant
-      // rather than Infinity — we can't tell if the change is unusual.
-      const zScore = sigma > MIN_SIGMA ? Math.abs(delta) / sigma : 0;
+    const horizons: Record<Horizon, HorizonDelta> = {
+      h1: buildHorizonDelta(curr, history, column, "h1", nowMs),
+      h4: buildHorizonDelta(curr, history, column, "h4", nowMs),
+      h24: buildHorizonDelta(curr, history, column, "h24", nowMs),
+    };
 
-      movers.push({ path, label, prev, curr, delta, sigma, zScore });
+    let headlineHorizon: Horizon = "h1";
+    let maxZ = horizons.h1.zScore;
+    for (const h of ["h4", "h24"] as Horizon[]) {
+      if (horizons[h].zScore > maxZ) {
+        maxZ = horizons[h].zScore;
+        headlineHorizon = h;
+      }
     }
+    const headline = horizons[headlineHorizon];
+
+    movers.push({
+      path: column,
+      label,
+      curr,
+      horizons,
+      headlineHorizon,
+      prev: headline.prev,
+      delta: headline.delta,
+      sigma: headline.sigma,
+      zScore: headline.zScore,
+    });
   }
 
-  // Sort by z-score descending so topMovers[0] is the biggest change
   movers.sort((a, b) => b.zScore - a.zScore);
 
+  // Regime flip is computed against the same horizon used for headline regime
+  // comparisons (4h ≈ one brief cycle).
+  const targetMs = nowMs - HORIZON_HOURS[REGIME_HEADLINE_HORIZON] * 60 * 60 * 1000;
+  const prevRegimeRow = findAtOrBefore(history, targetMs);
+  const prevRegime = prevRegimeRow ? prevRegimeRow.regime : null;
+
   return {
-    dimension,
-    regimeFlipped: prevRegime !== null && prevRegime !== currRegime,
+    dimension: output.dimension,
+    regimeFlipped: prevRegime !== null && prevRegime !== output.regime,
     prevRegime,
-    currRegime,
-    topMovers: movers.slice(0, 5), // keep top 5 per dimension
+    currRegime: output.regime,
+    topMovers: movers.slice(0, 5),
   };
 }
 
-// ─── Change summary builder ──────────────────────────────────────────────────
+// ─── Summary builders ───────────────────────────────────────────────────────
 
 function buildChangeSummary(dimensions: DimensionDelta[]): string {
   const lines: string[] = [];
-
   for (const dim of dimensions) {
     if (dim.regimeFlipped) {
       lines.push(`${dim.dimension}: regime flipped ${dim.prevRegime} → ${dim.currRegime}`);
     }
     const significant = dim.topMovers.filter((m) => m.zScore > LOW_THRESHOLD);
-    if (significant.length > 0) {
-      const parts = significant.slice(0, 3).map((m) => {
-        const dir = m.delta > 0 ? "↑" : "↓";
-        return `${m.label} ${dir} (z=${m.zScore.toFixed(1)})`;
-      });
-      lines.push(`${dim.dimension}: ${parts.join(", ")}`);
-    }
+    if (significant.length === 0) continue;
+    const parts = significant.slice(0, 3).map((m) => {
+      const dir = m.delta > 0 ? "↑" : "↓";
+      return `${m.label} ${dir} (z=${m.zScore.toFixed(1)} on ${HORIZON_LABELS[m.headlineHorizon]})`;
+    });
+    lines.push(`${dim.dimension}: ${parts.join(", ")}`);
   }
-
   if (lines.length === 0) return "No meaningful changes across any dimension.";
   return lines.join("\n");
 }
 
 function buildTopTension(dimensions: DimensionDelta[], outputs: DimensionOutput[]): string {
-  // Strategy: find the two dimensions with the most opposed regimes,
-  // or fall back to the single highest z-score metric.
-
-  // Collect all regime sentiments
   const bullishRegimes = new Set([
     "CROWDED_LONG",
     "STRONG_INFLOW",
@@ -408,67 +341,62 @@ function buildTopTension(dimensions: DimensionDelta[], outputs: DimensionOutput[
     "FEAR",
     "EXTREME_FEAR",
     "CONSENSUS_BEARISH",
-    "HEAVY_INFLOW", // exchange inflows = bearish (selling pressure)
+    "HEAVY_INFLOW", // exchange inflows = bearish
   ]);
 
   const bullish: string[] = [];
   const bearish: string[] = [];
-
-  for (const dim of dimensions) {
-    if (bullishRegimes.has(dim.currRegime)) bullish.push(dim.dimension);
-    else if (bearishRegimes.has(dim.currRegime)) bearish.push(dim.dimension);
+  for (const d of dimensions) {
+    if (bullishRegimes.has(d.currRegime)) bullish.push(d.dimension);
+    else if (bearishRegimes.has(d.currRegime)) bearish.push(d.dimension);
   }
-
-  // If we have opposing dimensions, that's the tension
   if (bullish.length > 0 && bearish.length > 0) {
-    const bLabel = bullish.join(" + ");
-    const sLabel = bearish.join(" + ");
-    return `${bLabel} leaning bullish while ${sLabel} leaning bearish`;
+    return `${bullish.join(" + ")} leaning bullish while ${bearish.join(" + ")} leaning bearish`;
   }
 
-  // Otherwise, find the single most notable metric
-  const allMovers = dimensions.flatMap((d) => d.topMovers);
-  allMovers.sort((a, b) => b.zScore - a.zScore);
-  const topMover = allMovers[0];
-  if (topMover && topMover.zScore > 0) {
-    const dir = topMover.delta > 0 ? "up" : "down";
-    return `${topMover.label} trending ${dir}`;
+  const allMovers = dimensions.flatMap((d) => d.topMovers).sort((a, b) => b.zScore - a.zScore);
+  const top = allMovers[0];
+  if (top && top.zScore > 0) {
+    const dir = top.delta > 0 ? "up" : "down";
+    return `${top.label} trending ${dir} on ${HORIZON_LABELS[top.headlineHorizon]}`;
   }
-
-  // Absolute fallback: use the first dimension's regime
-  const firstOutput = outputs[0];
-  if (firstOutput) {
-    return `Market in ${firstOutput.regime} regime`;
-  }
-
-  return "Markets quiet, no significant signals";
+  const first = outputs[0];
+  return first ? `Market in ${first.regime} regime` : "Markets quiet, no significant signals";
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+// ─── Public API ─────────────────────────────────────────────────────────────
 
 export interface ComputeDeltaOptions {
-  /** Override the previous brief to compare against (by brief ID). */
+  /** Deprecated. Multi-horizon delta no longer compares against a specific
+   *  prior brief — it compares against fixed time offsets via the snapshot
+   *  history. Kept on the type for callsite compatibility; ignored. */
   previousBriefId?: string;
 }
 
-/**
- * Compute the delta between current dimension outputs and the most recent
- * persisted brief for this asset. Returns a DeltaSummary that tells the
- * synthesizer how much has changed.
- */
 export async function computeDelta(
   asset: $Enums.Asset,
   outputs: DimensionOutput[],
-  opts: ComputeDeltaOptions = {},
+  _opts: ComputeDeltaOptions = {},
 ): Promise<DeltaSummary> {
-  // Load previous brief contexts + historical contexts for sigma (parallel)
-  const [prevContexts, history] = await Promise.all([
-    opts.previousBriefId ? loadBriefContextsById(opts.previousBriefId) : loadPreviousBriefContexts(asset),
-    loadHistoricalContexts(asset, HISTORY_DEPTH),
-  ]);
+  const nowMs = Date.now();
+  const dimensions: DimensionDelta[] = [];
+  let maxZ = 0;
+  let hadHistory = false;
 
-  // No history → first run, everything is significant
-  if (!prevContexts) {
+  for (const output of outputs) {
+    const history = await loadHistory(output.dimension, asset);
+    if (history.length === 0) continue;
+    hadHistory = true;
+
+    const dimDelta = computeDimensionDelta(output, history, nowMs);
+    dimensions.push(dimDelta);
+
+    if (dimDelta.regimeFlipped) maxZ = Math.max(maxZ, HIGH_THRESHOLD + 1);
+    const top = dimDelta.topMovers[0];
+    if (top) maxZ = Math.max(maxZ, top.zScore);
+  }
+
+  if (!hadHistory) {
     return {
       tier: "high",
       maxZ: Infinity,
@@ -476,39 +404,6 @@ export async function computeDelta(
       changeSummary: "First brief for this asset — all data is new.",
       topTension: "",
     };
-  }
-
-  const dimensions: DimensionDelta[] = [];
-  let maxZ = 0;
-
-  for (const output of outputs) {
-    const dimKey = DIMENSION_TO_KEY[output.dimension];
-    const prevCtx = prevContexts[dimKey];
-    const currentCtx = output.context as unknown as Record<string, unknown>;
-    const metrics = METRIC_REGISTRY[output.dimension];
-
-    // Compute sigmas from historical data
-    const sigmas = computeSigmas(history, dimKey, metrics);
-
-    // Get regime strings — always compare against the previous brief's stored
-    // regime, NOT the analyzer's internal previousRegime field (which tracks
-    // state across analytical runs, not across briefs).
-    const regimePath = REGIME_PATH[output.dimension];
-    const currRegime = getStringByPath(currentCtx, regimePath) ?? "";
-    const prevRegime = prevCtx ? getStringByPath(prevCtx, regimePath) : null;
-
-    const dimDelta = computeDimensionDelta(output.dimension, currentCtx, prevCtx, sigmas, currRegime, prevRegime);
-
-    dimensions.push(dimDelta);
-
-    // Regime flip always counts as high significance
-    if (dimDelta.regimeFlipped) maxZ = Math.max(maxZ, HIGH_THRESHOLD + 1);
-
-    // Track max z-score
-    const topMover = dimDelta.topMovers[0];
-    if (topMover) {
-      maxZ = Math.max(maxZ, topMover.zScore);
-    }
   }
 
   const tier: SignificanceTier = maxZ > HIGH_THRESHOLD ? "high" : maxZ > LOW_THRESHOLD ? "medium" : "low";

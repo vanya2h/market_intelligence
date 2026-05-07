@@ -30,6 +30,7 @@ export async function saveBrief(
       derivatives: derivOut
         ? {
             create: {
+              snapshotId: derivOut.snapshotId,
               regime: derivOut.regime,
               stress: derivOut.stress,
               previousRegime: derivOut.previousRegime,
@@ -44,6 +45,7 @@ export async function saveBrief(
       etfs: etfOut
         ? {
             create: {
+              snapshotId: etfOut.snapshotId,
               regime: etfOut.regime,
               previousRegime: etfOut.previousRegime,
               since: new Date(etfOut.since),
@@ -55,6 +57,7 @@ export async function saveBrief(
       htf: htfOut
         ? {
             create: {
+              snapshotId: htfOut.snapshotId,
               regime: htfOut.regime,
               previousRegime: htfOut.previousRegime,
               since: new Date(htfOut.since),
@@ -68,6 +71,7 @@ export async function saveBrief(
       sentiment: sentOut
         ? {
             create: {
+              snapshotId: sentOut.snapshotId,
               regime: sentOut.regime,
               previousRegime: sentOut.previousRegime,
               since: new Date(sentOut.since),
@@ -86,6 +90,7 @@ export async function saveBrief(
       exchangeFlows: efOut
         ? {
             create: {
+              snapshotId: efOut.snapshotId,
               regime: efOut.regime,
               previousRegime: efOut.previousRegime,
               since: new Date(efOut.since),

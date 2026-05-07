@@ -79,13 +79,14 @@ ${outputs
 ### What changed since last brief
 ${delta.changeSummary}
 
-### Metric movements (prev → curr)
+### Metric movements (curr vs 1h / 4h / 24h ago)
 ${delta.dimensions
   .flatMap((d) =>
-    d.topMovers.map(
-      (m) =>
-        `- ${DIMENSION_LABELS[d.dimension]} / ${m.label}: ${m.prev.toFixed(2)} → ${m.curr.toFixed(2)} (z=${m.zScore.toFixed(1)})`,
-    ),
+    d.topMovers.map((m) => {
+      const fmt = (h: { delta: number; zScore: number }) =>
+        `Δ${h.delta >= 0 ? "+" : ""}${h.delta.toFixed(2)} z=${h.zScore.toFixed(1)}`;
+      return `- ${DIMENSION_LABELS[d.dimension]} / ${m.label}: curr=${m.curr.toFixed(2)} | 1h ${fmt(m.horizons.h1)} | 4h ${fmt(m.horizons.h4)} | 24h ${fmt(m.horizons.h24)}`;
+    }),
   )
   .join("\n")}
 

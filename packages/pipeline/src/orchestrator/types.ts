@@ -19,6 +19,7 @@ import type { AssetType, DerivativesContext } from "../types.js";
 /** Output from the derivatives dimension pipeline */
 export interface DerivativesOutput {
   dimension: "DERIVATIVES";
+  snapshotId: string;
   regime: PositioningRegime;
   stress: StressLevel | null;
   previousRegime: PositioningRegime | null;
@@ -32,6 +33,7 @@ export interface DerivativesOutput {
 /** Output from the ETF flows dimension pipeline */
 export interface EtfsOutput {
   dimension: "ETFS";
+  snapshotId: string;
   regime: EtfRegime;
   previousRegime: EtfRegime | null;
   since: string;
@@ -42,6 +44,7 @@ export interface EtfsOutput {
 /** Output from the HTF technical dimension pipeline */
 export interface HtfOutput {
   dimension: "HTF";
+  snapshotId: string;
   regime: HtfRegime;
   previousRegime: HtfRegime | null;
   since: string;
@@ -54,6 +57,7 @@ export interface HtfOutput {
 /** Output from the sentiment dimension pipeline */
 export interface SentimentOutput {
   dimension: "SENTIMENT";
+  snapshotId: string;
   regime: SentimentRegime;
   previousRegime: SentimentRegime | null;
   since: string;
@@ -71,6 +75,7 @@ export interface SentimentOutput {
 /** Output from the exchange flows dimension pipeline */
 export interface ExchangeFlowsOutput {
   dimension: "EXCHANGE_FLOWS";
+  snapshotId: string;
   regime: ExchangeFlowsRegime;
   previousRegime: ExchangeFlowsRegime | null;
   since: string;
