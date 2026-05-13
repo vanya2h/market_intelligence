@@ -185,7 +185,7 @@ async function backfillHtf(): Promise<Counters> {
       atrPercentile: getNum(ctx, "volatility.atrPercentile"),
       atrRatio: getNum(ctx, "volatility.atrRatio"),
       recentDisplacement: getNum(ctx, "volatility.recentDisplacement"),
-      priceVsPocPct: getNum(ctx, "volumeProfile.profile.priceVsPocPct"),
+      priceVsPocPct: getNum(ctx, "volumeProfile.near.priceVsPocPct"),
       context: asJson(r.context),
     };
     if (DRY_RUN) {

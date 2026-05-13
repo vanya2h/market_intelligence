@@ -153,7 +153,7 @@ export function computeCompositeTarget(
 
   // POC — strongest single price magnet (displacement-anchored volume profile)
   samples.push({
-    value: volumeProfile.profile.poc,
+    value: volumeProfile.near.poc,
     weight: LEVEL_WEIGHTS.poc,
   });
 

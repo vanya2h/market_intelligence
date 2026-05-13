@@ -1137,6 +1137,7 @@ const VP_MIN_RANGE_CANDLES = 20; // minimum candles for meaningful profile
 const VP_DISPLACEMENT_SINGLE = 5; // single-candle displacement threshold (×ATR)
 const VP_DISPLACEMENT_WINDOW = 5; // 3-candle window displacement threshold (×ATR)
 const VA_COVERAGE = 0.7; // Value Area = 70% of total volume
+const VP_NEAR_CANDLES = 100; // 100 × 4H ≈ 17 days — rolling near-term window
 
 /**
  * Find where the current range started by detecting the most recent displacement.
@@ -1325,16 +1326,25 @@ function computeVolumeProfileContext(
   currentPrice: number,
 ): VolumeProfileContext {
   const binSize = currentPrice * VP_BIN_PCT;
-  const anchorIdx = futuresCandles.findIndex((c) => c.time >= VP_RANGE_ANCHOR);
-  const rangeStartIdx = anchorIdx >= 0 ? anchorIdx : findRangeStart(futuresCandles, atr);
-  const rangeCandles = futuresCandles.slice(rangeStartIdx);
 
-  const profileMap = buildVolumeProfile(rangeCandles, binSize);
-  const profile = analyzeVolumeProfile(profileMap, binSize, currentPrice);
+  // Structural: displacement-anchored (existing logic)
+  const anchorIdx = futuresCandles.findIndex((c) => c.time >= VP_RANGE_ANCHOR);
+  const structuralStartIdx = anchorIdx >= 0 ? anchorIdx : findRangeStart(futuresCandles, atr);
+  const structuralSlice = futuresCandles.slice(structuralStartIdx);
+  const structuralMap = buildVolumeProfile(structuralSlice, binSize);
+  const structural = analyzeVolumeProfile(structuralMap, binSize, currentPrice);
+
+  // Near: rolling last VP_NEAR_CANDLES candles
+  const nearStartIdx = Math.max(0, futuresCandles.length - VP_NEAR_CANDLES);
+  const nearSlice = futuresCandles.slice(nearStartIdx);
+  const nearMap = buildVolumeProfile(nearSlice, binSize);
+  const near = analyzeVolumeProfile(nearMap, binSize, currentPrice);
 
   return {
-    profile,
-    rangeStartCandles: futuresCandles.length - rangeStartIdx,
+    near,
+    structural,
+    nearCandles: nearSlice.length,
+    structuralCandles: structuralSlice.length,
   };
 }
 
@@ -1826,9 +1836,9 @@ function computeBias(
   //    Power curve (^0.6) amplifies moderate deviations: 3% from POC → 0.74 instead of 0.60.
   let vpGravity = 0;
   if (vp) {
-    const vpLinear = clamp(-vp.profile.priceVsPocPct / 5, -1, 1);
+    const vpLinear = clamp(-vp.near.priceVsPocPct / 5, -1, 1);
     const vpNonLinear = Math.sign(vpLinear) * Math.pow(Math.abs(vpLinear), 0.6);
-    vpGravity = vpNonLinear * clamp(vp.profile.pocVolumePct / 5, 0.5, 1.5);
+    vpGravity = vpNonLinear * clamp(vp.near.pocVolumePct / 5, 0.5, 1.5);
     vpGravity = clamp(vpGravity, -1, 1);
   }
 

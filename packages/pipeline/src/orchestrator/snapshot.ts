@@ -143,7 +143,7 @@ export async function snapshotHtf(asset: AssetType, timestamp = new Date()): Pro
       atrPercentile: getNum(context, "volatility.atrPercentile"),
       atrRatio: getNum(context, "volatility.atrRatio"),
       recentDisplacement: getNum(context, "volatility.recentDisplacement"),
-      priceVsPocPct: getNum(context, "volumeProfile.profile.priceVsPocPct"),
+      priceVsPocPct: getNum(context, "volumeProfile.near.priceVsPocPct"),
       context: asJson(context),
     },
     update: { context: asJson(context) },

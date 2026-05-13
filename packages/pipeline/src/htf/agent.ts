@@ -63,6 +63,10 @@ You receive computed HTF (weekly/daily) indicator data and write a concise 2-4 s
 Focus on: what the current macro structure means, key levels that matter, and what to watch for next.
 When divergenceConfluence.strength > 0.5, lead with it — multi-indicator exhaustion is the primary mean reversion trigger. \
 Call out RSI/MFI disagreement (one extreme, the other not) as a volume-confirmation mismatch worth flagging.
+Volume Profile — two profiles are provided: \
+'near' (≈17-day rolling) reflects where volume has actually been traded in the current range — its POC is the active near-term magnet. \
+'structural' (displacement-anchored) marks the macro accumulation zone since the last major move — its POC is longer-term fair value. \
+When near POC ≈ structural POC the level is strongly confluent. When they diverge, near POC takes priority for near-term mean reversion; structural POC signals where a larger move could resolve.
 Be direct and specific — cite actual values. Do not hedge or pad.`,
     user: `Analyze this ${ctx.asset} HTF technical context:\n\n${JSON.stringify(ctx, null, 2)}`,
     maxTokens: 256,

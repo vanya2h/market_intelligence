@@ -795,29 +795,29 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
           group: "Volatility",
           value: safe(() => formatUsd(get(ctx, "atr") as number)),
         },
-        ...(get(ctx, "volumeProfile.profile.poc") != null
+        ...(get(ctx, "volumeProfile.near.poc") != null
           ? [
               {
                 label: "POC",
                 group: "Volume Profile",
-                value: safe(() => fmtLevel(get(ctx, "volumeProfile.profile.poc") as number)),
+                value: safe(() => fmtLevel(get(ctx, "volumeProfile.near.poc") as number)),
               },
               {
                 label: "VA High",
                 group: "Volume Profile",
-                value: safe(() => fmtLevel(get(ctx, "volumeProfile.profile.vaHigh") as number)),
+                value: safe(() => fmtLevel(get(ctx, "volumeProfile.near.vaHigh") as number)),
               },
               {
                 label: "VA Low",
                 group: "Volume Profile",
-                value: safe(() => fmtLevel(get(ctx, "volumeProfile.profile.vaLow") as number)),
+                value: safe(() => fmtLevel(get(ctx, "volumeProfile.near.vaLow") as number)),
               },
               {
                 label: "Price Position",
                 group: "Volume Profile",
-                value: safe(() => (get(ctx, "volumeProfile.profile.pricePosition") as string).replace(/_/g, " ")),
+                value: safe(() => (get(ctx, "volumeProfile.near.pricePosition") as string).replace(/_/g, " ")),
                 signal: (() => {
-                  const pos = get(ctx, "volumeProfile.profile.pricePosition") as string;
+                  const pos = get(ctx, "volumeProfile.near.pricePosition") as string;
                   if (pos === "BELOW_VA") return "bullish" as MetricSignal;
                   if (pos === "ABOVE_VA") return "bearish" as MetricSignal;
                   return "neutral" as MetricSignal;
@@ -826,7 +826,7 @@ export const DIMENSIONS: Record<string, DimensionDef> = {
               {
                 label: "POC Volume",
                 group: "Volume Profile",
-                value: safe(() => `${formatNumber(get(ctx, "volumeProfile.profile.pocVolumePct") as number, 1)}%`),
+                value: safe(() => `${formatNumber(get(ctx, "volumeProfile.near.pocVolumePct") as number, 1)}%`),
               },
               {
                 label: "Range",

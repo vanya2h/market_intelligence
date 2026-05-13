@@ -422,7 +422,7 @@ function buildDimHtf(d: {
   }
   if (vp) {
     out += subsection("Volume Profile");
-    const profile = vp.profile as Record<string, unknown> | undefined;
+    const profile = vp.near as Record<string, unknown> | undefined;
     if (profile) {
       out += kv("POC", price(profile.poc as number));
       out += kv("Price vs POC", pct(profile.priceVsPocPct as number));

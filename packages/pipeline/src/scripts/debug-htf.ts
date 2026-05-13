@@ -468,33 +468,55 @@ async function main() {
   row("Coiled spring", bool(vol.compressionAfterMove));
 
   // ── Volume Profile ─────────────────────────────────────────────────────────────
-  hdr("Volume Profile (displacement-anchored)");
   const vp = ctx.volumeProfile;
-  row("Range start (candles back)", chalk.white(String(vp.rangeStartCandles)));
-  row("Range (~days)", chalk.dim(`~${((vp.rangeStartCandles * 4) / 24).toFixed(1)}d`));
-  row("POC", `${chalk.yellow.bold(fmt$(vp.profile.poc))}  (${vp.profile.pocVolumePct.toFixed(1)}% of volume)`);
-  row("VA High", chalk.white(fmt$(vp.profile.vaHigh)));
-  row("VA Low", chalk.white(fmt$(vp.profile.vaLow)));
+
+  hdr(`Volume Profile — Near (${vp.nearCandles} candles, ~${((vp.nearCandles * 4) / 24).toFixed(1)}d)`);
+  row("POC", `${chalk.yellow.bold(fmt$(vp.near.poc))}  (${vp.near.pocVolumePct.toFixed(1)}% of volume)`);
+  row("VA High", chalk.white(fmt$(vp.near.vaHigh)));
+  row("VA Low", chalk.white(fmt$(vp.near.vaLow)));
   row(
     "VA width",
-    `${chalk.white(fmt$(vp.profile.vaHigh - vp.profile.vaLow))}  (${(((vp.profile.vaHigh - vp.profile.vaLow) / vp.profile.poc) * 100).toFixed(2)}%)`,
+    `${chalk.white(fmt$(vp.near.vaHigh - vp.near.vaLow))}  (${(((vp.near.vaHigh - vp.near.vaLow) / vp.near.poc) * 100).toFixed(2)}%)`,
   );
-  row("Price vs POC", fmtPct(vp.profile.priceVsPocPct));
+  row("Price vs POC", fmtPct(vp.near.priceVsPocPct));
   row(
     "Price position",
-    vp.profile.pricePosition === "ABOVE_VA"
-      ? chalk.green(vp.profile.pricePosition)
-      : vp.profile.pricePosition === "BELOW_VA"
-        ? chalk.red(vp.profile.pricePosition)
-        : chalk.white(vp.profile.pricePosition),
+    vp.near.pricePosition === "ABOVE_VA"
+      ? chalk.green(vp.near.pricePosition)
+      : vp.near.pricePosition === "BELOW_VA"
+        ? chalk.red(vp.near.pricePosition)
+        : chalk.white(vp.near.pricePosition),
   );
   row(
     "HVNs (magnets)",
-    vp.profile.hvns.length > 0 ? vp.profile.hvns.map((h) => chalk.green(fmt$(h))).join("  ") : chalk.dim("(none)"),
+    vp.near.hvns.length > 0 ? vp.near.hvns.map((h) => chalk.green(fmt$(h))).join("  ") : chalk.dim("(none)"),
   );
   row(
     "LVNs (accel zones)",
-    vp.profile.lvns.length > 0 ? vp.profile.lvns.map((l) => chalk.cyan(fmt$(l))).join("  ") : chalk.dim("(none)"),
+    vp.near.lvns.length > 0 ? vp.near.lvns.map((l) => chalk.cyan(fmt$(l))).join("  ") : chalk.dim("(none)"),
+  );
+
+  hdr(
+    `Volume Profile — Structural (${vp.structuralCandles} candles, ~${((vp.structuralCandles * 4) / 24).toFixed(1)}d)`,
+  );
+  row("POC", `${chalk.yellow.bold(fmt$(vp.structural.poc))}  (${vp.structural.pocVolumePct.toFixed(1)}% of volume)`);
+  row("VA High", chalk.white(fmt$(vp.structural.vaHigh)));
+  row("VA Low", chalk.white(fmt$(vp.structural.vaLow)));
+  row("Price vs POC", fmtPct(vp.structural.priceVsPocPct));
+  row(
+    "Price position",
+    vp.structural.pricePosition === "ABOVE_VA"
+      ? chalk.green(vp.structural.pricePosition)
+      : vp.structural.pricePosition === "BELOW_VA"
+        ? chalk.red(vp.structural.pricePosition)
+        : chalk.white(vp.structural.pricePosition),
+  );
+  const pocDiffPct = ((vp.near.poc - vp.structural.poc) / vp.structural.poc) * 100;
+  row(
+    "Near vs Structural POC",
+    Math.abs(pocDiffPct) < 0.5
+      ? chalk.yellow(`${pocDiffPct >= 0 ? "+" : ""}${pocDiffPct.toFixed(2)}%  (confluent)`)
+      : chalk.dim(`${pocDiffPct >= 0 ? "+" : ""}${pocDiffPct.toFixed(2)}%  (diverging)`),
   );
 
   // ── Sweep Levels ──────────────────────────────────────────────────────────────
@@ -571,11 +593,12 @@ async function main() {
     { label: "STH cost basis (155d)", price: ctx.sth.price },
     { label: "VWAP weekly", price: ctx.vwap.weekly },
     { label: "VWAP monthly", price: ctx.vwap.monthly },
-    { label: "VP POC", price: ctx.volumeProfile.profile.poc },
-    { label: "VP VA High", price: ctx.volumeProfile.profile.vaHigh },
-    { label: "VP VA Low", price: ctx.volumeProfile.profile.vaLow },
-    ...ctx.volumeProfile.profile.hvns.map((p, i) => ({ label: `HVN ${i + 1}`, price: p })),
-    ...ctx.volumeProfile.profile.lvns.map((p, i) => ({ label: `LVN ${i + 1}`, price: p })),
+    { label: "VP Near POC", price: ctx.volumeProfile.near.poc },
+    { label: "VP Near VA High", price: ctx.volumeProfile.near.vaHigh },
+    { label: "VP Near VA Low", price: ctx.volumeProfile.near.vaLow },
+    { label: "VP Structural POC", price: ctx.volumeProfile.structural.poc },
+    ...ctx.volumeProfile.near.hvns.map((p: number, i: number) => ({ label: `HVN ${i + 1}`, price: p })),
+    ...ctx.volumeProfile.near.lvns.map((p: number, i: number) => ({ label: `LVN ${i + 1}`, price: p })),
     ...(ctx.sweep.nearestHigh
       ? [{ label: `Sweep ▲ ${ctx.sweep.nearestHigh.period.toLowerCase()}`, price: ctx.sweep.nearestHigh.price }]
       : []),
@@ -592,7 +615,7 @@ async function main() {
   }
 
   // ── ASCII profile ─────────────────────────────────────────────────────────────
-  printAsciiProfile(ctx.volumeProfile.profile, ctx.price);
+  printAsciiProfile(ctx.volumeProfile.near, ctx.price);
 }
 
 main().catch((err) => {

@@ -253,10 +253,14 @@ export interface VolumeProfileResult {
 }
 
 export interface VolumeProfileContext {
-  /** Displacement-anchored profile — covers the current range */
-  profile: VolumeProfileResult;
-  /** How many candles back the detected range started (transparency for LLM) */
-  rangeStartCandles: number;
+  /** Rolling ~17-day window — tracks current range activity */
+  near: VolumeProfileResult;
+  /** Displacement-anchored — macro accumulation/distribution since last major move */
+  structural: VolumeProfileResult;
+  /** How many candles the near window covers (always VP_NEAR_CANDLES) */
+  nearCandles: number;
+  /** How many candles back the structural profile starts */
+  structuralCandles: number;
 }
 
 export type SweepLevelType = "HIGH" | "LOW";
