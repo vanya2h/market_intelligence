@@ -317,7 +317,7 @@ async function main() {
   section("LLM INPUT: SYSTEM PROMPT");
 
   const isDelta = deltaSummary.tier === "medium";
-  const systemPrompt = buildSystemPrompt(decision, isDelta);
+  const systemPrompt = buildSystemPrompt(isDelta);
   console.log(chalk.dim("  (This is the system message the text synthesizer receives)\n"));
   wordWrap(systemPrompt, "  ", 70);
   console.log(`\n  ${chalk.dim(`${systemPrompt.length} chars`)}`);
@@ -325,7 +325,7 @@ async function main() {
   // ─── LLM input: user prompt ────────────────────────────────────────
   section("LLM INPUT: USER PROMPT");
 
-  const userPrompt = buildPrompt(asset, outputs, decision);
+  const userPrompt = buildPrompt(asset, outputs);
   console.log(chalk.dim("  (Rich brief minified JSON + trade decision)\n"));
 
   // The prompt is now minified — show it line by line with coloring

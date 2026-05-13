@@ -85,9 +85,9 @@ async function main() {
     console.log(`  Synthesizing new Telegram brief...`);
     const start = Date.now();
     const res = await callLlm({
-      system: buildSystemPrompt(decision ?? null),
-      user: buildPrompt(run.asset, outputs, decision ?? null),
-      maxTokens: 350,
+      system: buildSystemPrompt(),
+      user: buildPrompt(run.asset, outputs),
+      maxTokens: 150,
     });
     if (res.stopReason !== "end_turn") {
       console.warn(

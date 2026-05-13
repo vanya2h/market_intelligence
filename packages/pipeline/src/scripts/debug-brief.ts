@@ -33,9 +33,7 @@ import type { DeltaSummary } from "../orchestrator/delta.js";
 import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import type { Direction } from "../orchestrator/trade-idea/composite-target.js";
 import { computeConfluence, getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
-import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
 import {
   type DerivativesOutput,
   type DimensionOutput,
@@ -901,27 +899,6 @@ async function main() {
   const artifacts = run ? ((run.artifacts as RunArtifacts) ?? {}) : ({} as RunArtifacts);
   const storedOutputs = buildOutputsFromBrief(brief);
 
-  // Reconstruct trade decision for LLM prompt rebuilding
-  let promptDecision: TradeDecision | null = null;
-  if (tradeIdea) {
-    const rawBlob = tradeIdea.confluence as Record<string, unknown> | null;
-    const { confluence: storedConfluence, total: storedTotal } = parseStoredConfluence(rawBlob);
-    const sizing = (rawBlob?.sizing as { positionSizePct: number; convictionMultiplier: number; dailyVolPct: number } | undefined) ?? {
-      positionSizePct: tradeIdea.positionSizePct,
-      convictionMultiplier: 0,
-      dailyVolPct: 0,
-    };
-    promptDecision = {
-      direction: tradeIdea.direction as Direction,
-      confluence: storedConfluence,
-      confluenceTotal: storedTotal ?? getConfluenceTotal(storedConfluence),
-      entryPrice: tradeIdea.entryPrice,
-      compositeTarget: tradeIdea.compositeTarget,
-      sizing,
-      ml: null,
-    };
-  }
-
   const storedDelta: DeltaSummary | null = artifacts.deltaSummary ?? null;
   const isDeltaBrief = storedDelta?.tier === "medium";
 
@@ -945,8 +922,8 @@ async function main() {
   if (brief.richBrief)
     write(outDir, "10-rich-brief.txt", buildRichBrief(brief.richBrief as { blocks: Array<Record<string, unknown>> }));
   write(outDir, "11-brief-text.txt", brief.brief);
-  write(outDir, "12-llm-system-prompt.txt", buildSystemPrompt(promptDecision, isDeltaBrief));
-  write(outDir, "13-llm-user-prompt.txt", buildPrompt(asset as AssetType, storedOutputs, promptDecision, storedDelta));
+  write(outDir, "12-llm-system-prompt.txt", buildSystemPrompt(isDeltaBrief));
+  write(outDir, "13-llm-user-prompt.txt", buildPrompt(asset as AssetType, storedOutputs, storedDelta));
 
   const contexts: Record<string, unknown> = {};
   if (brief.derivatives) contexts.derivatives = brief.derivatives.context;

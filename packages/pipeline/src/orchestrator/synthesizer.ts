@@ -31,116 +31,53 @@ function buildCacheKey(asset: string, decision: TradeDecision | null): string {
   return `orchestrator-${asset.toLowerCase()}-${hash}`;
 }
 
-/** Format a -1..+1 score as a signed integer percentage (e.g. +45, -22). */
-function pct(score: number): string {
-  const v = Math.round(score * 100);
-  return v >= 0 ? `+${v}` : `${v}`;
+export function buildPrompt(asset: AssetType, outputs: DimensionOutput[], delta: DeltaSummary | null = null): string {
+  const htf = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
+  const priceStr = htf?.snapshotPrice
+    ? `Current price: $${htf.snapshotPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+    : "";
+
+  const dimensionLines = outputs
+    .map((o) => `${DIMENSION_LABELS[o.dimension]} (${o.regime}): ${o.interpretation}`)
+    .join("\n\n");
+
+  const deltaLine = delta && delta.tier !== "low" ? `\n\nWhat changed: ${delta.changeSummary}` : "";
+
+  return `${asset} | ${new Date().toUTCString()}
+${priceStr}
+
+${dimensionLines}${deltaLine}`;
 }
 
-function buildTradeSection(decision: TradeDecision | null): string {
-  if (!decision) {
-    return `### Trade Decision
-No HTF data available — trade idea could not be computed.`;
-  }
-  const targetDistPct = (((decision.compositeTarget - decision.entryPrice) / decision.entryPrice) * 100).toFixed(2);
-  const c = decision.confluence;
-  return `### Trade Decision: ${decision.direction} (conviction=${pct(decision.confluenceTotal)}/100, size=${decision.sizing.positionSizePct}% notional)
-**Breakdown:** Deriv=${pct(c["DERIVATIVES"])}, ETFs=${pct(c["ETFS"])}, HTF=${pct(c["HTF"])}, Flows=${pct(c["EXCHANGE_FLOWS"])}
-**Entry:** $${decision.entryPrice.toFixed(2)} | **Target:** $${decision.compositeTarget.toFixed(2)} (${targetDistPct}%)
+export function buildSystemPrompt(isDelta: boolean = false): string {
+  const deltaNote = isDelta ? `\nThis is an update — the reader saw the prior brief. Lead with what just changed.` : "";
 
-State the setup and the single biggest risk.`;
-}
+  return `You write Telegram market updates for crypto traders. Plain English, facts only.${deltaNote}
 
-export function buildPrompt(
-  asset: AssetType,
-  outputs: DimensionOutput[],
-  decision: TradeDecision | null,
-  delta: DeltaSummary | null = null,
-): string {
-  const richSection = `### Dimension Analysis
-
-${outputs
-  .map((o) => {
-    let line = `**${DIMENSION_LABELS[o.dimension]}** (${o.regime}): ${o.interpretation}`;
-    if (o.dimension === "HTF") {
-      const b = (o as HtfOutput).context.bias;
-      line += `\n  Bias scores: trend=${b.trend.toFixed(2)}, momentum=${b.momentum.toFixed(2)}, flow=${b.flow.toFixed(2)}, compression=${b.compression.toFixed(2)}, vpGravity=${b.vpGravity.toFixed(2)}, composite=${b.composite.toFixed(2)}`;
-    }
-    return line;
-  })
-  .join("\n\n")}`;
-
-  const deltaSection =
-    delta && delta.tier !== "low"
-      ? `
-
----
-
-### What changed since last brief
-${delta.changeSummary}
-
-### Metric movements (curr vs 1h / 4h / 24h ago)
-${delta.dimensions
-  .flatMap((d) =>
-    d.topMovers.map((m) => {
-      const fmt = (h: { delta: number; zScore: number }) =>
-        `Δ${h.delta >= 0 ? "+" : ""}${h.delta.toFixed(2)} z=${h.zScore.toFixed(1)}`;
-      return `- ${DIMENSION_LABELS[d.dimension]} / ${m.label}: curr=${m.curr.toFixed(2)} | 1h ${fmt(m.horizons.h1)} | 4h ${fmt(m.horizons.h4)} | 24h ${fmt(m.horizons.h24)}`;
-    }),
-  )
-  .join("\n")}
-
-IMPORTANT: Lead with what changed. Check whether these movements confirm or invalidate the catalysts from the prior brief. The reader already has context — focus on the delta.`
-      : "";
-
-  return `Write a Telegram-friendly market brief for ${asset}.
-Current time: ${new Date().toUTCString()}
-
-${richSection}${deltaSection}${
-    decision
-      ? `
-
----
-
-${buildTradeSection(decision)}`
-      : ""
-  }`;
-}
-
-export function buildSystemPrompt(decision: TradeDecision | null, isDelta: boolean = false): string {
-  const biasSection = decision ? `\n3. Trade: direction, why it works now, what price kills it.` : ``;
-
-  const structure = isDelta
-    ? `Structure (delta — reader saw the last brief):
-1. What changed and whether it confirms or contradicts the prior setup. One paragraph, no preamble.
-2. Catalyst check: for each "watch for" item from the prior brief's context, state whether it fired, partially fired, or remains pending. If the delta data shows a metric moved toward or past a threshold, call it out explicitly.${biasSection}`
-    : `Structure (full brief):
-1. Current state in one sentence — what the asset is doing and the dominant force behind it.
-2. Catalysts: 2-3 specific things the reader should watch that would flip or strengthen the current bias. Be concrete — name the metric and the direction it needs to move (e.g. "funding flipping positive while OI stays flat would confirm longs are trapped").${biasSection}`;
-
-  return `You write a Telegram market update for crypto traders. Short, sharp, actionable.
-
-${structure}
+Format:
+Line 1: current price + what the asset is doing in one short sentence. Must include the price.
+Then a bullet list of key facts — one fact per line, no fluff. Each bullet must include scale (dollar amount, percentile, days, or "X-day high/low"). Cover all dimensions that have something notable.
 
 Rules:
+- No headers, no bold, no emojis. Bullets use "- ".
 - Plain English. No jargon without immediate explanation.
-- No headers, no bold, no emojis. Short paragraphs.
-- Only mention price levels if they are directly tied to a catalyst (e.g. "losing $X confirms the flip"). Do not list levels for their own sake.
-- 100 words max. Cut ruthlessly.
-- The trade decision (if present) is mechanical output — describe it, don't override it.`;
+- Use percentiles for positioning/flow metrics (e.g. "94th percentile"), dollar amounts for ETF flows, relative benchmarks (e.g. "30-day high") for reserves.
+- One bullet per dimension. Pick the single most important fact from each. Max 15 words per bullet.
+- One clause per bullet. No connecting sentences between bullets.
+- Never use z-scores, sigma, or standard deviations. Use plain scale instead (e.g. "30-day high", "$350M outflow", "94th percentile").
+- Skip a dimension only if nothing notable happened.`;
 }
 
 async function callClaude(
   asset: $Enums.Asset,
   outputs: DimensionOutput[],
-  decision: TradeDecision | null,
   delta: DeltaSummary | null,
 ): Promise<string> {
   const isDelta = delta !== null && delta.tier !== "low";
   const res = await callLlm({
-    system: buildSystemPrompt(decision, isDelta),
-    user: buildPrompt(asset, outputs, decision, delta),
-    maxTokens: 300,
+    system: buildSystemPrompt(isDelta),
+    user: buildPrompt(asset, outputs, delta),
+    maxTokens: 650,
   });
   return res.text;
 }
@@ -165,7 +102,7 @@ function buildOneLiner(asset: string, delta: DeltaSummary, outputs: DimensionOut
 export async function synthesize(
   asset: AssetType,
   outputs: DimensionOutput[],
-  decision: TradeDecision | null = null,
+  _decision: TradeDecision | null = null,
   delta: DeltaSummary | null = null,
 ): Promise<string> {
   if (outputs.length === 0) {
@@ -178,5 +115,5 @@ export async function synthesize(
   }
 
   // High or medium significance → LLM call (medium injects delta into prompt)
-  return getCached(buildCacheKey(asset, decision), SYNTH_CACHE_TTL, () => callClaude(asset, outputs, decision, delta));
+  return getCached(buildCacheKey(asset, null), SYNTH_CACHE_TTL, () => callClaude(asset, outputs, delta));
 }

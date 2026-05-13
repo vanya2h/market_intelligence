@@ -7,11 +7,6 @@ import { callLlm } from "../llm.js";
 import { computeDelta } from "../orchestrator/delta.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { computeConfluence, getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
-import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
-import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
-import type { HtfOutput } from "../orchestrator/types.js";
 import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
 import "../env.js";
@@ -28,26 +23,6 @@ async function main() {
       select: { id: true, timestamp: true, brief: true },
     }),
   ]);
-
-  const htfOut = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
-  let decision: TradeDecision | null = null;
-  if (htfOut) {
-    const perDim = computeConfluence(outputs);
-    const total = getConfluenceTotal(perDim);
-    const direction: Direction = total >= 0 ? "LONG" : "SHORT";
-    const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);
-    const sizing = computePositionSize(total, htfOut.context);
-
-    decision = {
-      direction,
-      confluence: perDim,
-      confluenceTotal: total,
-      entryPrice,
-      compositeTarget,
-      sizing,
-      ml: null,
-    };
-  }
 
   // Delta analysis
   console.log(`📊 Computing delta against previous brief...`);
@@ -67,8 +42,7 @@ async function main() {
   }
 
   if (delta.tier === "low") {
-    const htfPrice = htfOut?.context.price;
-    const priceStr = htfPrice ? ` at $${htfPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "";
+    const priceStr = "";
     const oneLiner = `${asset}${priceStr} — no dramatic changes since last brief. ${delta.topTension}.`;
     console.log(`\n🟢 NEW BRIEF — one-liner (no LLM call):\n`);
     console.log(sep);
@@ -80,9 +54,9 @@ async function main() {
     console.log(`\n🔥 NEW BRIEF — calling LLM directly (no cache) [${delta.tier.toUpperCase()} DELTA]...\n`);
     const start = Date.now();
     const res = await callLlm({
-      system: buildSystemPrompt(decision, isDelta),
-      user: buildPrompt(asset, outputs, decision, delta),
-      maxTokens: 450,
+      system: buildSystemPrompt(isDelta),
+      user: buildPrompt(asset, outputs, delta),
+      maxTokens: 150,
     });
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 
