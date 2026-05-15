@@ -31,6 +31,48 @@ function buildCacheKey(asset: string, decision: TradeDecision | null): string {
   return `orchestrator-${asset.toLowerCase()}-${hash}`;
 }
 
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+function formatScale(output: DimensionOutput): string {
+  const parts: string[] = [];
+
+  if (output.dimension === "ETFS") {
+    const f = output.context.flow;
+    parts.push(`today's flow ${ordinal(f.percentile1m)} pct (30d)`);
+    if (f.consecutiveInflowDays > 0) parts.push(`${f.consecutiveInflowDays}d inflow streak`);
+    if (f.consecutiveOutflowDays > 0) parts.push(`${f.consecutiveOutflowDays}d outflow streak`);
+  }
+
+  if (output.dimension === "EXCHANGE_FLOWS") {
+    const m = output.context.metrics;
+    parts.push(`today's flow ${ordinal(m.flowPercentile1m)} pct (30d)`);
+    if (m.isAt30dHigh) parts.push("reserves at 30d high");
+    else if (m.isAt30dLow) parts.push("reserves at 30d low");
+    const dir = m.reserveChange7dPct > 0 ? "+" : "";
+    parts.push(`7d reserve ${dir}${m.reserveChange7dPct.toFixed(2)}%`);
+  }
+
+  if (output.dimension === "DERIVATIVES") {
+    const c = output.context;
+    parts.push(`funding ${ordinal(c.funding.percentile["1m"])} pct`);
+    parts.push(`OI ${ordinal(c.openInterest.percentile["1m"])} pct`);
+    parts.push(`liq ${ordinal(c.liquidations.percentile["1m"])} pct`);
+  }
+
+  if (output.dimension === "SENTIMENT") {
+    const m = output.context.metrics;
+    parts.push(`composite F&G ${m.compositeIndex}/100`);
+    parts.push(`consensus ${m.consensusIndex > 0 ? "+" : ""}${m.consensusIndex.toFixed(0)}/100`);
+    if (m.bullishRatio !== undefined) parts.push(`${Math.round(m.bullishRatio * 100)}% analysts bullish`);
+  }
+
+  return parts.length > 0 ? `[scale: ${parts.join(" | ")}]` : "";
+}
+
 export function buildPrompt(asset: AssetType, outputs: DimensionOutput[], delta: DeltaSummary | null = null): string {
   const htf = outputs.find((o): o is HtfOutput => o.dimension === "HTF");
   const priceStr = htf?.snapshotPrice
@@ -38,7 +80,10 @@ export function buildPrompt(asset: AssetType, outputs: DimensionOutput[], delta:
     : "";
 
   const dimensionLines = outputs
-    .map((o) => `${DIMENSION_LABELS[o.dimension]} (${o.regime}): ${o.interpretation}`)
+    .map((o) => {
+      const scale = formatScale(o);
+      return `${DIMENSION_LABELS[o.dimension]} (${o.regime}): ${o.interpretation}${scale ? `\n  ${scale}` : ""}`;
+    })
     .join("\n\n");
 
   const deltaLine = delta && delta.tier !== "low" ? `\n\nWhat changed: ${delta.changeSummary}` : "";
@@ -56,15 +101,16 @@ export function buildSystemPrompt(isDelta: boolean = false): string {
 
 Format:
 Line 1: current price + what the asset is doing in one short sentence. Must include the price.
-Then a bullet list of key facts — one fact per line, no fluff. Each bullet must include scale (dollar amount, percentile, days, or "X-day high/low"). Cover all dimensions that have something notable.
+Then a bullet list of key facts — one fact per line, no fluff. Each bullet must include relative scale. Cover all dimensions that have something notable.
 
 Rules:
 - No headers, no bold, no emojis. Bullets use "- ".
 - Plain English. No jargon without immediate explanation.
-- Use percentiles for positioning/flow metrics (e.g. "94th percentile"), dollar amounts for ETF flows, relative benchmarks (e.g. "30-day high") for reserves.
+- Each bullet MUST include a relative qualifier: percentile rank ("87th percentile"), streak length ("5-day inflow streak"), or benchmark ("30-day high"). Absolute numbers alone are not enough — pair them with their relative context.
+- Each dimension's data comes with a [scale: ...] line. Use those values when writing bullets.
 - One bullet per dimension. Pick the single most important fact from each. Max 15 words per bullet.
 - One clause per bullet. No connecting sentences between bullets.
-- Never use z-scores, sigma, or standard deviations. Use plain scale instead (e.g. "30-day high", "$350M outflow", "94th percentile").
+- Never use z-scores, sigma, or standard deviations. Use plain scale instead (e.g. "30-day high", "$350M outflow", "87th percentile").
 - Skip a dimension only if nothing notable happened.`;
 }
 
