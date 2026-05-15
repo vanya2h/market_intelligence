@@ -1,29 +1,14 @@
 import type { AggregatorInfo, OhlcvCandle, TradeIdea } from "@market-intel/api";
 import { CandleReturnChart } from "./CandleReturnChart";
 import { ConfluenceBreakdown } from "./ConfluenceBadges";
-import { InlineLink } from "./InlineLink";
 import { LevelStatus } from "./LevelStatus";
-import { ReturnsCurve } from "./ReturnsCurve";
 import { SectionBlock } from "./SectionBlock";
 import { UsdValue } from "./UsdValue";
 
-function LearnLink() {
-  return (
-    <div className="mt-3 flex items-center gap-4">
-      <InlineLink to="/faq#trade-ideas" className="inline-flex items-center gap-1 text-[0.725rem]">
-        <span>{"\u2192"}</span> How Trade Ideas works
-      </InlineLink>
-      <InlineLink to="/signals" className="inline-flex items-center gap-1 text-[0.725rem]">
-        <span>{"\u2192"}</span> Signal Effectiveness
-      </InlineLink>
-    </div>
-  );
-}
-
 function directionStyle(direction: string): { color: string; bg: string; label: string } {
-  if (direction === "LONG") return { color: "var(--green)", bg: "var(--green-dim)", label: "LONG \u25B2" };
-  if (direction === "SHORT") return { color: "var(--red)", bg: "var(--red-dim)", label: "SHORT \u25BC" };
-  return { color: "var(--text-muted)", bg: "var(--bg-hover)", label: "FLAT \u2014" };
+  if (direction === "LONG") return { color: "var(--green)", bg: "var(--green-dim)", label: "LONG ▲" };
+  if (direction === "SHORT") return { color: "var(--red)", bg: "var(--red-dim)", label: "SHORT ▼" };
+  return { color: "var(--text-muted)", bg: "var(--bg-hover)", label: "FLAT —" };
 }
 
 function formatAge(createdAt: Date): string {
@@ -35,16 +20,12 @@ function formatAge(createdAt: Date): string {
   return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
 }
 
-/** Color for position size badge: green = large, amber = medium, muted = small */
 function sizeColor(pct: number): string {
   if (pct >= 80) return "var(--green)";
   if (pct >= 40) return "var(--amber)";
   return "var(--text-muted)";
 }
 
-/** Tells the user how the confluence total was produced — ML model or heuristic.
- *  Missing `aggregator` = legacy record from before the ML aggregator existed,
- *  so the total was the IC-weighted heuristic by definition. */
 function AggregatorBadge({ aggregator }: { aggregator: AggregatorInfo | undefined }) {
   const isMl = aggregator?.source === "ml";
   const color = isMl ? "var(--amber)" : "var(--text-muted)";
@@ -78,25 +59,16 @@ function AggregatorBadge({ aggregator }: { aggregator: AggregatorInfo | undefine
 export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: TradeIdea; candles?: OhlcvCandle[] }) {
   const dir = directionStyle(tradeIdea.direction);
   const age = formatAge(tradeIdea.createdAt);
-  const totalLevels = tradeIdea.levels.length;
-  const wins = tradeIdea.levels.filter((l) => l.outcome === "WIN").length;
-  const losses = tradeIdea.levels.filter((l) => l.outcome === "LOSS").length;
-  const resolved = wins + losses;
-  const statusLabel = resolved === totalLevels ? "Resolved" : "Tracking";
-  const statusColor = resolved === totalLevels ? "var(--text-muted)" : "var(--amber)";
-
   const targetDistPct = ((tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
-  const lastReturn = tradeIdea.returns.length > 0 ? tradeIdea.returns[tradeIdea.returns.length - 1] : null;
-
   const sizePct = tradeIdea.positionSizePct;
   const sizingInfo = tradeIdea.sizing;
 
   return (
     <SectionBlock
       title="Trade Idea"
-      tooltip="Directional trade idea — always taken, sized proportionally to conviction × volatility. 4 dimensions (HTF, Derivatives, ETFs, Exchange Flows) each score -100 to +100. Levels tracked independently with time-decay quality scoring."
+      tooltip="Directional trade idea — always taken, sized proportionally to conviction × volatility. 4 dimensions (HTF, Derivatives, ETFs, Exchange Flows) each score -100 to +100."
     >
-      {/* Header: direction + prices + status */}
+      {/* Header: direction + prices */}
       <div
         className="rounded-md p-3 mb-3"
         style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
@@ -112,14 +84,7 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
           <span className="text-[0.625rem] font-mono-jb" style={{ color: "var(--text-muted)" }}>
             {age}
           </span>
-          <span
-            className="rounded px-1.5 py-0.5 text-[0.5625rem] font-medium uppercase tracking-wider"
-            style={{ color: statusColor, background: "var(--bg-hover)" }}
-          >
-            {statusLabel}
-          </span>
 
-          {/* Position size badge */}
           {sizePct > 0 && (
             <span
               className="rounded px-1.5 py-0.5 text-[0.5625rem] font-mono-jb font-medium"
@@ -135,17 +100,6 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
               }
             >
               {sizePct}% notional
-            </span>
-          )}
-
-          <span className="grow" />
-
-          {(wins > 0 || losses > 0) && (
-            <span className="text-[0.625rem] font-mono-jb" style={{ color: "var(--text-muted)" }}>
-              {wins > 0 && <span style={{ color: "var(--green)" }}>{wins}W</span>}
-              {wins > 0 && losses > 0 && " "}
-              {losses > 0 && <span style={{ color: "var(--red)" }}>{losses}L</span>}
-              <span style={{ opacity: 0.5 }}> / {totalLevels}</span>
             </span>
           )}
         </div>
@@ -193,24 +147,6 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
               </div>
             </>
           )}
-
-          {lastReturn && (
-            <div className="flex flex-col ml-auto">
-              <span
-                className="text-[0.5rem] font-medium uppercase tracking-wider mb-0.5"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Current P&L
-              </span>
-              <span
-                className="font-mono-jb tabular-nums text-[0.8125rem] font-semibold"
-                style={{ color: lastReturn.returnPct >= 0 ? "var(--green)" : "var(--red)" }}
-              >
-                {lastReturn.returnPct >= 0 ? "+" : ""}
-                {lastReturn.returnPct.toFixed(2)}%
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -238,20 +174,20 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
       {/* Levels + chart */}
       <div className="grid gap-4 md:grid-cols-[13.75rem_1fr]">
         <LevelStatus levels={tradeIdea.levels} entryPrice={tradeIdea.entryPrice} direction={tradeIdea.direction} />
-        <div
-          className="rounded-md p-3"
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-subtle)",
-          }}
-        >
+        {candles.length > 0 && (
           <div
-            className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
-            style={{ color: "var(--text-muted)" }}
+            className="rounded-md p-3"
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+            }}
           >
-            Returns Curve
-          </div>
-          {candles.length > 0 ? (
+            <div
+              className="mb-2 text-[0.5625rem] font-medium uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Returns Curve
+            </div>
             <CandleReturnChart
               candles={candles}
               levels={tradeIdea.levels}
@@ -259,13 +195,9 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
               direction={tradeIdea.direction}
               createdAt={tradeIdea.createdAt}
             />
-          ) : (
-            <ReturnsCurve returns={tradeIdea.returns} levels={tradeIdea.levels} />
-          )}
-        </div>
+          </div>
+        )}
       </div>
-
-      <LearnLink />
     </SectionBlock>
   );
 }

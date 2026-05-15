@@ -1,7 +1,7 @@
 /**
  * Trade Ideas — Data Layer
  *
- * Prisma include pattern and aggregate stats for trade idea queries.
+ * Prisma include pattern and type definitions for trade idea queries.
  */
 
 import type { Confluence, Prisma } from "@market-intel/pipeline";
@@ -15,9 +15,6 @@ export const tradeIdeaInclude = {
   levels: {
     orderBy: { label: "asc" as const },
   },
-  returns: {
-    orderBy: { hoursAfter: "asc" as const },
-  },
 } satisfies Prisma.TradeIdeaInclude;
 
 export type TradeIdeaRaw = Prisma.TradeIdeaGetPayload<{
@@ -27,7 +24,6 @@ export type TradeIdeaRaw = Prisma.TradeIdeaGetPayload<{
 // ─── Frontend types ──────────────────────────────────────────────────────────
 
 export type TradeDirection = "LONG" | "SHORT" | "FLAT";
-export type TradeOutcome = "OPEN" | "WIN" | "LOSS";
 export type LevelType = "INVALIDATION" | "TARGET";
 
 export interface SizingInfo {
@@ -49,16 +45,6 @@ export interface TradeIdeaLevel {
   type: LevelType;
   label: string;
   price: number;
-  outcome: TradeOutcome;
-  qualityScore: number | null;
-  resolvedAt: Date | null;
-}
-
-export interface TradeIdeaReturn {
-  hoursAfter: number;
-  price: number;
-  returnPct: number;
-  qualityAtPoint: number;
 }
 
 export interface TradeIdea {
@@ -81,7 +67,6 @@ export interface TradeIdea {
   skipped: boolean;
   createdAt: Date;
   levels: TradeIdeaLevel[];
-  returns: TradeIdeaReturn[];
 }
 
 export function parseTradeIdea(raw: Jsonify<TradeIdeaRaw>): TradeIdea {
@@ -121,129 +106,6 @@ export function parseTradeIdea(raw: Jsonify<TradeIdeaRaw>): TradeIdea {
       type: l.type as LevelType,
       label: l.label,
       price: l.price,
-      outcome: l.outcome as TradeOutcome,
-      qualityScore: l.qualityScore,
-      resolvedAt: l.resolvedAt ? new Date(l.resolvedAt) : null,
-    })),
-    returns: raw.returns.map((r) => ({
-      hoursAfter: r.hoursAfter,
-      price: r.price,
-      returnPct: r.returnPct,
-      qualityAtPoint: r.qualityAtPoint,
     })),
   };
-}
-
-export interface TradeIdeaLevelStats {
-  type: string; // "INVALIDATION" | "TARGET"
-  label: string; // "1:2", "T1", etc.
-  total: number;
-  wins: number;
-  losses: number;
-  open: number;
-  winRate: number | null;
-  avgQuality: number | null;
-}
-
-export interface TradeIdeaStats {
-  totalIdeas: number;
-  levels: TradeIdeaLevelStats[];
-}
-
-// ─── Signal effectiveness ───────────────────────────────────────────────────
-
-export interface SignalBucket {
-  range: string;
-  min: number;
-  max: number;
-  count: number;
-  avgVelocity: number | null;
-}
-
-export interface DimensionEffectiveness {
-  dimension: string;
-  buckets: SignalBucket[];
-  correlation: number | null;
-  sampleSize: number;
-}
-
-export interface IdeaSummary {
-  id: string;
-  briefId: string;
-  direction: string;
-  positionSizePct: number;
-  createdAt: string;
-  peakVelocity: number | null;
-  peakReturnPct: number | null;
-  peakHoursAfter: number | null;
-  peakQuality: number | null;
-}
-
-export interface SignalEffectiveness {
-  dimensions: DimensionEffectiveness[];
-  ideas: IdeaSummary[];
-  totalIdeas: number;
-  totalWithReturns: number;
-}
-
-// ─── Performance metrics ───────────────────────────────────────────────────
-
-export interface MonthlyReturn {
-  /** YYYY-MM */
-  month: string;
-  /** Size-weighted PnL: Σ(multiplier × peakReturn) */
-  pnl: number;
-  /** Number of ideas in the month */
-  count: number;
-  /** Average position size multiplier */
-  avgSize: number;
-  /** Win rate (peak return > 0) */
-  winRate: number;
-  /** Average peak return (unweighted) */
-  avgReturn: number;
-}
-
-export interface PerformanceMetrics {
-  /** Monthly returns series */
-  months: MonthlyReturn[];
-  /** Cumulative size-weighted PnL */
-  totalPnl: number;
-  /** Annualized Sharpe ratio from monthly returns (risk-free = 0) */
-  sharpe: number | null;
-  /** Total number of ideas */
-  totalIdeas: number;
-  /** Overall size-weighted average return per idea */
-  avgPnlPerIdea: number;
-  /** Overall win rate */
-  winRate: number;
-  /** Average position size multiplier */
-  avgSize: number;
-}
-
-// ─── Strategy curves ───────────────────────────────────────────────────────
-
-export interface StrategyPoint {
-  /** ISO timestamp of exit (resolvedAt of whichever level triggered) */
-  resolvedAt: string;
-  /** Running cumulative % return for this strategy */
-  cumulativeReturn: number;
-  /** Per-idea contribution to return */
-  ideaReturn: number;
-  outcome: "WIN" | "LOSS";
-}
-
-export interface Strategy {
-  /** Human-readable name, e.g. "Strategy 1" */
-  name: string;
-  /** Pairing label, e.g. "T1:S1" */
-  label: string;
-  points: StrategyPoint[];
-  totalIdeas: number;
-  wins: number;
-  winRate: number | null;
-  totalReturn: number;
-}
-
-export interface StrategyCurvesData {
-  strategies: Strategy[];
 }

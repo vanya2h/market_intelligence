@@ -596,11 +596,7 @@ function buildTradeIdea(tradeIdea: {
     type: string;
     label: string;
     price: number;
-    outcome: string;
-    qualityScore: number | null;
-    resolvedAt: Date | null;
   }>;
-  returns: Array<{ hoursAfter: number; price: number; returnPct: number; qualityAtPoint: number }>;
 }): string {
   let out = section("TRADE IDEA");
 
@@ -656,34 +652,15 @@ function buildTradeIdea(tradeIdea: {
       out += "Invalidation (Stop Loss):\n";
       for (const l of invalidations) {
         const d = ((l.price - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
-        const quality = l.qualityScore != null ? `  quality=${num(l.qualityScore)}` : "";
-        const resolved = l.resolvedAt ? `  resolved=${l.resolvedAt.toISOString()}` : "";
-        out += `  ${l.label.padEnd(5)} ${price(l.price).padEnd(16)} (${pct(d)})  outcome=${l.outcome}${quality}${resolved}\n`;
+        out += `  ${l.label.padEnd(5)} ${price(l.price).padEnd(16)} (${pct(d)})\n`;
       }
     }
     if (targets.length > 0) {
       out += "Targets (Take Profit):\n";
       for (const l of targets) {
         const d = ((l.price - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
-        const quality = l.qualityScore != null ? `  quality=${num(l.qualityScore)}` : "";
-        const resolved = l.resolvedAt ? `  resolved=${l.resolvedAt.toISOString()}` : "";
-        out += `  ${l.label.padEnd(5)} ${price(l.price).padEnd(16)} (${pct(d)})  outcome=${l.outcome}${quality}${resolved}\n`;
+        out += `  ${l.label.padEnd(5)} ${price(l.price).padEnd(16)} (${pct(d)})\n`;
       }
-    }
-  }
-
-  if (tradeIdea.returns.length > 0) {
-    out += subsection("Price Returns (post-trade tracking)");
-    out += `${"Hours".padEnd(8)} ${"Price".padEnd(16)} ${"Return".padEnd(12)} Quality\n`;
-    out += sep("─", 44) + "\n";
-    for (const r of tradeIdea.returns) {
-      const label =
-        r.hoursAfter < 24
-          ? `${r.hoursAfter}h`
-          : r.hoursAfter < 168
-            ? `${r.hoursAfter / 24}d`
-            : `${(r.hoursAfter / 168).toFixed(0)}w`;
-      out += `${label.padEnd(8)} ${price(r.price).padEnd(16)} ${pct(r.returnPct).padEnd(12)} ${num(r.qualityAtPoint)}\n`;
     }
   }
 
@@ -879,7 +856,7 @@ async function main() {
     }),
     prisma.tradeIdea.findUnique({
       where: { briefId },
-      include: { levels: { orderBy: { label: "asc" } }, returns: { orderBy: { hoursAfter: "asc" } } },
+      include: { levels: { orderBy: { label: "asc" } } },
     }),
     prisma.brief.findFirst({
       where: { asset: asset as AssetType, id: { not: briefId } },

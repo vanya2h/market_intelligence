@@ -5,7 +5,6 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
-  createSeriesMarkers,
   CrosshairMode,
   LineSeries,
   LineStyle,
@@ -159,23 +158,6 @@ export function CandleReturnChart({
       title: "",
     });
 
-    // Markers at resolved levels
-    const markers = levels
-      .filter((l) => l.outcome !== "OPEN" && l.resolvedAt != null)
-      .map((l) => ({
-        time: Math.floor(l.resolvedAt!.getTime() / 1000) as Time,
-        position: (l.outcome === "WIN" ? "aboveBar" : "belowBar") as "aboveBar" | "belowBar",
-        shape: (l.outcome === "WIN" ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-        color: l.outcome === "WIN" ? green : red,
-        text: l.label,
-        size: 1,
-      }))
-      .sort((a, b) => (a.time as number) - (b.time as number));
-
-    if (markers.length > 0) {
-      createSeriesMarkers(returnSeries, markers);
-    }
-
     // ── Sync time scales ──────────────────────────────────────────────────────
     let syncing = false;
     candleChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -210,8 +192,6 @@ export function CandleReturnChart({
     );
   }
 
-  const resolvedLevels = levels.filter((l) => l.outcome !== "OPEN");
-
   return (
     <div>
       {/* Candle pane */}
@@ -219,30 +199,6 @@ export function CandleReturnChart({
 
       {/* Return pane */}
       <div ref={returnRef} style={{ height: "80px", borderTop: "1px solid var(--border-subtle)", marginTop: "1px" }} />
-
-      {/* Resolved level badges */}
-      {resolvedLevels.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {resolvedLevels.map((l) => (
-            <span
-              key={`${l.type}-${l.label}`}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5625rem] font-medium font-mono-jb"
-              style={{
-                background: l.outcome === "WIN" ? "var(--green-dim)" : "var(--red-dim)",
-                color: l.outcome === "WIN" ? "var(--green)" : "var(--red)",
-              }}
-            >
-              {l.outcome === "WIN" ? "\u2713" : "\u2717"} {l.label}
-              {l.qualityScore != null && (
-                <span style={{ opacity: 0.7 }}>
-                  {l.qualityScore > 0 ? "+" : ""}
-                  {l.qualityScore.toFixed(1)}
-                </span>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

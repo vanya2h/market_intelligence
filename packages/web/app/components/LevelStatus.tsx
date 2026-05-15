@@ -1,18 +1,6 @@
 import type { TradeDirection, TradeIdeaLevel } from "@market-intel/api";
 import { UsdValue } from "./UsdValue";
 
-function outcomeIcon(outcome: string): string {
-  if (outcome === "WIN") return "\u2713";
-  if (outcome === "LOSS") return "\u2717";
-  return "\u2022";
-}
-
-function outcomeColor(outcome: string): string {
-  if (outcome === "WIN") return "var(--green)";
-  if (outcome === "LOSS") return "var(--red)";
-  return "var(--text-muted)";
-}
-
 function typeColor(type: string): string {
   return type === "TARGET" ? "var(--green)" : "var(--red)";
 }
@@ -109,10 +97,6 @@ export function LevelStatus({
                 </span>
               )}
 
-              {/* Outcome */}
-              <span className="ml-1 font-mono-jb font-bold" style={{ color: outcomeColor(level.outcome) }}>
-                {outcomeIcon(level.outcome)}
-              </span>
             </div>
           </div>
         );

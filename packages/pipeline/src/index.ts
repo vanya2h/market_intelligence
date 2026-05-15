@@ -19,7 +19,6 @@ export type {
   SentimentDimension,
   TradeIdea,
   TradeIdeaLevel,
-  TradeIdeaReturn,
 } from "./generated/prisma/client.js";
 
 // Prisma enums (exported as values + types)
@@ -34,7 +33,6 @@ export {
   SentimentRegime as PrismaSentimentRegime,
   StressLevel,
   TradeDirection,
-  TradeOutcome,
 } from "./generated/prisma/client.js";
 
 // Shared asset type
