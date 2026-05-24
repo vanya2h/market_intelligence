@@ -238,6 +238,7 @@ async function main() {
       compositeTarget,
       sizing,
       ml: null,
+      intradimMl: {},
     };
 
     console.log();

@@ -1,0 +1,186 @@
+{
+  "model_name": "dim_htf_eth_v1",
+  "dim": "HTF",
+  "asset": "ETH",
+  "version": "v1",
+  "model_type": "logistic_regression_l1",
+  "label": "went_up: 1=price_went_up, 0=price_went_down",
+  "feature_order": [
+    "biasComposite",
+    "biasTrend",
+    "biasMomentum",
+    "biasFlow",
+    "biasCompression",
+    "biasVpGravity",
+    "biasSthGravity",
+    "rsiDaily",
+    "rsiH4",
+    "mfiDaily",
+    "mfiH4",
+    "divergenceConfluenceStrength",
+    "atrPercentile",
+    "atrRatio",
+    "recentDisplacement",
+    "nearPriceVsPocPct",
+    "structuralPriceVsPocPct",
+    "priceVsSthPct",
+    "stalenessRsiExtreme",
+    "stalenessMfiExtreme",
+    "stalenessCvdDivergencePeak",
+    "regime",
+    "previousRegime",
+    "structure",
+    "cvdFuturesDivergence",
+    "cvdFuturesMechanism",
+    "cvdFuturesShortRegime",
+    "cvdFuturesLongRegime",
+    "cvdFuturesExtreme",
+    "cvdSpotDivergence",
+    "spotFuturesDivergence",
+    "rsiDivergence",
+    "mfiDivergence",
+    "divergenceConfluenceDir",
+    "nearVpPosition",
+    "structuralVpPosition",
+    "maCrossType",
+    "maRecentCross"
+  ],
+  "n_features": 38,
+  "trained_at": "2026-05-24T14:48:42.913024+00:00",
+  "n_samples": 296,
+  "date_range": {
+    "start": "2026-03-27T17:17:49.974000",
+    "end": "2026-05-15T00:05:54.017000"
+  },
+  "class_balance": {
+    "went_up": 192,
+    "went_down": 104
+  },
+  "non_zero_coefficients": {
+    "nearPriceVsPocPct": -2.5759711661156564,
+    "regime": -2.388721238641499,
+    "stalenessMfiExtreme": 2.2095442440627755,
+    "spotFuturesDivergence": -1.2841090126742962,
+    "divergenceConfluenceStrength": -0.9584215597014938,
+    "maCrossType": -0.6232859819167897,
+    "cvdFuturesMechanism": -0.5734761938211954,
+    "cvdFuturesLongRegime": -0.5439764723323677,
+    "stalenessRsiExtreme": -0.3059193768732164,
+    "structuralPriceVsPocPct": -0.2698482107679125,
+    "rsiDaily": 0.23785615263160337,
+    "cvdFuturesExtreme": 0.21680597117104985,
+    "rsiH4": -0.1516083501353526,
+    "biasFlow": 0.11506676183961827,
+    "cvdSpotDivergence": -0.05352492777388074,
+    "mfiDaily": -0.03892324055971994,
+    "recentDisplacement": -0.037732828033772516,
+    "priceVsSthPct": -0.035683215002950214,
+    "biasCompression": 0.03071841948084043,
+    "atrPercentile": -0.02099781832975171,
+    "mfiH4": 0.001789394495756357
+  },
+  "intercept": 0.0,
+  "regularization": {
+    "penalty": "l1",
+    "C": 1.0,
+    "solver": "liblinear",
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.6326530612244898,
+        "log_loss": 0.8500712731627027,
+        "brier": 0.2432522736269457
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.6122448979591837,
+        "log_loss": 1.0926980180815469,
+        "brier": 0.29176053177926176
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.5510204081632653,
+        "log_loss": 0.9812558864144847,
+        "brier": 0.31906885241263777
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.32653061224489793,
+        "log_loss": 2.2365674947834306,
+        "brier": 0.5645512446966712
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.7755102040816326,
+        "log_loss": 0.5715474272645957,
+        "brier": 0.19002188745709225
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.5795918367346938,
+      "log_loss": 1.1464280199413521,
+      "brier": 0.3217309579945217
+    }
+  },
+  "pearson_ic_top10": {
+    "rsiH4": -0.32159068795308055,
+    "rsiDaily": -0.2629093099142685,
+    "stalenessMfiExtreme": 0.23977163600201473,
+    "biasMomentum": 0.22525567619782252,
+    "cvdFuturesLongRegime": -0.2205330996138407,
+    "cvdFuturesExtreme": 0.21544543992690895,
+    "atrPercentile": -0.19883155917151965,
+    "regime": -0.19847396867241793,
+    "atrRatio": -0.1851737095846019,
+    "structuralVpPosition": 0.17810349930061595
+  },
+  "heuristic_baseline": {
+    "label": "heuristic_HTF",
+    "accuracy": 0.5337837837837838,
+    "log_loss": 0.8502716595960955,
+    "brier": 0.2936385751689189
+  },
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.7905405405405406,
+    "log_loss": 0.457596856371721,
+    "brier": 0.15134413644950237
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    38
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "went_down (price fell)",
+    "1": "went_up (price rose)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.7905405405405406,
+      "log_loss": 0.45759685776245274,
+      "brier": 0.15134413540363312
+    },
+    "first_5_probs": [
+      0.9531872272491455,
+      0.9524386525154114,
+      0.9555057287216187,
+      0.9555057287216187,
+      0.9576879739761353
+    ]
+  }
+}

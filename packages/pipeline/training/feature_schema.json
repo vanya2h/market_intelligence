@@ -1,0 +1,222 @@
+{
+  "_comment": "Categorical amplitude maps for per-dimension ML feature encoding. Each enum value maps to a [-1, +1] signed score where +1 = maximally bullish, -1 = maximally bearish, 0 = neutral. Used identically by training (Python) and inference (Node) to prevent encoding drift. Unknown/missing values default to 0.0.",
+
+  "categoricals": {
+    "PositioningRegime": {
+      "CROWDED_SHORT": 1.0,
+      "HEATING_UP": 0.0,
+      "POSITIONING_NEUTRAL": 0.0,
+      "CROWDED_LONG": -1.0
+    },
+    "StressLevel": {
+      "CAPITULATION": 1.0,
+      "UNWINDING": 0.5,
+      "DELEVERAGING": 0.3,
+      "STRESS_NONE": 0.0
+    },
+    "OiSignal": {
+      "DEPRESSED": 0.6,
+      "OI_NORMAL": 0.0,
+      "ELEVATED": -0.3,
+      "EXTREME": -0.8
+    },
+    "EtfRegime": {
+      "STRONG_INFLOW": 1.0,
+      "REVERSAL_TO_INFLOW": 0.6,
+      "ETF_NEUTRAL": 0.0,
+      "MIXED": -0.1,
+      "REVERSAL_TO_OUTFLOW": -0.6,
+      "STRONG_OUTFLOW": -1.0
+    },
+    "HtfRegime": {
+      "BEAR_EXTENDED": 0.8,
+      "ACCUMULATION": 0.6,
+      "RECLAIMING": 0.5,
+      "MACRO_BULLISH": 0.3,
+      "RANGING": 0.0,
+      "MACRO_BEARISH": -0.3,
+      "DISTRIBUTION": -0.6,
+      "BULL_EXTENDED": -0.8
+    },
+    "MarketStructure": {
+      "HH_HL": 0.8,
+      "HH_LL": 0.2,
+      "LH_HL": 0.0,
+      "STRUCTURE_UNKNOWN": 0.0,
+      "LH_LL": -0.8
+    },
+    "ExchangeFlowsRegime": {
+      "ACCUMULATION": 1.0,
+      "HEAVY_OUTFLOW": 0.7,
+      "EF_NEUTRAL": 0.0,
+      "HEAVY_INFLOW": -0.7,
+      "DISTRIBUTION": -1.0
+    },
+    "CvdDivergence": {
+      "BULLISH": 1.0,
+      "NONE": 0.0,
+      "BEARISH": -1.0
+    },
+    "CvdDivergenceMechanism": {
+      "EXHAUSTION": 1.0,
+      "ABSORPTION": 0.5,
+      "NONE": 0.0
+    },
+    "SpotFuturesCvdDivergence": {
+      "CONFIRMED_BUYING": 1.0,
+      "SPOT_LEADS": 0.6,
+      "NONE": 0.0,
+      "SUSPECT_BOUNCE": -0.6,
+      "CONFIRMED_SELLING": -1.0
+    },
+    "CvdRegime": {
+      "RISING": 1.0,
+      "FLAT": 0.0,
+      "DECLINING": -1.0
+    },
+    "CvdExtreme": {
+      "OVERSOLD": 1.0,
+      "NONE": 0.0,
+      "OVERBOUGHT": -1.0
+    },
+    "RsiDivergence": {
+      "BULLISH": 1.0,
+      "NONE": 0.0,
+      "BEARISH": -1.0
+    },
+    "MfiDivergence": {
+      "BULLISH": 1.0,
+      "NONE": 0.0,
+      "BEARISH": -1.0
+    },
+    "DivergenceConfluenceDirection": {
+      "BULLISH": 1.0,
+      "NONE": 0.0,
+      "BEARISH": -1.0
+    },
+    "VolumeProfilePosition": {
+      "BELOW_VA": 1.0,
+      "INSIDE_VA": 0.0,
+      "ABOVE_VA": -1.0
+    },
+    "MaCrossType": {
+      "GOLDEN": 0.5,
+      "NONE": 0.0,
+      "DEATH": -0.5
+    },
+    "FundingPressureSide": {
+      "SHORT": 0.5,
+      "null": 0.0,
+      "LONG": -0.5
+    },
+    "BalanceTrend": {
+      "FALLING": 1.0,
+      "FLAT": 0.0,
+      "RISING": -1.0
+    }
+  },
+
+  "previous_regime_decay": 0.5,
+
+  "feature_sets": {
+    "DERIVATIVES": {
+      "numeric": [
+        "fundingPct1m",
+        "liqPct1m",
+        "liqPct3m",
+        "oiChange24h",
+        "oiChange7d",
+        "oiZScore30d",
+        "fundingPressureCycles",
+        "cbPremiumPercentile1m"
+      ],
+      "categorical": [
+        { "key": "positioningState",  "enum": "PositioningRegime",   "decay": 1.0 },
+        { "key": "previousPositioning","enum": "PositioningRegime",  "decay": 0.5 },
+        { "key": "stressState",        "enum": "StressLevel",        "decay": 1.0 },
+        { "key": "previousStress",     "enum": "StressLevel",        "decay": 0.5 },
+        { "key": "oiSignal",           "enum": "OiSignal",           "decay": 1.0 },
+        { "key": "fundingPressureSide","enum": "FundingPressureSide","decay": 1.0 }
+      ]
+    },
+    "ETFS": {
+      "numeric": [
+        "todaySigma",
+        "consecutiveInflowDays",
+        "consecutiveOutflowDays",
+        "reversalRatio",
+        "priorStreakSigmas",
+        "percentile1m",
+        "dataFreshnessWeight"
+      ],
+      "categorical": [
+        { "key": "regime",         "enum": "EtfRegime", "decay": 1.0 },
+        { "key": "previousRegime", "enum": "EtfRegime", "decay": 0.5 }
+      ]
+    },
+    "HTF": {
+      "numeric": [
+        "biasComposite",
+        "biasTrend",
+        "biasMomentum",
+        "biasFlow",
+        "biasCompression",
+        "biasVpGravity",
+        "biasSthGravity",
+        "rsiDaily",
+        "rsiH4",
+        "mfiDaily",
+        "mfiH4",
+        "divergenceConfluenceStrength",
+        "atrPercentile",
+        "atrRatio",
+        "recentDisplacement",
+        "nearPriceVsPocPct",
+        "structuralPriceVsPocPct",
+        "priceVsSthPct",
+        "stalenessRsiExtreme",
+        "stalenessMfiExtreme",
+        "stalenessCvdDivergencePeak"
+      ],
+      "categorical": [
+        { "key": "regime",                      "enum": "HtfRegime",                  "decay": 1.0 },
+        { "key": "previousRegime",              "enum": "HtfRegime",                  "decay": 0.5 },
+        { "key": "structure",                   "enum": "MarketStructure",             "decay": 1.0 },
+        { "key": "cvdFuturesDivergence",        "enum": "CvdDivergence",              "decay": 1.0 },
+        { "key": "cvdFuturesMechanism",         "enum": "CvdDivergenceMechanism",     "decay": 1.0 },
+        { "key": "cvdFuturesShortRegime",       "enum": "CvdRegime",                  "decay": 1.0 },
+        { "key": "cvdFuturesLongRegime",        "enum": "CvdRegime",                  "decay": 0.7 },
+        { "key": "cvdFuturesExtreme",           "enum": "CvdExtreme",                 "decay": 1.0 },
+        { "key": "cvdSpotDivergence",           "enum": "CvdDivergence",              "decay": 1.0 },
+        { "key": "spotFuturesDivergence",       "enum": "SpotFuturesCvdDivergence",   "decay": 1.0 },
+        { "key": "rsiDivergence",               "enum": "RsiDivergence",              "decay": 1.0 },
+        { "key": "mfiDivergence",               "enum": "MfiDivergence",              "decay": 1.0 },
+        { "key": "divergenceConfluenceDir",     "enum": "DivergenceConfluenceDirection","decay": 1.0 },
+        { "key": "nearVpPosition",               "enum": "VolumeProfilePosition",      "decay": 1.0 },
+        { "key": "structuralVpPosition",         "enum": "VolumeProfilePosition",      "decay": 0.7 },
+        { "key": "maCrossType",                 "enum": "MaCrossType",                "decay": 1.0 },
+        { "key": "maRecentCross",               "enum": "MaCrossType",                "decay": 0.6 }
+      ]
+    },
+    "EXCHANGE_FLOWS": {
+      "numeric": [
+        "reserveChange1dPct",
+        "reserveChange7dPct",
+        "reserveChange30dPct",
+        "netFlow7d",
+        "netFlow30d",
+        "todaySigma",
+        "flowPercentile1m"
+      ],
+      "categorical": [
+        { "key": "regime",         "enum": "ExchangeFlowsRegime", "decay": 1.0 },
+        { "key": "previousRegime", "enum": "ExchangeFlowsRegime", "decay": 0.5 },
+        { "key": "balanceTrend",   "enum": "BalanceTrend",        "decay": 1.0 }
+      ],
+      "boolean": [
+        { "key": "isAt30dLow",  "trueValue":  1.0 },
+        { "key": "isAt30dHigh", "trueValue": -1.0 }
+      ]
+    }
+  }
+}

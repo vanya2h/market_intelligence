@@ -1,0 +1,192 @@
+{
+  "model_name": "dim_htf_btc_v1",
+  "dim": "HTF",
+  "asset": "BTC",
+  "version": "v1",
+  "model_type": "logistic_regression_l1",
+  "label": "went_up: 1=price_went_up, 0=price_went_down",
+  "feature_order": [
+    "biasComposite",
+    "biasTrend",
+    "biasMomentum",
+    "biasFlow",
+    "biasCompression",
+    "biasVpGravity",
+    "biasSthGravity",
+    "rsiDaily",
+    "rsiH4",
+    "mfiDaily",
+    "mfiH4",
+    "divergenceConfluenceStrength",
+    "atrPercentile",
+    "atrRatio",
+    "recentDisplacement",
+    "nearPriceVsPocPct",
+    "structuralPriceVsPocPct",
+    "priceVsSthPct",
+    "stalenessRsiExtreme",
+    "stalenessMfiExtreme",
+    "stalenessCvdDivergencePeak",
+    "regime",
+    "previousRegime",
+    "structure",
+    "cvdFuturesDivergence",
+    "cvdFuturesMechanism",
+    "cvdFuturesShortRegime",
+    "cvdFuturesLongRegime",
+    "cvdFuturesExtreme",
+    "cvdSpotDivergence",
+    "spotFuturesDivergence",
+    "rsiDivergence",
+    "mfiDivergence",
+    "divergenceConfluenceDir",
+    "nearVpPosition",
+    "structuralVpPosition",
+    "maCrossType",
+    "maRecentCross"
+  ],
+  "n_features": 38,
+  "trained_at": "2026-05-24T14:48:40.781563+00:00",
+  "n_samples": 302,
+  "date_range": {
+    "start": "2026-03-27T17:17:46.942000",
+    "end": "2026-05-15T00:05:10.216000"
+  },
+  "class_balance": {
+    "went_up": 199,
+    "went_down": 103
+  },
+  "non_zero_coefficients": {
+    "maRecentCross": -3.8159795699051764,
+    "biasTrend": 2.856309469563653,
+    "structure": 2.4255193433792055,
+    "biasMomentum": 2.3061334102569937,
+    "previousRegime": 1.4502898571064766,
+    "regime": -1.3997433089327098,
+    "biasCompression": 0.9377689280386655,
+    "cvdFuturesLongRegime": 0.8483122907505138,
+    "rsiDivergence": 0.6850526738415714,
+    "nearPriceVsPocPct": -0.4780882576614366,
+    "spotFuturesDivergence": -0.47358878103037116,
+    "stalenessRsiExtreme": -0.458773185993295,
+    "cvdFuturesDivergence": -0.45395338944011093,
+    "stalenessMfiExtreme": 0.42092313645251517,
+    "cvdFuturesShortRegime": 0.39473970748372356,
+    "divergenceConfluenceDir": 0.2945463341350219,
+    "priceVsSthPct": -0.2866507392439027,
+    "mfiDivergence": -0.2680978638223057,
+    "cvdFuturesMechanism": -0.22772478441687688,
+    "cvdSpotDivergence": -0.21236234229010764,
+    "recentDisplacement": -0.0664947501375961,
+    "mfiH4": 0.03008042581322023,
+    "mfiDaily": -0.027945257970095814,
+    "atrPercentile": 0.025724031550292247,
+    "structuralPriceVsPocPct": 0.02382343969364657,
+    "rsiDaily": 0.011110184515823266,
+    "rsiH4": 0.0008026520607168801
+  },
+  "intercept": 0.0,
+  "regularization": {
+    "penalty": "l1",
+    "C": 1.0,
+    "solver": "liblinear",
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.44,
+        "log_loss": 1.4851691692626832,
+        "brier": 0.42180445276379946
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.36,
+        "log_loss": 0.9433861652851653,
+        "brier": 0.35330648397761505
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.56,
+        "log_loss": 1.028249267203844,
+        "brier": 0.3227573695058584
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.34,
+        "log_loss": 2.0241692340071036,
+        "brier": 0.5666994779116403
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.5,
+        "log_loss": 0.8255412984520447,
+        "brier": 0.30226396175444636
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.44,
+      "log_loss": 1.261303026842168,
+      "brier": 0.39336634918267194
+    }
+  },
+  "pearson_ic_top10": {
+    "biasMomentum": 0.2273842044284318,
+    "rsiH4": -0.2050586071198168,
+    "biasTrend": 0.19527565593138554,
+    "spotFuturesDivergence": -0.1881834459415841,
+    "rsiDaily": -0.1620676905288385,
+    "priceVsSthPct": -0.15252562563700753,
+    "biasSthGravity": 0.14725657628918573,
+    "previousRegime": 0.12700785097134512,
+    "nearPriceVsPocPct": -0.10438320263218041,
+    "biasFlow": -0.10435134706034604
+  },
+  "heuristic_baseline": {
+    "label": "heuristic_HTF",
+    "accuracy": 0.5496688741721855,
+    "log_loss": 0.8141535183306707,
+    "brier": 0.2604984908940397
+  },
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.7317880794701986,
+    "log_loss": 0.49018237432096573,
+    "brier": 0.16233848511195836
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    38
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "went_down (price fell)",
+    "1": "went_up (price rose)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.7317880794701986,
+      "log_loss": 0.49018236768431006,
+      "brier": 0.1623384803533554
+    },
+    "first_5_probs": [
+      0.8286113739013672,
+      0.8286113739013672,
+      0.886639416217804,
+      0.8868280649185181,
+      0.4019910395145416
+    ]
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "model_name": "dim_etfs_btc_v1",
+  "dim": "ETFS",
+  "asset": "BTC",
+  "version": "v1",
+  "model_type": "logistic_regression_l1",
+  "label": "went_up: 1=price_went_up, 0=price_went_down",
+  "feature_order": [
+    "todaySigma",
+    "consecutiveInflowDays",
+    "consecutiveOutflowDays",
+    "reversalRatio",
+    "priorStreakSigmas",
+    "percentile1m",
+    "dataFreshnessWeight",
+    "regime",
+    "previousRegime"
+  ],
+  "n_features": 9,
+  "trained_at": "2026-05-24T14:48:51.064047+00:00",
+  "n_samples": 301,
+  "date_range": {
+    "start": "2026-03-27T17:17:46.942000",
+    "end": "2026-05-15T00:05:10.216000"
+  },
+  "class_balance": {
+    "went_up": 198,
+    "went_down": 103
+  },
+  "non_zero_coefficients": {
+    "previousRegime": -3.7547826288297212,
+    "priorStreakSigmas": 0.3159360295824002,
+    "regime": -0.2855294722257481,
+    "dataFreshnessWeight": 0.2769532003106565,
+    "consecutiveOutflowDays": -0.16753022443356408,
+    "consecutiveInflowDays": -0.07466726443533142,
+    "todaySigma": 0.02027644320300471,
+    "percentile1m": 0.004833050785530818,
+    "reversalRatio": 0.002373214437112273
+  },
+  "intercept": 0.0,
+  "regularization": {
+    "penalty": "l1",
+    "C": 1.0,
+    "solver": "liblinear",
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.36,
+        "log_loss": 0.8451785487260913,
+        "brier": 0.3200294675314536
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.46,
+        "log_loss": 0.7114718747062888,
+        "brier": 0.25910826439916557
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.46,
+        "log_loss": 1.476217496756405,
+        "brier": 0.4342805312740971
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.62,
+        "log_loss": 0.6510536897492399,
+        "brier": 0.23016553701225528
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.5,
+        "log_loss": 0.6687244515942414,
+        "brier": 0.24276286821015133
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.48,
+      "log_loss": 0.8705292123064532,
+      "brier": 0.29726933368542463
+    }
+  },
+  "pearson_ic_top10": {
+    "regime": -0.19863630661011186,
+    "consecutiveInflowDays": -0.1832644123506506,
+    "previousRegime": -0.14756208909455726,
+    "priorStreakSigmas": 0.1361807965948048,
+    "consecutiveOutflowDays": 0.11499870324455351,
+    "dataFreshnessWeight": 0.09210356099637931,
+    "percentile1m": -0.022624184280165667,
+    "reversalRatio": -0.0091724967263028,
+    "todaySigma": 0.0014938685527550687
+  },
+  "heuristic_baseline": {
+    "label": "heuristic_ETFS",
+    "accuracy": 0.5049833887043189,
+    "log_loss": 0.7516686679068467,
+    "brier": 0.27575848089700994
+  },
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.6445182724252492,
+    "log_loss": 0.6140260490714531,
+    "brier": 0.21594693771795526
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    9
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "went_down (price fell)",
+    "1": "went_up (price rose)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.6445182724252492,
+      "log_loss": 0.6140260487479651,
+      "brier": 0.21594694256782532
+    },
+    "first_5_probs": [
+      0.5492528676986694,
+      0.5492528676986694,
+      0.5492528676986694,
+      0.5469713807106018,
+      0.52399742603302
+    ]
+  }
+}

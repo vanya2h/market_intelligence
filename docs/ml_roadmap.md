@@ -1,15 +1,17 @@
 ## ML Roadmap
 
-How machine learning replaces and extends the heuristic confluence scoring. **L1 is shipped** — the ONNX-backed logistic regression is the default aggregator, with the heuristic kept as a shadow value and a silent fallback. L2 is the next active step. L3 and L4 are captured here for later phases.
+How machine learning replaces and extends the heuristic confluence scoring. **L1 and L2a are shipped** — L1 is the cross-dim ONNX aggregator; L2a is the per-dimension sub-model layer. L3 and L4 are captured here for later phases.
+
+For the live inference pipeline (data flow, encoding, persistence schema), see [`ml_inference.md`](./ml_inference.md).
 
 ## Context: where weights live today
 
 There are two layers of "weight management" in the pipeline. They have very different leverage.
 
 1. **Cross-dimension aggregation** — was IC-weighted, now ML-driven. [`ml-aggregator.ts`](../packages/pipeline/src/orchestrator/trade-idea/ml-aggregator.ts) is the live aggregator. [`ic-weights.ts`](../packages/pipeline/src/orchestrator/trade-idea/ic-weights.ts) still runs but as **diagnostic infrastructure only**: it surfaces per-dim IC and `recentIc` to the API (`GET /trades/ic-weights/:asset`) and the [Signals panel](../packages/web/app/routes/signals.tsx) for regime-drift monitoring between ML retrains. It also still produces the heuristic `total` that lives alongside `mlTotal` for back-compat and as a shadow comparator.
-2. **Intra-dimension scoring** — fully hand-tuned. The bulk of the brittleness lives here: dozens of magic numbers in [`confluence.ts`](../packages/pipeline/src/orchestrator/trade-idea/confluence.ts) (`DERIV_W_POSITIONING`, `ETF_W_SIGMA`, `EF_W_RESERVE`, funding decay τ, dead-zone widths, the `Math.pow(x, 0.65)` power curve, saturation thresholds, etc.). **Untouched by L1.** Replacing this is the L2 lift.
+2. **Intra-dimension scoring** — was fully hand-tuned; now **ML-driven via L2a**. [`intradim-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/intradim-ml.ts) runs 8 per-dim ONNX models (4 dims × 2 assets) answering "P(price goes up)". The heuristic formulas in [`confluence.ts`](../packages/pipeline/src/orchestrator/trade-idea/confluence.ts) are still computed on every brief as a fallback and audit shadow — they are never skipped.
 
-The L1 deployment confirmed the layer-2 hypothesis: ML on top of the existing per-dim scores beats the heuristic, but the per-dim scoring formulas themselves are where the regime-fragility lives.
+The L1 deployment confirmed the layer-2 hypothesis: ML on top of the existing per-dim scores beats the heuristic, but the per-dim scoring formulas themselves are where the regime-fragility lives. L2a replaces those formulas with learned models.
 
 ---
 
@@ -193,11 +195,11 @@ Don't optimize raw accuracy. Optimize what actually matters:
 
 ## Current status & next steps
 
-1. **L1 — shipped.** Default ML aggregator, shadow heuristic preserved, 4 features, 2 per-asset models. Retrain workflow documented at [`packages/pipeline/training/README.md`](../packages/pipeline/training/README.md).
-2. **L1 follow-ups, in order of priority:**
-   - **Investigate HTF analyzer** — strongest finding from L1 training; both assets show HTF as most anti-predictive. Likely a real bug or stale tuning, not regime noise. Fixing this benefits ML, the heuristic shadow, the LLM brief, and the dashboard simultaneously.
-   - **Calibration check** — reliability diagrams against the persisted `mlTotal` vs `qualityAtPoint`. Add Platt scaling if miscalibration shows up.
-   - **Weekly retrain cadence** — currently manual; automate once HTF investigation settles.
-3. **L2 — active next.** Build once HTF and calibration are addressed (so we're not embedding a known-broken sub-score as a feature).
+1. **L1 — shipped.** Default ML aggregator, shadow heuristic preserved, 4 features, 2 per-asset models. Retrain workflow at [`packages/pipeline/training/README.md`](../packages/pipeline/training/README.md).
+2. **L2a — shipped.** Per-dim sub-models live. 8 ONNX models (4 dims × 2 assets), amplitude-encoded features, L1-sparse logistic regression. First retrain done on ~60 days of data — OOF accuracy 44–58%, consistent with limited data; will improve as rows accumulate. Inference at [`intradim-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/intradim-ml.ts), feature encoding at [`extract-features.ts`](../packages/pipeline/src/orchestrator/trade-idea/extract-features.ts). Full pipeline description at [`ml_inference.md`](./ml_inference.md).
+3. **Near-term follow-ups:**
+   - **Retrain L1 on ML-sourced per-dim scores.** The current L1 was trained when per-dim scores came from the heuristic. Now that L2a is live, retrain L1 on trade ideas where `confluence.intradim` is populated — it will learn to aggregate ML scores rather than heuristic scores.
+   - **Calibration check** — reliability diagrams for L1 pWin vs qualityAtPoint. Add Platt scaling if miscalibrated.
+   - **Weekly retrain cadence** — currently manual; automate once data volume justifies it.
 4. **L3 — gated on data volume.** Audit `DimensionSnapshot` history and prototype the synthetic-label backfill before considering L3 directly.
 5. **L4 — only after L3 has been in production long enough to have a clear ceiling.**
