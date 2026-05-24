@@ -5,6 +5,7 @@
   "scripts": {
     "brief": "pnpm --filter @market-intel/pipeline brief",
     "build": "turbo build",
+    "bootstrap": "pnpm install && python3 -m venv packages/pipeline/training/.venv && packages/pipeline/training/.venv/bin/pip install -r packages/pipeline/training/requirements.txt",
     "db:generate": "pnpm --filter @market-intel/pipeline db:generate",
     "db:migrate": "pnpm --filter @market-intel/pipeline db:migrate",
     "derivatives": "pnpm --filter @market-intel/pipeline derivatives",

@@ -27,6 +27,8 @@
     "backfill:snapshots": "tsx src/scripts/backfill-snapshots.bin.ts",
     "verify:snapshots": "tsx src/scripts/verify-snapshots.bin.ts",
     "ml:audit": "tsx src/scripts/ml-data-audit.ts",
+    "ml:backfill-features": "tsx src/scripts/backfill-raw-features.ts",
+    "ml:train-dim": "python3 packages/pipeline/training/train_dim.py",
     "ml:compare": "tsx src/scripts/ml-vs-heuristic.ts",
     "ml:smoke": "tsx src/scripts/ml-aggregator-smoke.ts",
     "debug:sentiment": "tsx src/scripts/debug-sentiment.ts",

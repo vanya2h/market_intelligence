@@ -16,10 +16,12 @@
 import chalk from "chalk";
 import type { $Enums } from "../../generated/prisma/client.js";
 import type { HtfContext } from "../../htf/types.js";
-import { CONFLUENCE_DIMENSIONS } from "../dimensions.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../dimensions.js";
 import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
 import { computeConfluence, type Confluence, getConfluenceTotal } from "./confluence.js";
+import { extractRawFeatures } from "./extract-features.js";
+import { type IntradimMlResults, runIntradimMl } from "./intradim-ml.js";
 import { type MlResult, runMlAggregator } from "./ml-aggregator.js";
 import { saveTradeIdea } from "./persist.js";
 import { computePositionSize, type PositionSize } from "./sizing.js";
@@ -36,6 +38,8 @@ export interface TradeDecision {
   sizing: PositionSize;
   /** ML aggregator diagnostics (pWin, modelVersion), or null if model unavailable. */
   ml: MlResult | null;
+  /** Per-dimension L2a ML results. Missing key = heuristic was used for that dim. */
+  intradimMl: IntradimMlResults;
 }
 
 /**
@@ -51,7 +55,19 @@ export async function processTradeIdea(
   htfContext: HtfContext,
   outputs: DimensionOutput[],
 ): Promise<{ id: string; decision: TradeDecision }> {
-  const confluence = computeConfluence(outputs);
+  const heuristicConfluence = computeConfluence(outputs);
+  const rawFeatures = extractRawFeatures(outputs);
+
+  // L2a: per-dim ML scores replace heuristic scores where models are available
+  const intradimMl = await runIntradimMl(asset, rawFeatures);
+  const confluence: Confluence = {
+    [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES]?.score ?? heuristicConfluence[DimensionEnum.DERIVATIVES],
+    [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS]?.score ?? heuristicConfluence[DimensionEnum.ETFS],
+    [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF]?.score ?? heuristicConfluence[DimensionEnum.HTF],
+    [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS]?.score ?? heuristicConfluence[DimensionEnum.EXCHANGE_FLOWS],
+  };
+
+  // L1: cross-dim aggregator on the (ML-replaced) per-dim scores
   const ml = await runMlAggregator(asset, confluence);
   const confluenceTotal = ml?.mlTotal ?? getConfluenceTotal(confluence);
   const direction: Direction = confluenceTotal >= 0 ? "LONG" : "SHORT";
@@ -70,6 +86,8 @@ export async function processTradeIdea(
     total: confluenceTotal,
     sizing,
     ml,
+    intradimMl,
+    rawFeatures,
   });
 
   const decision: TradeDecision = {
@@ -80,13 +98,15 @@ export async function processTradeIdea(
     compositeTarget,
     sizing,
     ml,
+    intradimMl,
   };
 
   // ─── Console output ───────────────────────────────────────────────
   const confStr = CONFLUENCE_DIMENSIONS.map((dim) => {
     const s = confluence[dim];
+    const mlUsed = dim in intradimMl;
     const icon = s > 0 ? chalk.green(`+${s}`) : s < 0 ? chalk.red(`${s}`) : chalk.dim("0");
-    return `${dim}:${icon}`;
+    return `${dim}:${icon}${mlUsed ? chalk.magenta("*") : ""}`;
   }).join("  ");
 
   const targetDist = Math.abs(compositeTarget - entryPrice);
@@ -100,6 +120,7 @@ export async function processTradeIdea(
     .join(" ");
 
   const aggLabel = ml ? chalk.magenta(`ml ${ml.modelVersion} pWin=${ml.pWin}`) : chalk.yellow("equal-weight fallback");
+  const mlDimCount = Object.keys(intradimMl).length;
 
   console.log(
     `      ${chalk.green("▸")} trade idea: ${chalk.bold(direction)} ` +
@@ -111,7 +132,7 @@ export async function processTradeIdea(
   );
   console.log(`        stops: ${stops}`);
   console.log(`        targets: ${targets}`);
-  console.log(`        ${confStr}`);
+  console.log(`        ${confStr}  ${chalk.dim(`(* = L2a ML, ${mlDimCount}/4 dims)`)}`);
 
   return { id, decision };
 }

@@ -1,0 +1,147 @@
+{
+  "model_name": "dim_derivatives_eth_v1",
+  "dim": "DERIVATIVES",
+  "asset": "ETH",
+  "version": "v1",
+  "model_type": "logistic_regression_l1",
+  "label": "went_up: 1=price_went_up, 0=price_went_down",
+  "feature_order": [
+    "fundingPct1m",
+    "liqPct1m",
+    "liqPct3m",
+    "oiChange24h",
+    "oiChange7d",
+    "oiZScore30d",
+    "fundingPressureCycles",
+    "cbPremiumPercentile1m",
+    "positioningState",
+    "previousPositioning",
+    "stressState",
+    "previousStress",
+    "oiSignal",
+    "fundingPressureSide"
+  ],
+  "n_features": 14,
+  "trained_at": "2026-05-24T14:48:46.191329+00:00",
+  "n_samples": 277,
+  "date_range": {
+    "start": "2026-03-27T17:17:49.974000",
+    "end": "2026-05-15T00:05:54.017000"
+  },
+  "class_balance": {
+    "went_up": 180,
+    "went_down": 97
+  },
+  "non_zero_coefficients": {
+    "oiSignal": 1.9953293097637999,
+    "previousStress": -1.432911996213868,
+    "positioningState": -0.6943055115509577,
+    "previousPositioning": 0.4412828901770549,
+    "fundingPressureSide": 0.236986288318544,
+    "fundingPressureCycles": -0.17607522808120601,
+    "oiZScore30d": 0.047996973669269846,
+    "liqPct1m": -0.013160462695023,
+    "cbPremiumPercentile1m": 0.009194035415583465,
+    "fundingPct1m": -0.004420961521585708,
+    "liqPct3m": -0.001703239204324688
+  },
+  "intercept": 1.1932808053929949,
+  "regularization": {
+    "penalty": "l1",
+    "C": 1.0,
+    "solver": "liblinear",
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.391304347826087,
+        "log_loss": 2.32133862075345,
+        "brier": 0.49770157637669954
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.5217391304347826,
+        "log_loss": 1.251857275248376,
+        "brier": 0.3853968208420879
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.782608695652174,
+        "log_loss": 0.48548715226168765,
+        "brier": 0.15398042963779962
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.6956521739130435,
+        "log_loss": 0.5984048831097563,
+        "brier": 0.20484081511759686
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.30434782608695654,
+        "log_loss": 0.8884341404413476,
+        "brier": 0.341461137561953
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.5391304347826087,
+      "log_loss": 1.1091044143629234,
+      "brier": 0.3166761559072274
+    }
+  },
+  "pearson_ic_top10": {
+    "oiSignal": 0.26302633614269977,
+    "fundingPressureCycles": -0.22902195568454564,
+    "oiZScore30d": -0.21891856046743358,
+    "liqPct3m": -0.2072471543686194,
+    "liqPct1m": -0.202797927642099,
+    "oiChange24h": -0.1800046164121504,
+    "oiChange7d": -0.109234418580561,
+    "previousStress": -0.0945805036134291,
+    "fundingPct1m": -0.08859243079854995,
+    "fundingPressureSide": 0.057313538353089985
+  },
+  "heuristic_baseline": null,
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.6823104693140795,
+    "log_loss": 0.5963571784843887,
+    "brier": 0.20516445113555892
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    14
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "went_down (price fell)",
+    "1": "went_up (price rose)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.6823104693140795,
+      "log_loss": 0.5963571820832949,
+      "brier": 0.20516444742679596
+    },
+    "first_5_probs": [
+      0.37698352336883545,
+      0.3684936761856079,
+      0.3704991340637207,
+      0.3756692409515381,
+      0.37674370408058167
+    ]
+  }
+}

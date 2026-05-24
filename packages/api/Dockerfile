@@ -19,4 +19,4 @@ RUN pnpm --filter @market-intel/pipeline db:generate
 
 EXPOSE 3001
 
-CMD ["pnpm", "--filter", "@market-intel/api", "start"]
+CMD ["sh", "-c", "pnpm --filter @market-intel/pipeline db:migrate && pnpm --filter @market-intel/api start"]

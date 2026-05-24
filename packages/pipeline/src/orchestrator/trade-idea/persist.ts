@@ -9,6 +9,8 @@ import type { $Enums, Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../storage/db.js";
 import type { Direction, LevelResult } from "./composite-target.js";
 import type { Confluence } from "./confluence.js";
+import type { RawFeaturesByDim } from "./extract-features.js";
+import type { IntradimMlResults } from "./intradim-ml.js";
 import type { MlResult } from "./ml-aggregator.js";
 import type { PositionSize } from "./sizing.js";
 
@@ -24,6 +26,10 @@ interface SaveTradeIdeaInput {
   total: number;
   sizing: PositionSize;
   ml: MlResult | null;
+  /** Per-dimension L2a ML results (score, pUp) keyed by DimensionEnum. */
+  intradimMl: IntradimMlResults;
+  /** Raw amplitude-encoded features at trade time — training source for per-dim sub-models. */
+  rawFeatures: RawFeaturesByDim;
 }
 
 export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> {
@@ -46,6 +52,8 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
         aggregator: input.ml
           ? { source: "ml", modelVersion: input.ml.modelVersion, pWin: input.ml.pWin }
           : { source: "fallback" },
+        intradim: input.intradimMl,
+        rawFeatures: input.rawFeatures,
       } as unknown as Prisma.InputJsonValue,
       levels: {
         create: input.levels.map((l) => ({

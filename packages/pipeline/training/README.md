@@ -1,3 +1,9 @@
+# Confluence ML Training
+
+Two scripts live here: `train.py` (L1 cross-dim aggregator) and `train_dim.py` (L2a per-dim sub-models).
+
+---
+
 # L1 Confluence Aggregator — Training
 
 Logistic regression on the four per-dim confluence scores (`derivatives`, `etfs`, `htf`, `exchangeFlows`). Replaces the IC-weighted heuristic in [`confluence.ts`](../src/orchestrator/trade-idea/confluence.ts) with a learned `P(win)`, mapped back to a `-1..+1` total via `2*p - 1` so the rest of the pipeline (sizing, bias, targets) is unchanged.
@@ -80,3 +86,44 @@ Reports per-asset usable rows, class balance, and a verdict.
 - **Per-asset models, not cross-asset.** BTC and ETH have shown materially different coefficient signs in early training. Don't pool.
 - **No calibration step yet.** If reliability diagrams show miscalibration, add Platt scaling on a holdout fold before final fit.
 - **Heuristic fallback is the safety net.** Before deleting any code in `confluence.ts` (the IC weighting, the fire override), you want at least 2–3 months of side-by-side comparison.
+
+---
+
+# L2a Per-Dimension Sub-Models — Training
+
+Logistic regression (L1 penalty) per dimension per asset. Inputs are the amplitude-encoded raw features stored in `confluence.rawFeatures.<DIM>`. Label is market direction — **price went up or down** — regardless of what direction the pipeline chose.
+
+## Train
+
+Start with HTF (most anti-predictive in L1 data):
+
+```bash
+.venv/bin/python train_dim.py --dim HTF --asset BTC --verify
+.venv/bin/python train_dim.py --dim HTF --asset ETH --verify
+.venv/bin/python train_dim.py --dim DERIVATIVES --asset BTC --verify
+.venv/bin/python train_dim.py --dim DERIVATIVES --asset ETH --verify
+.venv/bin/python train_dim.py --dim ETFS --asset BTC --verify
+.venv/bin/python train_dim.py --dim ETFS --asset ETH --verify
+.venv/bin/python train_dim.py --dim EXCHANGE_FLOWS --asset BTC --verify
+.venv/bin/python train_dim.py --dim EXCHANGE_FLOWS --asset ETH --verify
+```
+
+Outputs: `../models/dim_<dim>_<asset>_v1.{onnx,meta.json}`
+
+## What gets logged
+
+- **Heuristic baseline** — per-dim score mapped via `(score+1)/2`, compared against the new model.
+- **Walk-forward CV** — OOF accuracy / Brier with L1 logistic regression.
+- **Per-feature Pearson IC** — top 10 raw features by |IC| with market direction.
+- **Non-zero coefficients** — L1 sparsifies; surviving features have real edge.
+
+## Label semantics
+
+`label=1` = price went up. For SHORT trades the label flips relative to L1: a winning SHORT (qualityAtPoint > 0) means price fell → label=0. The model answers "should we buy here?" not "did our direction choice win?"
+
+## Prerequisite: backfill
+
+```bash
+pnpm ml:backfill-features --dry-run   # check coverage
+pnpm ml:backfill-features             # patch missing rows
+```

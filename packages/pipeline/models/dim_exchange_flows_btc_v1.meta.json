@@ -1,0 +1,149 @@
+{
+  "model_name": "dim_exchange_flows_btc_v1",
+  "dim": "EXCHANGE_FLOWS",
+  "asset": "BTC",
+  "version": "v1",
+  "model_type": "logistic_regression_l1",
+  "label": "went_up: 1=price_went_up, 0=price_went_down",
+  "feature_order": [
+    "reserveChange1dPct",
+    "reserveChange7dPct",
+    "reserveChange30dPct",
+    "netFlow7d",
+    "netFlow30d",
+    "todaySigma",
+    "flowPercentile1m",
+    "regime",
+    "previousRegime",
+    "balanceTrend",
+    "isAt30dLow",
+    "isAt30dHigh"
+  ],
+  "n_features": 12,
+  "trained_at": "2026-05-24T14:48:47.858432+00:00",
+  "n_samples": 299,
+  "date_range": {
+    "start": "2026-03-27T21:59:30.838000",
+    "end": "2026-05-15T00:05:10.216000"
+  },
+  "class_balance": {
+    "went_up": 196,
+    "went_down": 103
+  },
+  "non_zero_coefficients": {
+    "todaySigma": 1.0522271715210054,
+    "isAt30dHigh": -0.8911808146131515,
+    "isAt30dLow": 0.8864234169479309,
+    "regime": 0.8131148736199042,
+    "reserveChange1dPct": -0.7842051784782964,
+    "balanceTrend": 0.7371805462782711,
+    "previousRegime": 0.36503306321047596,
+    "flowPercentile1m": -0.010721032775496804,
+    "netFlow7d": 3.318130963019062e-05,
+    "netFlow30d": -4.423760495487657e-06
+  },
+  "intercept": 0.2519953840781225,
+  "regularization": {
+    "penalty": "l1",
+    "C": 1.0,
+    "solver": "liblinear",
+    "class_weight": "balanced"
+  },
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "accuracy": 0.5102040816326531,
+        "log_loss": 1.3844235487483523,
+        "brier": 0.38890072163884043
+      },
+      {
+        "label": "fold1",
+        "accuracy": 0.5510204081632653,
+        "log_loss": 0.7111734377587239,
+        "brier": 0.25737112489127745
+      },
+      {
+        "label": "fold2",
+        "accuracy": 0.5306122448979592,
+        "log_loss": 0.7312924827890009,
+        "brier": 0.26604563974401163
+      },
+      {
+        "label": "fold3",
+        "accuracy": 0.40816326530612246,
+        "log_loss": 0.871526026780562,
+        "brier": 0.3342720730399244
+      },
+      {
+        "label": "fold4",
+        "accuracy": 0.4897959183673469,
+        "log_loss": 0.7089967456704416,
+        "brier": 0.257878091737806
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "accuracy": 0.49795918367346936,
+      "log_loss": 0.881482448349416,
+      "brier": 0.300893530210372
+    }
+  },
+  "pearson_ic_top10": {
+    "regime": 0.1980630176649344,
+    "isAt30dLow": 0.16550092174326247,
+    "flowPercentile1m": -0.15507708536328915,
+    "todaySigma": -0.13800003581462228,
+    "reserveChange1dPct": -0.10978703382203922,
+    "balanceTrend": 0.10703796439059972,
+    "netFlow30d": -0.04618042174146973,
+    "reserveChange30dPct": -0.04611067713431152,
+    "previousRegime": -0.04250980384707634,
+    "reserveChange7dPct": -0.04138071694782536
+  },
+  "heuristic_baseline": {
+    "label": "heuristic_EXCHANGE_FLOWS",
+    "accuracy": 0.5451505016722408,
+    "log_loss": 0.8718809647708576,
+    "brier": 0.2607689607023411
+  },
+  "training_metrics_in_sample": {
+    "label": "train_full",
+    "accuracy": 0.6421404682274248,
+    "log_loss": 0.615488857955022,
+    "brier": 0.21477424860228964
+  },
+  "onnx_input_name": "X",
+  "onnx_input_shape": [
+    null,
+    12
+  ],
+  "onnx_input_dtype": "float32",
+  "onnx_output_index_for_win": 1,
+  "label_mapping": {
+    "0": "went_down (price fell)",
+    "1": "went_up (price rose)"
+  },
+  "onnx_verification": {
+    "input_name": "X",
+    "output_names": [
+      "label",
+      "probabilities"
+    ],
+    "probability_output_index": 1,
+    "metrics": {
+      "label": "onnx_roundtrip",
+      "accuracy": 0.6421404682274248,
+      "log_loss": 0.6154888554548618,
+      "brier": 0.2147742360830307
+    },
+    "first_5_probs": [
+      0.7197113037109375,
+      0.7197113037109375,
+      0.6497427821159363,
+      0.6497427821159363,
+      0.6497427821159363
+    ]
+  }
+}

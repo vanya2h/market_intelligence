@@ -15,4 +15,4 @@ COPY packages/pipeline/ packages/pipeline/
 # Generate Prisma client
 RUN pnpm --filter @market-intel/pipeline db:generate
 
-CMD ["pnpm", "--filter", "@market-intel/pipeline", "schedule"]
+CMD ["sh", "-c", "pnpm --filter @market-intel/pipeline db:migrate && pnpm --filter @market-intel/pipeline schedule"]
