@@ -15,13 +15,7 @@ import type { EtfContext } from "../../etfs/types.js";
 import type { ExchangeFlowsContext } from "../../exchange_flows/types.js";
 import type { HtfContext } from "../../htf/types.js";
 import type { DerivativesContext } from "../../types.js";
-import type {
-  DerivativesOutput,
-  DimensionOutput,
-  EtfsOutput,
-  ExchangeFlowsOutput,
-  HtfOutput,
-} from "../types.js";
+import type { DerivativesOutput, DimensionOutput, EtfsOutput, ExchangeFlowsOutput, HtfOutput } from "../types.js";
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -57,12 +51,30 @@ function normStaleness(v: number | null): number {
   return Math.min(v / STALENESS_MAX_CANDLES, 1);
 }
 
+// ─── Duration normalisation ───────────────────────────────────────────────────
+
+// Hours since the current regime started, capped at 30 days → [0, 1].
+// Captures where we are in a regime's lifecycle: 0 = just started, 1 = mature (30d+).
+const MAX_DURATION_HOURS = 30 * 24; // 720h
+
+function normDurationHours(since: string | undefined, snapshotAt: Date): number {
+  if (!since) return 0;
+  const ms = snapshotAt.getTime() - new Date(since).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 0;
+  return Math.min(ms / (MAX_DURATION_HOURS * 3600 * 1000), 1);
+}
+
 // ─── Per-dimension extractors ─────────────────────────────────────────────────
 
-function extractDerivatives(ctx: DerivativesContext): Record<string, number> {
+function extractDerivatives(
+  ctx: DerivativesContext,
+  since: string | undefined,
+  snapshotAt: Date,
+): Record<string, number> {
   const s = ctx.signals;
   return {
     // Numeric
+    durationHours: normDurationHours(since, snapshotAt),
     fundingPct1m: s.fundingPct1m,
     liqPct1m: s.liqPct1m,
     liqPct3m: s.liqPct3m,
@@ -81,14 +93,15 @@ function extractDerivatives(ctx: DerivativesContext): Record<string, number> {
   };
 }
 
-function extractEtfs(ctx: EtfContext): Record<string, number> {
+function extractEtfs(ctx: EtfContext, since: string | undefined, snapshotAt: Date): Record<string, number> {
   const f = ctx.flow;
   return {
     // Numeric
+    durationHours: normDurationHours(since, snapshotAt),
     todaySigma: f.todaySigma,
     consecutiveInflowDays: f.consecutiveInflowDays,
     consecutiveOutflowDays: f.consecutiveOutflowDays,
-    reversalRatio: f.reversalRatio,
+    reversalRatio: Math.min(f.reversalRatio, 3.0),
     priorStreakSigmas: f.sigma30d > 0 ? f.priorStreakFlow / f.sigma30d : 0,
     percentile1m: f.percentile1m,
     // dataFreshness added after initial schema — older rows lack it; default to fresh (1.0)
@@ -99,7 +112,7 @@ function extractEtfs(ctx: EtfContext): Record<string, number> {
   };
 }
 
-function extractHtf(ctx: HtfContext): Record<string, number> {
+function extractHtf(ctx: HtfContext, since: string | undefined, snapshotAt: Date): Record<string, number> {
   // Several sub-objects were added after the initial schema — guard each independently.
   const bias = ctx.bias as typeof ctx.bias | undefined;
   const mfi = ctx.mfi as typeof ctx.mfi | undefined;
@@ -107,6 +120,8 @@ function extractHtf(ctx: HtfContext): Record<string, number> {
   const dc = ctx.divergenceConfluence as typeof ctx.divergenceConfluence | undefined;
   const staleness = ctx.staleness as typeof ctx.staleness | undefined;
   return {
+    // Numeric
+    durationHours: normDurationHours(since, snapshotAt),
     // Bias components (pre-computed by analyzer — kept as model priors)
     biasComposite: bias?.composite ?? 0,
     biasTrend: bias?.trend ?? 0,
@@ -152,10 +167,15 @@ function extractHtf(ctx: HtfContext): Record<string, number> {
   };
 }
 
-function extractExchangeFlows(ctx: ExchangeFlowsContext): Record<string, number> {
+function extractExchangeFlows(
+  ctx: ExchangeFlowsContext,
+  since: string | undefined,
+  snapshotAt: Date,
+): Record<string, number> {
   const m = ctx.metrics;
   return {
     // Numeric
+    durationHours: normDurationHours(since, snapshotAt),
     reserveChange1dPct: m.reserveChange1dPct,
     reserveChange7dPct: m.reserveChange7dPct,
     reserveChange30dPct: m.reserveChange30dPct,
@@ -200,17 +220,21 @@ export interface RawFeaturesByDim {
 /**
  * Extract raw features from all dimension outputs.
  * Missing dimensions produce an empty object (model inference will fall back to heuristic).
+ *
+ * @param snapshotAt - The time at which the snapshot was taken. Defaults to now for live
+ *   inference; pass the original brief/trade timestamp when backfilling historical rows so
+ *   durationHours reflects the regime age at the time of the trade, not today.
  */
-export function extractRawFeatures(outputs: DimensionOutput[]): RawFeaturesByDim {
+export function extractRawFeatures(outputs: DimensionOutput[], snapshotAt: Date = new Date()): RawFeaturesByDim {
   const deriv = outputs.find(isDerivatives);
   const etfs = outputs.find(isEtfs);
   const htf = outputs.find(isHtf);
   const ef = outputs.find(isExchangeFlows);
 
   return {
-    DERIVATIVES: deriv ? extractDerivatives(deriv.context) : {},
-    ETFS: etfs ? extractEtfs(etfs.context) : {},
-    HTF: htf ? extractHtf(htf.context) : {},
-    EXCHANGE_FLOWS: ef ? extractExchangeFlows(ef.context) : {},
+    DERIVATIVES: deriv ? extractDerivatives(deriv.context, deriv.since, snapshotAt) : {},
+    ETFS: etfs ? extractEtfs(etfs.context, etfs.since, snapshotAt) : {},
+    HTF: htf ? extractHtf(htf.context, htf.since, snapshotAt) : {},
+    EXCHANGE_FLOWS: ef ? extractExchangeFlows(ef.context, ef.since, snapshotAt) : {},
   };
 }

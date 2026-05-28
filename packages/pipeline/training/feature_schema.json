@@ -121,6 +121,7 @@
   "feature_sets": {
     "DERIVATIVES": {
       "numeric": [
+        "durationHours",
         "fundingPct1m",
         "liqPct1m",
         "liqPct3m",
@@ -141,6 +142,7 @@
     },
     "ETFS": {
       "numeric": [
+        "durationHours",
         "todaySigma",
         "consecutiveInflowDays",
         "consecutiveOutflowDays",
@@ -156,6 +158,7 @@
     },
     "HTF": {
       "numeric": [
+        "durationHours",
         "biasComposite",
         "biasTrend",
         "biasMomentum",
@@ -200,6 +203,7 @@
     },
     "EXCHANGE_FLOWS": {
       "numeric": [
+        "durationHours",
         "reserveChange1dPct",
         "reserveChange7dPct",
         "reserveChange30dPct",

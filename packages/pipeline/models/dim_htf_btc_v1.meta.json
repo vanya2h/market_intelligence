@@ -6,6 +6,7 @@
   "model_type": "logistic_regression_l1",
   "label": "went_up: 1=price_went_up, 0=price_went_down",
   "feature_order": [
+    "durationHours",
     "biasComposite",
     "biasTrend",
     "biasMomentum",
@@ -45,8 +46,8 @@
     "maCrossType",
     "maRecentCross"
   ],
-  "n_features": 38,
-  "trained_at": "2026-05-24T14:48:40.781563+00:00",
+  "n_features": 39,
+  "trained_at": "2026-05-28T02:07:14.534561+00:00",
   "n_samples": 302,
   "date_range": {
     "start": "2026-03-27T17:17:46.942000",
@@ -57,37 +58,37 @@
     "went_down": 103
   },
   "non_zero_coefficients": {
-    "maRecentCross": -3.8159795699051764,
-    "biasTrend": 2.856309469563653,
-    "structure": 2.4255193433792055,
-    "biasMomentum": 2.3061334102569937,
-    "previousRegime": 1.4502898571064766,
-    "regime": -1.3997433089327098,
-    "biasCompression": 0.9377689280386655,
-    "cvdFuturesLongRegime": 0.8483122907505138,
-    "rsiDivergence": 0.6850526738415714,
-    "nearPriceVsPocPct": -0.4780882576614366,
-    "spotFuturesDivergence": -0.47358878103037116,
-    "stalenessRsiExtreme": -0.458773185993295,
-    "cvdFuturesDivergence": -0.45395338944011093,
-    "stalenessMfiExtreme": 0.42092313645251517,
-    "cvdFuturesShortRegime": 0.39473970748372356,
-    "divergenceConfluenceDir": 0.2945463341350219,
-    "priceVsSthPct": -0.2866507392439027,
-    "mfiDivergence": -0.2680978638223057,
-    "cvdFuturesMechanism": -0.22772478441687688,
-    "cvdSpotDivergence": -0.21236234229010764,
-    "recentDisplacement": -0.0664947501375961,
-    "mfiH4": 0.03008042581322023,
-    "mfiDaily": -0.027945257970095814,
-    "atrPercentile": 0.025724031550292247,
-    "structuralPriceVsPocPct": 0.02382343969364657,
-    "rsiDaily": 0.011110184515823266,
-    "rsiH4": 0.0008026520607168801
+    "maRecentCross": -3.8160227413947685,
+    "biasTrend": 2.8561886692683256,
+    "structure": 2.4256368081611885,
+    "biasMomentum": 2.306704529730122,
+    "previousRegime": 1.4496644920804955,
+    "regime": -1.3999176995010076,
+    "biasCompression": 0.9377037540043427,
+    "cvdFuturesLongRegime": 0.8484675677580712,
+    "rsiDivergence": 0.49442823246830353,
+    "divergenceConfluenceDir": 0.4850832500237806,
+    "nearPriceVsPocPct": -0.4780675012275581,
+    "spotFuturesDivergence": -0.47358458664546865,
+    "stalenessRsiExtreme": -0.4587769374383851,
+    "cvdFuturesDivergence": -0.4538328953466262,
+    "stalenessMfiExtreme": 0.4207846258487571,
+    "cvdFuturesShortRegime": 0.39468655171808853,
+    "priceVsSthPct": -0.2866721972938791,
+    "mfiDivergence": -0.2680090217694131,
+    "cvdFuturesMechanism": -0.22767976954889357,
+    "cvdSpotDivergence": -0.2124543581343814,
+    "recentDisplacement": -0.06645382051194491,
+    "mfiH4": 0.03008680795909221,
+    "mfiDaily": -0.027944422922485383,
+    "atrPercentile": 0.02572237491812952,
+    "structuralPriceVsPocPct": 0.02384295926643355,
+    "rsiDaily": 0.011067857229785235,
+    "rsiH4": 0.0008386234521315534
   },
   "intercept": 0.0,
   "regularization": {
-    "penalty": "l1",
+    "l1_ratio": 1,
     "C": 1.0,
     "solver": "liblinear",
     "class_weight": "balanced"
@@ -98,39 +99,39 @@
       {
         "label": "fold0",
         "accuracy": 0.44,
-        "log_loss": 1.4851691692626832,
-        "brier": 0.42180445276379946
+        "log_loss": 1.4851511326361635,
+        "brier": 0.4218026954975161
       },
       {
         "label": "fold1",
         "accuracy": 0.36,
-        "log_loss": 0.9433861652851653,
-        "brier": 0.35330648397761505
+        "log_loss": 0.9433856218400559,
+        "brier": 0.3533060202466337
       },
       {
         "label": "fold2",
         "accuracy": 0.56,
-        "log_loss": 1.028249267203844,
-        "brier": 0.3227573695058584
+        "log_loss": 1.0282518357889687,
+        "brier": 0.32275769321321535
       },
       {
         "label": "fold3",
         "accuracy": 0.34,
-        "log_loss": 2.0241692340071036,
-        "brier": 0.5666994779116403
+        "log_loss": 2.0241694585680734,
+        "brier": 0.5667003467837082
       },
       {
         "label": "fold4",
         "accuracy": 0.5,
-        "log_loss": 0.8255412984520447,
-        "brier": 0.30226396175444636
+        "log_loss": 0.8255334285225984,
+        "brier": 0.30226081230928886
       }
     ],
     "oof": {
       "label": "oof",
       "accuracy": 0.44,
-      "log_loss": 1.261303026842168,
-      "brier": 0.39336634918267194
+      "log_loss": 1.261298295471172,
+      "brier": 0.39336551361007244
     }
   },
   "pearson_ic_top10": {
@@ -154,13 +155,13 @@
   "training_metrics_in_sample": {
     "label": "train_full",
     "accuracy": 0.7317880794701986,
-    "log_loss": 0.49018237432096573,
-    "brier": 0.16233848511195836
+    "log_loss": 0.49018313780919887,
+    "brier": 0.1623387188847693
   },
   "onnx_input_name": "X",
   "onnx_input_shape": [
     null,
-    38
+    39
   ],
   "onnx_input_dtype": "float32",
   "onnx_output_index_for_win": 1,
@@ -178,15 +179,15 @@
     "metrics": {
       "label": "onnx_roundtrip",
       "accuracy": 0.7317880794701986,
-      "log_loss": 0.49018236768431006,
-      "brier": 0.1623384803533554
+      "log_loss": 0.49018313993886165,
+      "brier": 0.1623387336730957
     },
     "first_5_probs": [
-      0.8286113739013672,
-      0.8286113739013672,
-      0.886639416217804,
-      0.8868280649185181,
-      0.4019910395145416
+      0.8285530805587769,
+      0.8285530805587769,
+      0.8865993618965149,
+      0.8867964744567871,
+      0.4019051194190979
     ]
   }
 }

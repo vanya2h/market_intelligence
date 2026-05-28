@@ -6,6 +6,7 @@
   "model_type": "logistic_regression_l1",
   "label": "went_up: 1=price_went_up, 0=price_went_down",
   "feature_order": [
+    "durationHours",
     "fundingPct1m",
     "liqPct1m",
     "liqPct3m",
@@ -21,8 +22,8 @@
     "oiSignal",
     "fundingPressureSide"
   ],
-  "n_features": 14,
-  "trained_at": "2026-05-24T14:48:44.550004+00:00",
+  "n_features": 15,
+  "trained_at": "2026-05-28T02:06:31.614868+00:00",
   "n_samples": 300,
   "date_range": {
     "start": "2026-03-27T17:17:46.942000",
@@ -33,20 +34,20 @@
     "went_down": 103
   },
   "non_zero_coefficients": {
-    "stressState": -1.202040855237431,
-    "oiZScore30d": -0.40022036225709934,
-    "fundingPressureSide": 0.25410589973222547,
-    "previousPositioning": 0.21077374860009196,
-    "liqPct3m": -0.06771133375326821,
-    "liqPct1m": 0.0673931457308361,
-    "oiSignal": -0.05370711620820628,
-    "fundingPressureCycles": -0.03757812827570373,
-    "fundingPct1m": 0.00903407705441366,
-    "cbPremiumPercentile1m": -0.0012050884080233957
+    "stressState": -1.2020368347158867,
+    "oiZScore30d": -0.40021599218536974,
+    "fundingPressureSide": 0.2541143558594123,
+    "previousPositioning": 0.21077095118532374,
+    "liqPct3m": -0.06771246568915781,
+    "liqPct1m": 0.06739422076445581,
+    "oiSignal": -0.053708101804548776,
+    "fundingPressureCycles": -0.037578170548212574,
+    "fundingPct1m": 0.009034147453684431,
+    "cbPremiumPercentile1m": -0.0012053056329545723
   },
   "intercept": 0.0,
   "regularization": {
-    "penalty": "l1",
+    "l1_ratio": 1,
     "C": 1.0,
     "solver": "liblinear",
     "class_weight": "balanced"
@@ -57,39 +58,39 @@
       {
         "label": "fold0",
         "accuracy": 0.32,
-        "log_loss": 1.3480571795005412,
-        "brier": 0.4828444059601793
+        "log_loss": 1.3480481127286723,
+        "brier": 0.4828414286679895
       },
       {
         "label": "fold1",
         "accuracy": 0.52,
-        "log_loss": 0.7493993402432838,
-        "brier": 0.27112411884904664
+        "log_loss": 0.7493960522954194,
+        "brier": 0.2711227782028211
       },
       {
         "label": "fold2",
         "accuracy": 0.62,
-        "log_loss": 0.6536829964401495,
-        "brier": 0.2305560147929279
+        "log_loss": 0.6536849422468248,
+        "brier": 0.23055689058205042
       },
       {
         "label": "fold3",
         "accuracy": 0.12,
-        "log_loss": 1.1872904858136777,
-        "brier": 0.46783208599214626
+        "log_loss": 1.1872847761081688,
+        "brier": 0.4678298086502393
       },
       {
         "label": "fold4",
         "accuracy": 0.6,
-        "log_loss": 0.652798394688327,
-        "brier": 0.23028953499542154
+        "log_loss": 0.6527932512734183,
+        "brier": 0.23028711135480998
       }
     ],
     "oof": {
       "label": "oof",
       "accuracy": 0.436,
-      "log_loss": 0.9182456793371958,
-      "brier": 0.33652923211794433
+      "log_loss": 0.9182414269305007,
+      "brier": 0.33652760349158206
     }
   },
   "pearson_ic_top10": {
@@ -113,13 +114,13 @@
   "training_metrics_in_sample": {
     "label": "train_full",
     "accuracy": 0.61,
-    "log_loss": 0.6501812848945646,
-    "brier": 0.22938286891102208
+    "log_loss": 0.6501810661851387,
+    "brier": 0.22938277028041465
   },
   "onnx_input_name": "X",
   "onnx_input_shape": [
     null,
-    14
+    15
   ],
   "onnx_input_dtype": "float32",
   "onnx_output_index_for_win": 1,
@@ -137,15 +138,15 @@
     "metrics": {
       "label": "onnx_roundtrip",
       "accuracy": 0.61,
-      "log_loss": 0.6501812614641407,
-      "brier": 0.22938288748264313
+      "log_loss": 0.6501810542441714,
+      "brier": 0.22938275337219238
     },
     "first_5_probs": [
-      0.6174166202545166,
-      0.6075406074523926,
-      0.5907265543937683,
-      0.5640767812728882,
-      0.4070664942264557
+      0.6174168586730957,
+      0.6075412034988403,
+      0.5907271504402161,
+      0.5640780329704285,
+      0.4070674777030945
     ]
   }
 }

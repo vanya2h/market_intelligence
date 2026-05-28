@@ -8,10 +8,11 @@
  */
 
 import chalk from "chalk";
-import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
-import { getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
-import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { type Confluence, getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
+import { extractRawFeatures } from "../orchestrator/trade-idea/extract-features.js";
+import { runIntradimMl } from "../orchestrator/trade-idea/intradim-ml.js";
 import type {
   DerivativesOutput,
   EtfsOutput,
@@ -183,7 +184,13 @@ async function main() {
   console.log("  CONFLUENCE  (positive = bullish · negative = bearish)");
   console.log("═══════════════════════════════════════════════════════════════\n");
 
-  const conf = computeConfluence(outputs);
+  const mlResults = await runIntradimMl(asset, extractRawFeatures(outputs));
+  const conf: Confluence = {
+    [DimensionEnum.DERIVATIVES]: mlResults[DimensionEnum.DERIVATIVES].score,
+    [DimensionEnum.ETFS]: mlResults[DimensionEnum.ETFS].score,
+    [DimensionEnum.HTF]: mlResults[DimensionEnum.HTF].score,
+    [DimensionEnum.EXCHANGE_FLOWS]: mlResults[DimensionEnum.EXCHANGE_FLOWS].score,
+  };
   const total = getConfluenceTotal(conf);
   const totalColor = total >= 0 ? chalk.green : chalk.red;
 

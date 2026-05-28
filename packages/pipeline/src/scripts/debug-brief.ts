@@ -33,7 +33,7 @@ import type { DeltaSummary } from "../orchestrator/delta.js";
 import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import { computeConfluence, getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import {
   type DerivativesOutput,
   type DimensionOutput,
@@ -562,28 +562,6 @@ function buildRegimes(brief: {
   return out;
 }
 
-function buildConfluence(storedOutputs: DimensionOutput[]): string {
-  let out = section("CONFLUENCE SCORING (reconstructed from stored contexts)");
-
-  if (storedOutputs.length === 0) {
-    return out + "Cannot reconstruct — no dimension data in brief\n";
-  }
-
-  const conf = computeConfluence(storedOutputs);
-  const total = getConfluenceTotal(conf);
-  const fmtScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
-
-  out += `${"Dimension".padEnd(16)} Score\n`;
-  out += sep("─", 26) + "\n";
-  for (const dim of CONFLUENCE_DIMENSIONS) {
-    out += `${dim.padEnd(16)} ${fmtScore(conf[dim])}\n`;
-  }
-  out += sep("─", 26) + "\n";
-  out += `${"total (fallback)".padEnd(16)} ${fmtScore(total)}\n`;
-
-  return out;
-}
-
 function buildTradeIdea(tradeIdea: {
   id: string;
   direction: string;
@@ -894,7 +872,6 @@ async function main() {
   if (brief.sentiment) write(outDir, "05-dim-sentiment.txt", buildDimSentiment(brief.sentiment));
   if (brief.exchangeFlows) write(outDir, "06-dim-exchange-flows.txt", buildDimExchangeFlows(brief.exchangeFlows));
   write(outDir, "07-regimes.txt", buildRegimes(brief));
-  write(outDir, "08-confluence.txt", buildConfluence(storedOutputs));
   if (tradeIdea) write(outDir, "09-trade-idea.txt", buildTradeIdea(tradeIdea));
   if (brief.richBrief)
     write(outDir, "10-rich-brief.txt", buildRichBrief(brief.richBrief as { blocks: Array<Record<string, unknown>> }));

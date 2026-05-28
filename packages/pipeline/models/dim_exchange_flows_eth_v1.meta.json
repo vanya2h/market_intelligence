@@ -6,6 +6,7 @@
   "model_type": "logistic_regression_l1",
   "label": "went_up: 1=price_went_up, 0=price_went_down",
   "feature_order": [
+    "durationHours",
     "reserveChange1dPct",
     "reserveChange7dPct",
     "reserveChange30dPct",
@@ -19,8 +20,8 @@
     "isAt30dLow",
     "isAt30dHigh"
   ],
-  "n_features": 12,
-  "trained_at": "2026-05-24T14:48:49.465664+00:00",
+  "n_features": 13,
+  "trained_at": "2026-05-28T02:06:37.452356+00:00",
   "n_samples": 277,
   "date_range": {
     "start": "2026-03-27T21:33:38.376000",
@@ -31,18 +32,18 @@
     "went_down": 96
   },
   "non_zero_coefficients": {
-    "previousRegime": -2.452935490981375,
-    "todaySigma": 0.5852294314349652,
-    "balanceTrend": -0.34040312661530897,
-    "isAt30dLow": 0.10065222768232314,
-    "regime": -0.04413091358034625,
-    "flowPercentile1m": 0.006479259103338876,
-    "netFlow7d": -5.928208199968763e-06,
-    "netFlow30d": 1.1560477165123623e-06
+    "previousRegime": -2.452977886536301,
+    "todaySigma": 0.5852195209467492,
+    "balanceTrend": -0.3404103078062655,
+    "isAt30dLow": 0.10079451956076903,
+    "regime": -0.04422613866819333,
+    "flowPercentile1m": 0.006481100242463289,
+    "netFlow7d": -5.928375410362724e-06,
+    "netFlow30d": 1.1560720788249645e-06
   },
-  "intercept": 0.018860364362523627,
+  "intercept": 0.018730031256231017,
   "regularization": {
-    "penalty": "l1",
+    "l1_ratio": 1,
     "C": 1.0,
     "solver": "liblinear",
     "class_weight": "balanced"
@@ -53,39 +54,39 @@
       {
         "label": "fold0",
         "accuracy": 0.4782608695652174,
-        "log_loss": 1.2114647935283327,
-        "brier": 0.34010588833137934
+        "log_loss": 1.2145980066305189,
+        "brier": 0.3400047276885943
       },
       {
         "label": "fold1",
         "accuracy": 0.6086956521739131,
-        "log_loss": 0.6095557277074232,
-        "brier": 0.2124305364709941
+        "log_loss": 0.6095551211160501,
+        "brier": 0.21243045837953972
       },
       {
         "label": "fold2",
         "accuracy": 0.34782608695652173,
-        "log_loss": 1.1201230852389814,
-        "brier": 0.4026811672897246
+        "log_loss": 1.1201128919677508,
+        "brier": 0.4026790896032245
       },
       {
         "label": "fold3",
         "accuracy": 0.5652173913043478,
-        "log_loss": 0.9456934815660005,
-        "brier": 0.31710059696918674
+        "log_loss": 0.9454491946486503,
+        "brier": 0.3169874192951682
       },
       {
         "label": "fold4",
         "accuracy": 0.5,
-        "log_loss": 1.0088570805187806,
-        "brier": 0.3617857374715704
+        "log_loss": 1.0084934460724881,
+        "brier": 0.36169712552196
       }
     ],
     "oof": {
       "label": "oof",
       "accuracy": 0.5,
-      "log_loss": 0.9791388337119036,
-      "brier": 0.32682078530657105
+      "log_loss": 0.9796417320870919,
+      "brier": 0.3267597640976975
     }
   },
   "pearson_ic_top10": {
@@ -109,13 +110,13 @@
   "training_metrics_in_sample": {
     "label": "train_full",
     "accuracy": 0.6462093862815884,
-    "log_loss": 0.5924940894509484,
-    "brier": 0.2053195782357666
+    "log_loss": 0.5924950571667142,
+    "brier": 0.2053199037022621
   },
   "onnx_input_name": "X",
   "onnx_input_shape": [
     null,
-    12
+    13
   ],
   "onnx_input_dtype": "float32",
   "onnx_output_index_for_win": 1,
@@ -133,15 +134,15 @@
     "metrics": {
       "label": "onnx_roundtrip",
       "accuracy": 0.6462093862815884,
-      "log_loss": 0.5924940899309925,
-      "brier": 0.2053195983171463
+      "log_loss": 0.5924950578739986,
+      "brier": 0.20531989634037018
     },
     "first_5_probs": [
-      0.6652187705039978,
-      0.6652187705039978,
-      0.6652187705039978,
-      0.6542842984199524,
-      0.6542842984199524
+      0.6652271151542664,
+      0.6652271151542664,
+      0.6652271151542664,
+      0.6542922258377075,
+      0.6542922258377075
     ]
   }
 }
