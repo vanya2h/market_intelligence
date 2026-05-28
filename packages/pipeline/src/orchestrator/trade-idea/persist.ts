@@ -8,11 +8,8 @@
 import type { $Enums, Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../storage/db.js";
 import type { Direction, LevelResult } from "./composite-target.js";
-import type { Confluence } from "./confluence.js";
 import type { RawFeaturesByDim } from "./extract-features.js";
-import type { IntradimMlResults } from "./intradim-ml.js";
-import type { MlResult } from "./ml-aggregator.js";
-import type { ModelStats } from "./snapshot-ml.js";
+import type { MlResult, ModelStats } from "./snapshot-ml.js";
 import type { PositionSize } from "./sizing.js";
 
 interface SaveTradeIdeaInput {
@@ -22,16 +19,13 @@ interface SaveTradeIdeaInput {
   entryPrice: number;
   compositeTarget: number;
   levels: LevelResult[];
-  confluence: Confluence;
-  /** ML total or equal-weight fallback — stored in the JSON blob alongside per-dim scores. */
+  /** Snapshot ML total, or 0 if model unavailable. */
   total: number;
   sizing: PositionSize;
   ml: MlResult | null;
   /** CV stats from the snapshot model meta.json — null when fallback path was used. */
   modelStats: ModelStats | null;
-  /** Per-dimension L2a ML results (score, modelVersion) keyed by DimensionEnum. */
-  intradimMl: IntradimMlResults;
-  /** Raw amplitude-encoded features at trade time — training source for per-dim sub-models. */
+  /** Raw amplitude-encoded features at trade time — training source for models. */
   rawFeatures: RawFeaturesByDim;
 }
 
@@ -45,7 +39,6 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
       compositeTarget: input.compositeTarget,
       positionSizePct: input.sizing.positionSizePct,
       confluence: {
-        ...input.confluence,
         total: input.total,
         sizing: {
           positionSizePct: input.sizing.positionSizePct,
@@ -55,7 +48,6 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
         aggregator: input.ml
           ? { source: "ml", modelVersion: input.ml.modelVersion, stats: input.modelStats ?? undefined }
           : { source: "fallback" },
-        intradim: input.intradimMl,
         rawFeatures: input.rawFeatures,
       } as unknown as Prisma.InputJsonValue,
       levels: {

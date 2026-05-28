@@ -9,7 +9,7 @@ export function MobileBriefSummary({ brief, tradeIdea }: { brief: Brief; tradeId
       className="flex flex-col gap-4 p-3 md:hidden"
       style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-card)" }}
     >
-      {tradeIdea && tradeIdea.confluence && (
+      {tradeIdea && (
         <div className="flex items-center gap-4">
           <OpportunityGauge tradeIdea={tradeIdea} />
         </div>

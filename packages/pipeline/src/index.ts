@@ -86,9 +86,8 @@ export type {
 // Dimension enum + ordered array
 export { CONFLUENCE_DIMENSIONS, DimensionEnum } from "./orchestrator/dimensions.js";
 
-// Confluence type + utilities
-export type { Confluence } from "./orchestrator/trade-idea/confluence.js";
-export { getConfluenceTotal, parseStoredConfluence } from "./orchestrator/trade-idea/confluence.js";
+// Confluence JSON parsing
+export { parseStoredConfluence } from "./orchestrator/trade-idea/confluence.js";
 
 // Orchestrator
 export type {

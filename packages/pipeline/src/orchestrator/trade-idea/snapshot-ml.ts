@@ -57,6 +57,12 @@ export interface SnapshotMlResult {
   stats: ModelStats | null;
 }
 
+/** Minimal ML result stored alongside a trade idea. */
+export interface MlResult {
+  mlTotal: number;
+  modelVersion: string;
+}
+
 // ─── Model cache (loaded once per process) ────────────────────────────────────
 
 const MODEL_CACHE = new Map<string, LoadedSnapshotModel | null>();

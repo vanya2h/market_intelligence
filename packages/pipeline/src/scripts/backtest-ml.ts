@@ -1,11 +1,9 @@
 /**
- * ML Backtest — re-infers per-dim + L1 scores from stored rawFeatures, then
- * measures the direction call against actual forward price move.
+ * ML Backtest — re-runs the snapshot model on stored rawFeatures and measures
+ * direction accuracy against actual forward price returns.
  *
- * For each TradeIdea with rawFeatures, the current ONNX models are re-run and
- * the direction (sign of re-inferred mlTotal) is compared to the raw price
- * return at a configurable horizon. Answers: "If we had deployed the current
- * model on every historical snapshot, what would the strategy return have been?"
+ * Answers: "If we deployed the current snapshot model on every historical
+ * snapshot, what would the strategy return have been?"
  *
  * Usage:
  *   tsx src/scripts/backtest-ml.ts                     # BTC, 168h horizon
@@ -16,11 +14,8 @@
 
 import chalk from "chalk";
 import { Prisma } from "../generated/prisma/client.js";
-import { DimensionEnum } from "../orchestrator/dimensions.js";
-import { type Confluence, getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import type { RawFeaturesByDim } from "../orchestrator/trade-idea/extract-features.js";
-import { runIntradimMl } from "../orchestrator/trade-idea/intradim-ml.js";
-import { runMlAggregator } from "../orchestrator/trade-idea/ml-aggregator.js";
+import { runSnapshotMl } from "../orchestrator/trade-idea/snapshot-ml.js";
 import { prisma } from "../storage/db.js";
 import { parseAsset } from "./utils.js";
 import "../env.js";
@@ -56,16 +51,11 @@ interface ReturnRow {
 interface BacktestRow {
   date: Date;
   mlTotal: number;
-  heuristicTotal: number | null;
   returnPct: number;
   hoursAfter: number;
-  // Binary 1x strategy return (direction only, no sizing)
   strategyReturn: number;
   win: boolean;
-  // Conviction-weighted return: mlTotal * returnPct
-  // Positive = model and market agreed and were sized accordingly
   sizedReturn: number;
-  heuristicSizedReturn: number | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -185,39 +175,25 @@ async function main() {
 
     let mlTotal: number;
     try {
-      const intradim = await runIntradimMl(asset, idea.rawFeatures);
-      const confluence: Confluence = {
-        [DimensionEnum.DERIVATIVES]: intradim[DimensionEnum.DERIVATIVES].score,
-        [DimensionEnum.ETFS]: intradim[DimensionEnum.ETFS].score,
-        [DimensionEnum.HTF]: intradim[DimensionEnum.HTF].score,
-        [DimensionEnum.EXCHANGE_FLOWS]: intradim[DimensionEnum.EXCHANGE_FLOWS].score,
-      };
-      const ml = await runMlAggregator(asset, confluence);
-      mlTotal = ml?.mlTotal ?? getConfluenceTotal(confluence);
+      const result = await runSnapshotMl(asset, idea.rawFeatures);
+      if (!result) { skipped++; continue; }
+      mlTotal = result.score;
     } catch {
       skipped++;
       continue;
     }
 
-    // heuristicTotal is the IC-weighted score stored at the time of the brief
-    const { total: heuristicTotal } = parseStoredConfluence(idea.confluence);
-
-    // Binary 1x: direction only
     const strategyReturn = mlTotal >= 0 ? ret.returnPct : -ret.returnPct;
-    // Conviction-weighted: model score × actual return (positive = sized correctly)
     const sizedReturn = mlTotal * ret.returnPct;
-    const heuristicSizedReturn = heuristicTotal != null ? heuristicTotal * ret.returnPct : null;
 
     results.push({
       date: idea.createdAt,
       mlTotal,
-      heuristicTotal,
       returnPct: ret.returnPct,
       hoursAfter: Number(ret.hoursAfter),
       strategyReturn,
       win: strategyReturn > 0,
       sizedReturn,
-      heuristicSizedReturn,
     });
   }
 
@@ -239,14 +215,14 @@ async function main() {
   // ─── Trade Log ──────────────────────────────────────────────────────────────
 
   console.log(chalk.bold("═══ TRADE LOG ════════════════════════════════════════════════════════════\n"));
-  console.log(chalk.dim(`  ${"Date".padEnd(12)} Dir    mlTotal  Heuristic  ±@${horizon}h   Sized ret`));
-  console.log(chalk.dim(`  ${"─".repeat(70)}`));
+  console.log(chalk.dim(`  ${"Date".padEnd(12)} Dir    Score    ±@${horizon}h   Sized ret`));
+  console.log(chalk.dim(`  ${"─".repeat(60)}`));
 
   for (const r of filtered) {
     const date = r.date.toISOString().slice(0, 10);
     const dir = r.mlTotal >= 0 ? chalk.green("LONG ") : chalk.red("SHORT");
     console.log(
-      `  ${date}  ${dir}  ${colorScore(r.mlTotal)}   ${r.heuristicTotal != null ? colorScore(r.heuristicTotal) : chalk.dim(" —     ")}   ${colorPct(r.returnPct)}   ${colorPct(r.sizedReturn)}`,
+      `  ${date}  ${dir}  ${colorScore(r.mlTotal)}   ${colorPct(r.returnPct)}   ${colorPct(r.sizedReturn)}`,
     );
   }
 
@@ -256,43 +232,16 @@ async function main() {
 
   const sign = (v: number) => (v >= 0 ? "+" : "");
 
-  // Primary metric: conviction-weighted return (sized by |mlTotal|)
   const mlSized = filtered.map((r) => r.sizedReturn);
   const { mean: mlMean, sharpe: mlSharpe } = computeStats(mlSized);
   const mlCum = mlSized.reduce((a, b) => a + b, 0);
-
-  // Secondary: binary win rate (direction only, unweighted)
   const mlWins = filtered.filter((r) => r.win).length;
   const mlWinRate = mlWins / filtered.length;
 
-  const heurRows = filtered.filter(
-    (r): r is BacktestRow & { heuristicTotal: number; heuristicSizedReturn: number } =>
-      r.heuristicTotal != null && r.heuristicSizedReturn != null,
-  );
-
-  if (heurRows.length > 0) {
-    const heurSized = heurRows.map((r) => r.heuristicSizedReturn);
-    const heurBinary = heurRows.map((r) => (r.heuristicTotal >= 0 ? r.returnPct : -r.returnPct));
-    const heurWins = heurBinary.filter((v) => v > 0).length;
-    const heurWinRate = heurWins / heurRows.length;
-    const { mean: heurMean, sharpe: heurSharpe } = computeStats(heurSized);
-    const winDelta = (mlWinRate - heurWinRate) * 100;
-    const winDeltaStr =
-      winDelta >= 0 ? chalk.green(`+${winDelta.toFixed(1)}pp`) : chalk.red(`${winDelta.toFixed(1)}pp`);
-
-    console.log(
-      `  Avg sized ret  ML: ${chalk.bold(sign(mlMean) + mlMean.toFixed(3) + "%")}   Heuristic: ${sign(heurMean) + heurMean.toFixed(3)}%`,
-    );
-    console.log(`  Sharpe (sized) ML: ${chalk.bold(mlSharpe.toFixed(2))}   Heuristic: ${heurSharpe.toFixed(2)}`);
-    console.log(
-      `  Win rate (1x)  ML: ${chalk.bold((mlWinRate * 100).toFixed(1) + "%")}   Heuristic: ${(heurWinRate * 100).toFixed(1)}%   Δ: ${winDeltaStr}`,
-    );
-  } else {
-    console.log(`  Avg sized ret  ML: ${chalk.bold(sign(mlMean) + mlMean.toFixed(3) + "%")}`);
-    console.log(`  Sharpe (sized) ML: ${chalk.bold(mlSharpe.toFixed(2))}`);
-    console.log(`  Win rate (1x)  ML: ${chalk.bold((mlWinRate * 100).toFixed(1) + "%")}`);
-  }
-  console.log(`  Cumulative     ML: ${chalk.bold(`${mlCum >= 0 ? "+" : ""}${mlCum.toFixed(2)}%`)}`);
+  console.log(`  Avg sized ret : ${chalk.bold(sign(mlMean) + mlMean.toFixed(3) + "%")}`);
+  console.log(`  Sharpe (sized): ${chalk.bold(mlSharpe.toFixed(2))}`);
+  console.log(`  Win rate (1x) : ${chalk.bold((mlWinRate * 100).toFixed(1) + "%")}`);
+  console.log(`  Cumulative    : ${chalk.bold(`${mlCum >= 0 ? "+" : ""}${mlCum.toFixed(2)}%`)}`);
 
   // Conviction buckets — sized return per bucket shows whether high conviction adds value
   const BUCKETS = [

@@ -1,6 +1,5 @@
-import type { AggregatorInfo, OhlcvCandle, TradeIdea } from "@market-intel/api";
+import type { OhlcvCandle, TradeIdea } from "@market-intel/api";
 import { CandleReturnChart } from "./CandleReturnChart";
-import { ConfluenceBreakdown } from "./ConfluenceBadges";
 import { LevelStatus } from "./LevelStatus";
 import { SectionBlock } from "./SectionBlock";
 import { UsdValue } from "./UsdValue";
@@ -26,41 +25,18 @@ function sizeColor(pct: number): string {
   return "var(--text-muted)";
 }
 
-function AggregatorBadge({ aggregator }: { aggregator: AggregatorInfo | undefined }) {
-  const isMl = aggregator?.source === "ml";
-  const color = isMl ? "var(--amber)" : "var(--text-muted)";
-  const versionLabel = isMl && aggregator?.modelVersion ? ` ${aggregator.modelVersion}` : "";
-  const title = isMl
-    ? "Total is a learned trend strength score in [-1, +1] from the ML regression model."
-    : aggregator
-      ? "Total is the IC-weighted average of the four per-dim scores (heuristic fallback)."
-      : "Legacy record — predates the ML aggregator, so the total is the IC-weighted heuristic.";
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5rem] font-mono-jb font-medium uppercase tracking-wider"
-      style={{
-        color,
-        background: "var(--bg-hover)",
-        border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
-      }}
-      title={title}
-    >
-      <span>{isMl ? `ML${versionLabel}` : "Heuristic"}</span>
-    </span>
-  );
-}
-
 export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: TradeIdea; candles?: OhlcvCandle[] }) {
   const dir = directionStyle(tradeIdea.direction);
   const age = formatAge(tradeIdea.createdAt);
-  const targetDistPct = ((tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
+  const targetDistPct =
+    ((tradeIdea.compositeTarget - tradeIdea.entryPrice) / tradeIdea.entryPrice) * 100;
   const sizePct = tradeIdea.positionSizePct;
   const sizingInfo = tradeIdea.sizing;
 
   return (
     <SectionBlock
       title="Trade Idea"
-      tooltip="Directional trade idea — always taken, sized proportionally to conviction × volatility. 4 dimensions (HTF, Derivatives, ETFs, Exchange Flows) each score -100 to +100."
+      tooltip="Directional trade idea sized proportionally to model conviction × volatility. Direction and size are driven by the 7-day snapshot ML forecast."
     >
       {/* Header: direction + prices */}
       <div
@@ -143,27 +119,6 @@ export function TradeIdeaSection({ tradeIdea, candles = [] }: { tradeIdea: Trade
           )}
         </div>
       </div>
-
-      {/* Confluence */}
-      {tradeIdea.confluence && (
-        <div className="mb-4">
-          <div
-            className="rounded-md p-3"
-            style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)" }}
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span
-                className="text-[0.5625rem] font-medium uppercase tracking-widest"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Confluence Scoring
-              </span>
-              <AggregatorBadge aggregator={tradeIdea.aggregator ?? undefined} />
-            </div>
-            <ConfluenceBreakdown confluence={tradeIdea.confluence} total={tradeIdea.confluenceTotal ?? 0} />
-          </div>
-        </div>
-      )}
 
       {/* Levels + chart */}
       <div className="grid gap-4 md:grid-cols-[13.75rem_1fr]">

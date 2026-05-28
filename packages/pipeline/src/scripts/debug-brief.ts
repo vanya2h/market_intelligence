@@ -30,10 +30,9 @@ import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { parseAssetType } from "../models.js";
 import type { DeltaSummary } from "../orchestrator/delta.js";
-import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
 import type { RunArtifacts } from "../orchestrator/notify-run.js";
 import { buildPrompt, buildSystemPrompt } from "../orchestrator/synthesizer.js";
-import { getConfluenceTotal, parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { parseStoredConfluence } from "../orchestrator/trade-idea/confluence.js";
 import {
   type DerivativesOutput,
   type DimensionOutput,
@@ -592,13 +591,10 @@ function buildTradeIdea(tradeIdea: {
 
   const rawConf = tradeIdea.confluence as (Record<string, unknown> & { bias?: Record<string, unknown> }) | null;
   if (rawConf) {
-    const { confluence: parsedConf, total: storedTotal } = parseStoredConfluence(rawConf);
+    const { total: storedTotal } = parseStoredConfluence(rawConf);
     out += subsection("Stored Confluence");
     const fmtPctScore = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
-    for (const dim of CONFLUENCE_DIMENSIONS) {
-      out += kv(dim, fmtPctScore(parsedConf[dim]));
-    }
-    out += kv("Total", fmtPctScore(storedTotal ?? getConfluenceTotal(parsedConf)));
+    if (storedTotal != null) out += kv("Total", fmtPctScore(storedTotal));
     const conf = rawConf;
 
     if (conf.bias) {

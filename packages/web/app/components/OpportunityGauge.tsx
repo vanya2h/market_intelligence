@@ -1,17 +1,5 @@
-import type { Confluence, TradeIdea } from "@market-intel/api";
-import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "@market-intel/pipeline/shared";
-import { InfoCircledIcon } from "@radix-ui/react-icons";
-import { DIMENSION_LABELS } from "../lib/dimensions";
+import type { TradeIdea } from "@market-intel/api";
 import { Tooltip } from "./Tooltip";
-
-/** Trend strength threshold for "strong" color on the Total row (0.5 = 50/100). */
-const CONVICTION_THRESHOLD = 0.5;
-
-/** Format a -1..+1 score as a signed integer percentage. */
-function pctLabel(score: number): string {
-  const v = Math.round(score * 100);
-  return v >= 0 ? `+${v}` : `${v}`;
-}
 
 /**
  * Bipolar score color: green for buy, red for sell, muted near zero.
@@ -44,15 +32,11 @@ function modelBadge(aggregator: TradeIdea["aggregator"]): { label: string; title
 }
 
 export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
-  const conf = tradeIdea.confluence;
-  if (!conf) return null;
-
   const score = Math.round((tradeIdea.confluenceTotal ?? 0) * 100);
   const color = gaugeColor(score);
   const prefix = score > 0 ? "+" : "";
   const taken = !tradeIdea.skipped;
   const badge = modelBadge(tradeIdea.aggregator);
-  // Derive display direction from score sign — stored direction may be from an older model.
   const displayDirection = score >= 0 ? "LONG" : "SHORT";
 
   return (
@@ -168,68 +152,3 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
   );
 }
 
-function dimScoreColor(score: number): string {
-  if (score >= 0.2) return "var(--green)";
-  if (score <= -0.2) return "var(--red)";
-  return "var(--text-muted)";
-}
-
-const CONFLUENCE_TOOLTIPS: Record<DimensionEnum, string> = {
-  [DimensionEnum.HTF]:
-    "HTF structure: trend regime (bull/bear extended), CVD momentum, RSI momentum, volume profile position, and MA alignment.",
-  [DimensionEnum.DERIVATIVES]:
-    "Derivatives positioning: trend-confirming OI participation, funding direction, and stress/capitulation events.",
-  [DimensionEnum.ETFS]:
-    "ETF institutional flows: sustained inflow/outflow regime, streak momentum, and flow trend direction.",
-  [DimensionEnum.EXCHANGE_FLOWS]:
-    "Exchange flows: accumulation vs distribution regime and 7d/30d reserve trend direction.",
-};
-
-/** Per-dimension confluence breakdown — rows matching the Overview section style */
-export function ConfluenceRows({ confluence, total }: { confluence: Confluence; total: number }) {
-  return (
-    <div className="space-y-1">
-      {CONFLUENCE_DIMENSIONS.map((dim) => {
-        const score = confluence[dim] ?? 0;
-        const label = DIMENSION_LABELS[dim];
-        const tooltip = CONFLUENCE_TOOLTIPS[dim];
-        const color = dimScoreColor(score);
-
-        return (
-          <div
-            key={dim}
-            className="flex items-center justify-between py-1.5"
-            style={{ borderBottom: "1px solid var(--border-subtle)" }}
-          >
-            <Tooltip content={tooltip} side="right">
-              <span
-                className="inline-flex cursor-default items-center gap-1 text-xs"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {label}
-                <InfoCircledIcon />
-              </span>
-            </Tooltip>
-            <span className="font-mono-jb text-xs font-medium tabular-nums" style={{ color }}>
-              {pctLabel(score)}
-            </span>
-          </div>
-        );
-      })}
-      {/* Total — read from the persisted (normalized) total field */}
-      <div className="flex items-center justify-between py-1.5">
-        <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          Total
-        </span>
-        <span
-          className="font-mono-jb text-xs font-bold tabular-nums"
-          style={{
-            color: total >= CONVICTION_THRESHOLD ? "var(--green)" : total > 0 ? "var(--amber)" : "var(--red)",
-          }}
-        >
-          {pctLabel(total)} / 100
-        </span>
-      </div>
-    </div>
-  );
-}

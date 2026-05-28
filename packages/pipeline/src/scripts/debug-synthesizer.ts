@@ -13,16 +13,14 @@
 
 import chalk from "chalk";
 import { computeDelta } from "../orchestrator/delta.js";
-import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { buildPrompt, buildSystemPrompt, synthesize } from "../orchestrator/synthesizer.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { type Confluence, getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
 import { extractRawFeatures } from "../orchestrator/trade-idea/extract-features.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
-import { runIntradimMl } from "../orchestrator/trade-idea/intradim-ml.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
+import { runSnapshotMl } from "../orchestrator/trade-idea/snapshot-ml.js";
 import {
   type DerivativesOutput,
   DIMENSION_LABELS,
@@ -167,18 +165,9 @@ function analyzeGaps(outputs: DimensionOutput[], decision: TradeDecision | null)
     }
   }
 
-  // Trade decision gaps — flag dimensions actively opposing the chosen direction
-  if (decision) {
-    const conf = decision.confluence;
-    const opposing = CONFLUENCE_DIMENSIONS.map((d) => ({
-      dim: d,
-      score: conf[d],
-    }))
-      .filter((d) => d.score < 0)
-      .sort((a, b) => a.score - b.score);
-    for (const o of opposing.slice(0, 2)) {
-      gaps.push(`${chalk.yellow("OPPOSING")} Trade: ${o.dim} scores ${o.score} — actively opposing the direction`);
-    }
+  // Trade decision gap — flag near-zero conviction
+  if (decision && Math.abs(decision.confluenceTotal) < 0.1) {
+    gaps.push(`${chalk.dim("LOW CONVICTION")} Snapshot score near zero (${(decision.confluenceTotal * 100).toFixed(0)}) — no clear edge`);
   }
 
   return gaps;
@@ -220,31 +209,26 @@ async function main() {
   let decision: TradeDecision | null = null;
 
   if (htfOut) {
-    const intradimMl = await runIntradimMl(asset, extractRawFeatures(outputs));
-    const confluence: Confluence = {
-      [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES].score,
-      [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS].score,
-      [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF].score,
-      [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS].score,
-    };
-    const total = getConfluenceTotal(confluence);
+    const rawFeatures = extractRawFeatures(outputs);
+    const snapshotResult = await runSnapshotMl(asset, rawFeatures);
+    const total = snapshotResult?.score ?? 0;
     const direction: Direction = total >= 0 ? "LONG" : "SHORT";
 
-    const parts = CONFLUENCE_DIMENSIONS.map((d) => `${d}=${scoreStr(confluence[d])}`).join("  ");
-    console.log(`  ${chalk.bold(direction.padEnd(6))} ${parts}`);
+    console.log(
+      `  ${chalk.bold(direction.padEnd(6))} snapshot score=${scoreStr(total)}` +
+        (snapshotResult ? ` [${snapshotResult.modelVersion}]` : chalk.yellow(" [no model — score=0]")),
+    );
 
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);
-    const sizing = computePositionSize(total, htfOut.context);
+    const sizing = computePositionSize(Math.abs(total), htfOut.context);
 
     decision = {
       direction,
-      confluence,
       confluenceTotal: total,
       entryPrice,
       compositeTarget,
       sizing,
-      ml: null,
-      intradimMl,
+      ml: snapshotResult ? { mlTotal: total, modelVersion: snapshotResult.modelVersion } : null,
     };
 
     console.log();

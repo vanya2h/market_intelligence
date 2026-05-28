@@ -1,6 +1,6 @@
 import type { Brief, TradeIdea } from "@market-intel/api";
 import type { TrendPoint } from "../lib/trade-idea";
-import { ConfluenceRows, OpportunityGauge } from "./OpportunityGauge";
+import { OpportunityGauge } from "./OpportunityGauge";
 import { RegimeOverview } from "./RegimeOverview";
 import { SectionBlock } from "./SectionBlock";
 import { TrendStrengthChart } from "./TrendStrengthChart";
@@ -23,7 +23,7 @@ export function BriefSidebar({
         height: "calc(100vh - 98px)",
       }}
     >
-      {tradeIdea && tradeIdea.confluence && (
+      {tradeIdea && (
         <SectionBlock
           title="7-Day Forecast"
           className="mb-6"
@@ -38,9 +38,6 @@ export function BriefSidebar({
               <TrendStrengthChart data={trendHistory} />
             </div>
           )}
-          <div className="mt-4">
-            <ConfluenceRows confluence={tradeIdea.confluence} total={tradeIdea.confluenceTotal ?? 0} />
-          </div>
         </SectionBlock>
       )}
 
