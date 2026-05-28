@@ -11,6 +11,7 @@ import { BriefsController } from "./routes/briefs.js";
 import { CandlesController } from "./routes/candles.js";
 import { DimensionsController } from "./routes/dimensions.js";
 import { HealthController } from "./routes/health.js";
+import { LevelMatrixController } from "./routes/level-matrix.js";
 import { PriceController } from "./routes/price.js";
 import { TradeIdeasController } from "./routes/trade-ideas.js";
 
@@ -24,6 +25,7 @@ const app = new Hono()
   .route("/api/dimensions", DimensionsController.build(factory))
   .route("/api/price", PriceController.build(factory))
   .route("/api/trades", TradeIdeasController.build(factory))
+  .route("/api/trades", LevelMatrixController.build(factory))
   .route("/api/candles", CandlesController.build(factory));
 
 export type AppType = typeof app;

@@ -5,5 +5,6 @@ export default [
   route("brief/:id", "routes/brief.tsx"),
   route("brief-history", "routes/brief-history.tsx"),
   route("faq", "routes/faq.tsx"),
+  route("level-matrix", "routes/level-matrix.tsx"),
   route("api/price/:asset", "routes/api.price.ts"),
 ] satisfies RouteConfig;

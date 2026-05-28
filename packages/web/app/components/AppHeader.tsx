@@ -28,6 +28,7 @@ export function AppHeader({ children, currentBriefId }: { children?: ReactNode; 
   const tabs = [
     { key: "home", label: "Home", to: "/" },
     { key: "history", label: "History" },
+    // { key: "matrix", label: "Matrix", to: "/level-matrix" },
     { key: "faq", label: "FAQ", to: "/faq" },
   ];
 

@@ -39,6 +39,7 @@
     "ml:compare-dims": "training/.venv/bin/python training/compare_dimensions.py",
     "ml:backfill-scores": "tsx src/scripts/backfill-snapshot-scores.ts",
     "ml:backfill-ideas": "tsx src/scripts/backfill-trade-ideas.ts",
+    "ml:level-matrix": "tsx src/scripts/level-matrix.ts",
     "debug:sentiment": "tsx src/scripts/debug-sentiment.ts",
     "debug:synthesizer": "tsx src/scripts/debug-synthesizer.ts",
     "debug:twitter": "tsx src/scripts/debug-twitter-synth.bin.ts",

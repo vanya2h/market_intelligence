@@ -1,5 +1,6 @@
 // Database
-export type { $Enums, Prisma } from "./generated/prisma/client.js";
+export type { $Enums } from "./generated/prisma/client.js";
+export { Prisma } from "./generated/prisma/client.js";
 export { prisma } from "./storage/db.js";
 
 // Cache
