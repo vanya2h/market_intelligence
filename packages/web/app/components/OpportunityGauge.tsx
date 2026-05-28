@@ -26,33 +26,51 @@ function gaugeColor(score: number): string {
 
 function gaugeLabel(score: number): string {
   const abs = Math.abs(score);
-  const dir = score > 0 ? "Uptrend" : score < 0 ? "Downtrend" : "";
+  if (abs < 15) return "No edge";
+  const dir = score > 0 ? "Bullish" : "Bearish";
   if (abs >= 70) return `Strong ${dir}`;
-  if (abs >= 40) return `${dir}`;
-  if (abs >= 15) return `Weak ${dir}`;
-  return "Ranging";
+  if (abs >= 40) return dir;
+  return `Weak ${dir}`;
+}
+
+function modelBadge(aggregator: TradeIdea["aggregator"]): { label: string; title: string } {
+  if (aggregator?.source === "ml" && aggregator.modelVersion?.startsWith("snapshot_")) {
+    return { label: "Snapshot ML · 7d", title: "Score from the snapshot regression model trained on 168h forward returns" };
+  }
+  if (aggregator?.source === "ml") {
+    return { label: `ML · ${aggregator.modelVersion ?? ""}`, title: "Score from an ONNX ML aggregator model" };
+  }
+  return { label: "Heuristic", title: "Equal-weight average of per-dimension heuristic scores — no ML model loaded" };
 }
 
 export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
   const conf = tradeIdea.confluence;
   if (!conf) return null;
 
-  // Bipolar score: -100 (strong sell) to +100 (strong buy).
-  // confluenceTotal is already signed -1..+1 (positive = bullish).
   const score = Math.round((tradeIdea.confluenceTotal ?? 0) * 100);
-
   const color = gaugeColor(score);
   const prefix = score > 0 ? "+" : "";
   const taken = !tradeIdea.skipped;
+  const badge = modelBadge(tradeIdea.aggregator);
+  // Derive display direction from score sign — stored direction may be from an older model.
+  const displayDirection = score >= 0 ? "LONG" : "SHORT";
 
   return (
     <div className="flex flex-col gap-3 w-full">
-      {/* Score */}
-      <div className="flex items-baseline gap-2">
+      {/* Score + model badge */}
+      <div className="flex items-baseline justify-between gap-2">
         <span className="font-mono-jb text-4xl font-bold tabular-nums" style={{ color }}>
           {prefix}
           {Math.round(score)}
         </span>
+        <Tooltip content={badge.title} side="left">
+          <span
+            className="cursor-default rounded px-1.5 py-0.5 text-[0.5rem] font-medium uppercase tracking-wider"
+            style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+          >
+            {badge.label}
+          </span>
+        </Tooltip>
       </div>
 
       {/* Verbal label */}
@@ -91,25 +109,59 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
         ))}
       </div>
 
+      {/* Model stats */}
+      {tradeIdea.aggregator?.stats && (
+        <div
+          className="flex items-center gap-3 rounded px-2 py-1.5 text-[0.5625rem] tabular-nums"
+          style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+        >
+          <Tooltip
+            content="Out-of-fold Information Coefficient — Pearson correlation between the model's predictions and actual 7-day returns on data it never trained on. Ranges -1 to +1; above +0.05 is considered meaningful."
+            side="bottom"
+          >
+            <span className="cursor-default">
+              OOF IC{" "}
+              <span className="font-mono-jb font-medium" style={{ color: "var(--text-secondary)" }}>
+                {tradeIdea.aggregator.stats.oofIc >= 0 ? "+" : ""}
+                {tradeIdea.aggregator.stats.oofIc.toFixed(2)}
+              </span>
+            </span>
+          </Tooltip>
+          <span style={{ color: "var(--border)" }}>·</span>
+          <Tooltip
+            content="Directional accuracy on held-out data — how often the model correctly predicted whether price would be higher or lower after 7 days. 50% = coin flip."
+            side="bottom"
+          >
+            <span className="cursor-default">
+              Hit rate{" "}
+              <span className="font-mono-jb font-medium" style={{ color: "var(--text-secondary)" }}>
+                {Math.round(tradeIdea.aggregator.stats.hitRate * 100)}%
+              </span>
+            </span>
+          </Tooltip>
+          <span style={{ color: "var(--border)" }}>·</span>
+          <Tooltip
+            content="Number of historical snapshots used to train this model. More samples = more reliable statistics, especially across different market regimes."
+            side="bottom"
+          >
+            <span className="cursor-default">n={tradeIdea.aggregator.stats.nSamples}</span>
+          </Tooltip>
+        </div>
+      )}
+
       {/* Status line */}
       <div className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
-        {taken ? (
-          <span>
-            Riding{" "}
-            <span style={{ color }} className="font-medium">
-              {tradeIdea.direction}
-            </span>{" "}
-            trend — sized to strength
-          </span>
-        ) : score !== 0 ? (
-          <span>
-            <span style={{ color }} className="font-medium">
-              {score > 0 ? "Bullish" : "Bearish"}
-            </span>{" "}
-            momentum — strength {Math.abs(score)}/100
-          </span>
+        {Math.abs(score) < 15 ? (
+          <span>No directional edge predicted for next 7 days</span>
         ) : (
-          <span>No trend detected — market ranging</span>
+          <span>
+            Predicting{" "}
+            <span style={{ color }} className="font-medium">
+              {displayDirection}
+            </span>{" "}
+            over 7 days
+            {taken ? " — position sized to conviction" : ""}
+          </span>
         )}
       </div>
     </div>

@@ -1,0 +1,183 @@
+{
+  "model_name": "snapshot_btc_v1",
+  "asset": "BTC",
+  "version": "v1",
+  "model_type": "ridge_regression_snapshot",
+  "horizon_hours": 168,
+  "dims": [
+    "DERIVATIVES",
+    "HTF"
+  ],
+  "feature_order": [
+    "DERIVATIVES_durationHours",
+    "DERIVATIVES_fundingPct1m",
+    "DERIVATIVES_liqPct1m",
+    "DERIVATIVES_liqPct3m",
+    "DERIVATIVES_oiChange24h",
+    "DERIVATIVES_oiChange7d",
+    "DERIVATIVES_oiZScore30d",
+    "DERIVATIVES_fundingPressureCycles",
+    "DERIVATIVES_cbPremiumPercentile1m",
+    "DERIVATIVES_positioningState",
+    "DERIVATIVES_previousPositioning",
+    "DERIVATIVES_stressState",
+    "DERIVATIVES_previousStress",
+    "DERIVATIVES_oiSignal",
+    "DERIVATIVES_fundingPressureSide",
+    "HTF_durationHours",
+    "HTF_biasComposite",
+    "HTF_biasTrend",
+    "HTF_biasMomentum",
+    "HTF_biasFlow",
+    "HTF_biasCompression",
+    "HTF_biasVpGravity",
+    "HTF_biasSthGravity",
+    "HTF_rsiDaily",
+    "HTF_rsiH4",
+    "HTF_mfiDaily",
+    "HTF_mfiH4",
+    "HTF_divergenceConfluenceStrength",
+    "HTF_atrPercentile",
+    "HTF_atrRatio",
+    "HTF_recentDisplacement",
+    "HTF_nearPriceVsPocPct",
+    "HTF_structuralPriceVsPocPct",
+    "HTF_priceVsSthPct",
+    "HTF_stalenessRsiExtreme",
+    "HTF_stalenessMfiExtreme",
+    "HTF_stalenessCvdDivergencePeak",
+    "HTF_regime",
+    "HTF_previousRegime",
+    "HTF_structure",
+    "HTF_cvdFuturesDivergence",
+    "HTF_cvdFuturesMechanism",
+    "HTF_cvdFuturesShortRegime",
+    "HTF_cvdFuturesLongRegime",
+    "HTF_cvdFuturesExtreme",
+    "HTF_cvdSpotDivergence",
+    "HTF_spotFuturesDivergence",
+    "HTF_rsiDivergence",
+    "HTF_mfiDivergence",
+    "HTF_divergenceConfluenceDir",
+    "HTF_nearVpPosition",
+    "HTF_structuralVpPosition",
+    "HTF_maCrossType",
+    "HTF_maRecentCross"
+  ],
+  "n_features": 54,
+  "trained_at": "2026-05-28T14:22:44.814565+00:00",
+  "n_samples": 421,
+  "date_range": {
+    "start": "2026-03-26T22:23:45.308Z",
+    "end": "2026-05-21T16:00:00.107Z"
+  },
+  "quality_scale": 0.115398452523873,
+  "regularization": {
+    "penalty": "l2",
+    "alpha": 10.0
+  },
+  "onnx_output_name": "variable",
+  "cv": {
+    "folds": 5,
+    "fold_metrics": [
+      {
+        "label": "fold0",
+        "r2": -4.324963453617432,
+        "mae": 0.4030079297280675,
+        "pearson_ic": -0.31800576283079585,
+        "p_value": 0.00730201205294265,
+        "hit_rate": 1.0
+      },
+      {
+        "label": "fold1",
+        "r2": 0.3376419746867555,
+        "mae": 0.13882593740530497,
+        "pearson_ic": 0.59089228418568,
+        "p_value": 7.243497750936823e-08,
+        "hit_rate": 0.7714285714285715
+      },
+      {
+        "label": "fold2",
+        "r2": -0.29862585110456163,
+        "mae": 0.32289157789193823,
+        "pearson_ic": 0.5809668223407621,
+        "p_value": 1.343735743697248e-07,
+        "hit_rate": 0.6857142857142857
+      },
+      {
+        "label": "fold3",
+        "r2": -0.5471380188506287,
+        "mae": 0.17426617362481547,
+        "pearson_ic": 0.5161649673214426,
+        "p_value": 4.793931862578838e-06,
+        "hit_rate": 0.7142857142857143
+      },
+      {
+        "label": "fold4",
+        "r2": -0.4168348331671794,
+        "mae": 0.16376115509651662,
+        "pearson_ic": 0.043788559385537475,
+        "p_value": 0.7188938658016081,
+        "hit_rate": 0.6857142857142857
+      }
+    ],
+    "oof": {
+      "label": "oof",
+      "r2": 0.1248185299051574,
+      "mae": 0.24055055474932857,
+      "pearson_ic": 0.6569549919457913,
+      "p_value": 1.3269041475088897e-44,
+      "hit_rate": 0.7714285714285715
+    }
+  },
+  "training_metrics": {
+    "label": "train_full",
+    "r2": 0.8809147500953164,
+    "mae": 0.09110627188741333,
+    "pearson_ic": 0.9390797253234767,
+    "p_value": 1.8907472068980924e-196,
+    "hit_rate": 0.9287410926365796
+  },
+  "top_features_by_ic": [
+    {
+      "feature": "HTF_structuralPriceVsPocPct",
+      "ic": -0.7298090435219254
+    },
+    {
+      "feature": "HTF_structuralVpPosition",
+      "ic": 0.7036603387699043
+    },
+    {
+      "feature": "HTF_biasSthGravity",
+      "ic": 0.6978664490026474
+    },
+    {
+      "feature": "HTF_priceVsSthPct",
+      "ic": -0.6599943855673854
+    },
+    {
+      "feature": "HTF_mfiH4",
+      "ic": -0.5164416969250328
+    },
+    {
+      "feature": "HTF_biasVpGravity",
+      "ic": -0.5072172670166416
+    },
+    {
+      "feature": "HTF_maCrossType",
+      "ic": -0.48121997922440357
+    },
+    {
+      "feature": "DERIVATIVES_cbPremiumPercentile1m",
+      "ic": 0.44782472658635303
+    },
+    {
+      "feature": "HTF_nearPriceVsPocPct",
+      "ic": 0.43099482959352275
+    },
+    {
+      "feature": "HTF_cvdFuturesMechanism",
+      "ic": 0.41911466319632906
+    }
+  ]
+}

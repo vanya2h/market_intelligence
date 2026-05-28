@@ -25,9 +25,9 @@ export function BriefSidebar({
     >
       {tradeIdea && tradeIdea.confluence && (
         <SectionBlock
-          title="Trend Strength"
+          title="7-Day Forecast"
           className="mb-6"
-          tooltip="Momentum score (-100 to +100) across 4 dimensions: HTF structure, derivatives positioning, ETF flows, and exchange flows. Positive = bullish trend active, negative = bearish trend active, near zero = ranging / no trend."
+          tooltip="7-day directional forecast (-100 to +100). Positive = model predicts price higher in 7 days, negative = lower, near zero = no clear edge. Produced by a Ridge regression trained on HTF structure and derivatives positioning against 168h forward returns."
         >
           <OpportunityGauge tradeIdea={tradeIdea} />
           {trendHistory.length >= 2 && (

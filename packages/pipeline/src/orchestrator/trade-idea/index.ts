@@ -25,6 +25,7 @@ import { type IntradimMlResults, runIntradimMl } from "./intradim-ml.js";
 import { type MlResult, runMlAggregator } from "./ml-aggregator.js";
 import { saveTradeIdea } from "./persist.js";
 import { computePositionSize, type PositionSize } from "./sizing.js";
+import { runSnapshotMl } from "./snapshot-ml.js";
 
 /** Result of the mechanical trade decision — passed to the synthesizer */
 export interface TradeDecision {
@@ -56,17 +57,39 @@ export async function processTradeIdea(
   outputs: DimensionOutput[],
 ): Promise<{ id: string; decision: TradeDecision }> {
   const rawFeatures = extractRawFeatures(outputs);
-  const intradimMl = await runIntradimMl(asset, rawFeatures);
+
+  // Snapshot model: single cross-dim model trained on price data.
+  // Preferred when available — falls back to L2a + L1 stack if model is missing.
+  const snapshotResult = await runSnapshotMl(asset, rawFeatures);
+
+  let confluenceTotal: number;
+  let ml: MlResult | null;
+  let intradimMl: IntradimMlResults;
+  const modelStats = snapshotResult?.stats ?? null;
+
+  if (snapshotResult) {
+    confluenceTotal = snapshotResult.score;
+    ml = { mlTotal: snapshotResult.score, modelVersion: snapshotResult.modelVersion };
+    // Per-dim scores not used by the snapshot model — fall back to heuristic for display
+    intradimMl = await runIntradimMl(asset, rawFeatures);
+  } else {
+    intradimMl = await runIntradimMl(asset, rawFeatures);
+    const confluence: Confluence = {
+      [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES].score,
+      [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS].score,
+      [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF].score,
+      [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS].score,
+    };
+    ml = await runMlAggregator(asset, confluence);
+    confluenceTotal = ml?.mlTotal ?? getConfluenceTotal(confluence);
+  }
+
   const confluence: Confluence = {
     [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES].score,
     [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS].score,
     [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF].score,
     [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS].score,
   };
-
-  // L1: cross-dim aggregator on the (ML-replaced) per-dim scores
-  const ml = await runMlAggregator(asset, confluence);
-  const confluenceTotal = ml?.mlTotal ?? getConfluenceTotal(confluence);
   const direction: Direction = confluenceTotal >= 0 ? "LONG" : "SHORT";
 
   const sizing = computePositionSize(confluenceTotal, htfContext);
@@ -83,6 +106,7 @@ export async function processTradeIdea(
     total: confluenceTotal,
     sizing,
     ml,
+    modelStats,
     intradimMl,
     rawFeatures,
   });

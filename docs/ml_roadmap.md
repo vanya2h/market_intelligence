@@ -1,205 +1,140 @@
 ## ML Roadmap
 
-How machine learning replaces and extends the heuristic confluence scoring. **L1 and L2a are shipped** — L1 is the cross-dim ONNX aggregator; L2a is the per-dimension sub-model layer. L3 and L4 are captured here for later phases.
+How machine learning produces the trade score. The **Snapshot model is the current primary path** — a single cross-dimension Ridge regression trained directly on price returns. L2a (intradim) and L1 (aggregator) exist as a fallback chain when the snapshot model is absent.
 
-For the live inference pipeline (data flow, encoding, persistence schema), see [`ml_inference.md`](./ml_inference.md).
-
-## Context: where weights live today
-
-There are two layers of "weight management" in the pipeline. They have very different leverage.
-
-1. **Cross-dimension aggregation** — was IC-weighted, now ML-driven. [`ml-aggregator.ts`](../packages/pipeline/src/orchestrator/trade-idea/ml-aggregator.ts) is the live aggregator. [`ic-weights.ts`](../packages/pipeline/src/orchestrator/trade-idea/ic-weights.ts) still runs but as **diagnostic infrastructure only**: it surfaces per-dim IC and `recentIc` to the API (`GET /trades/ic-weights/:asset`) and the [Signals panel](../packages/web/app/routes/signals.tsx) for regime-drift monitoring between ML retrains. It also still produces the heuristic `total` that lives alongside `mlTotal` for back-compat and as a shadow comparator.
-2. **Intra-dimension scoring** — was fully hand-tuned; now **ML-driven via L2a**. [`intradim-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/intradim-ml.ts) runs 8 per-dim ONNX models (4 dims × 2 assets) answering "P(price goes up)". The heuristic formulas in [`confluence.ts`](../packages/pipeline/src/orchestrator/trade-idea/confluence.ts) are still computed on every brief as a fallback and audit shadow — they are never skipped.
-
-The L1 deployment confirmed the layer-2 hypothesis: ML on top of the existing per-dim scores beats the heuristic, but the per-dim scoring formulas themselves are where the regime-fragility lives. L2a replaces those formulas with learned models.
+For the live inference pipeline (data flow, encoding, persistence schema, feature list), see [`ml_inference.md`](./ml_inference.md).
 
 ---
 
-## Shipped: Level 1 — Learned cross-dim aggregator
+## Current primary: Snapshot model
 
-### Implementation
+### What it does
+
+Trained on every `HtfSnapshot` (not just trade ideas), predicting the 168h forward price return from the cross-dimension feature vector. Replaces the entire L1 + L2a stack when the model file is present.
 
 | | |
 |---|---|
-| **Training** | Python (`packages/pipeline/training/train.py`) — sklearn `LogisticRegression` (L2, `class_weight='balanced'`), walk-forward CV via `TimeSeriesSplit`, exports ONNX + `.meta.json` |
-| **Inference** | Node ([`ml-aggregator.ts`](../packages/pipeline/src/orchestrator/trade-idea/ml-aggregator.ts)) via `onnxruntime-node`, lazy session cache |
-| **Inputs** | The four per-dim scores already produced by [`confluence.ts:computeConfluence`](../packages/pipeline/src/orchestrator/trade-idea/confluence.ts) |
-| **Output** | `P(win)` in `[0, 1]`, mapped to `mlTotal = 2*pWin - 1` in `[-1, +1]` to preserve the existing total contract |
-| **Per-asset** | Separate BTC and ETH models — coefficient signs differ enough that pooling would hurt |
-| **Failure policy** | Silent null fallback — missing model or inference error → warning logged, `mlTotal` undefined, `decisionScore()` returns the heuristic `total` |
-| **Cache** | Successful loads only; failures are not cached, so retraining is picked up on the next brief without restart |
-| **Artifacts** | `packages/pipeline/models/confluence_<asset>_<version>.{onnx,meta.json}`, checked into git |
+| **Training data** | All `HtfSnapshot` rows with a recorded price, joined to latest-before snapshot from each other dimension table at the same timestamp |
+| **Label** | `clip(return_pct / 3σ, -1, 1)` where `return_pct = (price_T+168h − price_T) / price_T` |
+| **Features** | 54 features from DERIVATIVES + HTF dimensions only. ETFs and Exchange Flows were dropped after dimension search showed they reduce OOF IC. Full list in [`ml_inference.md`](./ml_inference.md) |
+| **Model** | `Ridge(alpha=10)` — strong L2 because N/p ratio (~400/54 ≈ 7) is low |
+| **Training** | `packages/pipeline/training/train_snapshot.py` via `pnpm ml:train-snapshot` |
+| **Inference** | [`snapshot-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/snapshot-ml.ts) via `onnxruntime-node`, model cache per process |
+| **Per-asset** | Separate BTC and ETH models |
+| **Failure policy** | Returns `null` → caller falls back to L2a + L1 chain → heuristic equal-weight |
+| **Artifacts** | `packages/pipeline/models/snapshot_{asset}_{version}.{onnx,meta.json}` |
 
-The pipeline now persists **both** values per trade idea:
+### Why this is better than the old approach
 
-- `confluence.total` — IC-weighted heuristic. Always present.
-- `confluence.mlTotal?` — ML output. Set when the model ran successfully.
+The old system (L1 + L2a) had three compounding problems:
 
-`decisionScore(c) = c.mlTotal ?? c.total` is the single source of truth used for direction selection, sizing, bias, and composite-target computation. Old code that reads `total` continues to work; the heuristic is preserved as an audit trail and shadow comparator. See the [training README](../packages/pipeline/training/README.md) for the retraining workflow.
+1. **Look-ahead label** — `qualityAtPoint` was the peak-quality hour across 720 hours, picked in hindsight.
+2. **Selection bias** — training set was only trade ideas with conviction ≥ 200, inheriting the heuristic's blindspots.
+3. **Bootstrapped target** — models were trained to predict the heuristic's output, not price.
 
-### Findings from the first 37 days of data
+The snapshot model fixes all three: trains on all market states, labels are fixed-horizon forward returns from actual prices, no heuristic in the loop.
 
-Surfaced once we could compare the trained model against the live heuristic over the same 241 BTC / 230 ETH resolved trade ideas:
+### First training results (2026-05)
 
-**Stored heuristic (the IC-weighted total used at trade time)**
-- BTC: 40.2% accuracy, Brier 0.297 — *worse than always predicting "loss"* (56.8% baseline against a 137L/104W class split).
-- ETH: 48.7% accuracy, Brier 0.259.
+| Asset | OOF IC | p-value | Rows | Dims |
+|-------|--------|---------|------|------|
+| BTC   | +0.657 | <0.001  | ~420 | DERIVATIVES+HTF |
+| ETH   | +0.716 | <0.001  | ~405 | DERIVATIVES+HTF |
 
-**Per-dim Pearson IC (signed correlation between dim score and outcome)**
+ETFs and Exchange Flows were tested and found to reduce OOF IC on both assets — see `training/compare_dimensions.py`. ETF flow data (daily granularity in a 4H pipeline) adds noise; Exchange Flows is neutral when HTF is present.
 
-| Dimension | BTC IC | ETH IC |
-|---|---|---|
-| derivatives | -0.05 | +0.08 |
-| etfs | +0.05 | -0.16 |
-| **htf** | **-0.21** | **-0.23** |
-| exchangeFlows | +0.18 | +0.15 |
+OOF IC is walk-forward (TimeSeriesSplit), so it reflects genuine out-of-sample predictive power.
 
-- **HTF is the most anti-predictive dimension on both assets, by a wide margin.** Two independent samples agreeing makes this unlikely to be regime noise — it points at the HTF scoring logic itself (or its tuning) being misaligned with outcomes over the last 37 days.
-- **ExchangeFlows is the most consistent positive signal on both assets.**
-- ML walk-forward OOF accuracy: 50.5% BTC, 60.5% ETH — meaningfully better than the heuristic and structurally explains why: ML naturally learns negative coefficients for anti-predictive dims, while the IC weight floor of 0.0625 forces every dimension to contribute *with the wrong sign* even when its IC is negative.
+### Pipeline integration
 
-These findings are also driving an HTF-analyzer review (separate work item, not strictly ML).
-
----
-
-## Next: Level 2 — Learned model over raw sub-features (hybrid)
-
-Skip the per-dim scoring functions entirely; feed the raw analyzer outputs into a single model.
-
-- **Inputs:** `fundingPct1m`, `oiZScore30d`, `liqPct1m/3m`, `cbPremium.percentile`, `etf.todaySigma`, `reversalRatio`, `consecutiveInflowDays`, `rsi.h4`, `cvd.futures.divergence`, `reserveChange7dPct`, regime enums one-hot, and the existing per-dim scores as engineered features (don't throw away the priors). Roughly 30–60 features.
-- **Model:** LightGBM / XGBoost with monotonic constraints where signs are known (more outflow → more bullish, etc.). ONNX export still works for these.
-- **Target:** same as L1 — `sign(qualityAtPoint)` for classification, or `qualityAtPoint` regression.
-- **Risk:** moderate. More features → more overfit risk → walk-forward CV is mandatory and currently has only ~37 days of history.
-- **Wins:** removes the hand-tuned intra-dim formulas; captures non-linear interactions ("RSI overbought AND funding extreme") that the linear L1 aggregator can't.
-
-The dimension collectors, analyzers, sizing, bias, and LLM synthesizer all stay unchanged. Only the **score-production step** changes — instead of `analyzer → per-dim score → ML aggregator`, it becomes `analyzer → ML model → mlTotal directly`. The per-dim scores can still be computed and persisted alongside as features and for UI display.
-
-**Reuses everything from L1:** ONNX export, the inference module pattern (extend `ml-aggregator.ts` or add a sibling), failure policy, model versioning, training README workflow.
+```
+processTradeIdea()
+  → runSnapshotMl()       ← primary
+  → (null) → runIntradimMl() + runMlAggregator()  ← L2a + L1 fallback
+  → (null) → getConfluenceTotal()                  ← heuristic fallback
+```
 
 ---
 
-## Future work
+## Legacy fallback: L2a + L1
 
-### Level 3 — Time-series features
+These models remain in the codebase as a fallback chain when snapshot model is absent (asset not yet trained, ONNX file missing). They are not actively retrained.
 
-Today, every scoring call is a snapshot. The `DimensionSnapshot` table is a goldmine that's currently only read for charts, not training.
+### L1 — Cross-dim aggregator
 
-**Idea:** keep the model class from L2 (GBT), but engineer features that capture *trajectory* instead of point-in-time:
+- [`ml-aggregator.ts`](../packages/pipeline/src/orchestrator/trade-idea/ml-aggregator.ts)
+- Input: four per-dim heuristic scores from `confluence.ts`
+- Output: `mlTotal = 2*pWin - 1` in `[-1, +1]`
+- Model: `LogisticRegression(L2, class_weight='balanced')`
+- Artifacts: `models/confluence_{asset}_{version}.{onnx,meta.json}`
 
-- 24h slope of OI z-score
-- 5-day momentum of ETF sigma
-- Funding-percentile change since regime entry
-- Rolling correlation between BTC and ETH dimensions
-- Time-since-last-extreme for each indicator
-- Acceleration / deceleration of reserve drawdown
+### L2a — Per-dimension sub-models
 
-Most of the alpha in macro-style setups lives in trajectory features, not in static snapshots. This is likely where the largest performance jump beyond L2 comes from.
+- [`intradim-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/intradim-ml.ts)
+- 8 ONNX models (4 dims × 2 assets), amplitude-encoded features
+- Input: raw dimension features from `extractRawFeatures()`
+- Output: per-dim score in `[-1, +1]`
+- Always runs even when snapshot model is present (for display in the brief)
 
-**Prerequisites:**
-- Backfill a feature-engineering job that materializes rolling features from `DimensionSnapshot` history.
-- Synthesize labels by walking historical snapshots forward N hours and computing `qualityAtPoint`-equivalents. This can multiply the training set 10–100× beyond resolved trade ideas.
+### Why L2a still runs
 
-**Risks:**
-- Label leakage (a feature accidentally encodes future info). Audit each feature.
-- Feature explosion → dimensionality penalty. Use feature selection or L1 regularization.
-
-### Level 4 — End-to-end temporal model
-
-A small 1D-CNN or transformer that takes raw indicator time series directly (no hand-engineered features) and outputs direction probability + magnitude + uncertainty.
-
-**When to attempt:**
-- ≥ 1000 resolved trade ideas, OR
-- ≥ 5000 synthetic labels from historical snapshot walk-forward
-- Stable feature schemas for ≥ 6 months (otherwise the model retrains on a moving target)
-
-**Architecture sketch:**
-- Input: `[T, F]` tensor — last T hours of F indicators.
-- Embedding layer per indicator (handles different scales).
-- 1D-CNN or small transformer encoder → pooled representation.
-- Two heads:
-  1. Direction head: P(LONG wins).
-  2. Magnitude head: expected `qualityAtPoint`.
-- Loss: cross-entropy + MSE, weighted.
-
-**Risks:**
-- Crypto regime shift will eat any model that doesn't have explicit recency weighting or online retraining.
-- High variance — needs strong regularization (dropout, weight decay, early stopping).
-- Black box — hard to debug a bad call. Pair with SHAP / integrated gradients for interpretability.
-- Infra cost — GPU training + serving overhead vs LightGBM's negligible footprint.
-
-**Likely only worth it if:**
-- L3 has plateaued
-- Dataset is large enough
-- A pattern that's clearly temporal (sequence-dependent) is showing up in residuals
+Even when the snapshot model is active, `intradimMl` scores are computed and persisted for UI display and the per-dimension breakdown in the brief. They serve as an interpretability layer, not the decision.
 
 ---
 
-## Cross-cutting concerns (apply at every level)
+## Roadmap
 
-### Label engineering
+### Near-term
 
-`qualityAtPoint = returnPct × exp(-hoursAfter/τ)` is the L1 target — direction-signed, time-decayed. Variants worth experimenting with at L2+:
+1. **Multi-horizon ensemble** — train separate Ridge models for 24h, 48h, 72h, 168h horizons; ensemble predictions. The training CSV already contains all four horizons. First step: compare OOF IC per horizon to find the predictive sweet spot.
 
-- **Binary:** did price hit T1 before stop-loss? (matches actual trading outcome)
-- **Multi-horizon:** predict 6h, 24h, 72h returns separately; ensemble.
-- **Risk-adjusted:** divide by realized volatility over the window.
+2. **Weekly retrain** — as more snapshots accumulate (target: 1000+ rows), retrain on a rolling window. Currently manual (`pnpm ml:gen-training-data && pnpm ml:train-snapshot`).
+
+3. **Regime-aware retraining** — hold out the most recent 90 days as a validation set; retrain when recent-window IC drops below +0.3.
+
+### Medium-term
+
+4. **Trajectory features** — today every training row is point-in-time. Add rolling features: 24h slope of OI z-score, 5-day ETF sigma momentum, funding-percentile change since regime entry. Most macro alpha lives in trajectory, not static snapshots.
+
+5. **Calibration** — Ridge outputs a regression score, mapped to `[-1, +1]` by clipping. As sizing relies on magnitude, add isotonic calibration on a validation fold to ensure the magnitude is meaningful.
+
+### Long-term
+
+6. **End-to-end temporal model** — 1D-CNN or small transformer over raw indicator time series. Gate on: ≥ 2000 labeled rows and stable feature schema for ≥ 6 months. Use SHAP for interpretability.
+
+---
+
+## Cross-cutting concerns
 
 ### Walk-forward CV
 
-Random K-fold leaks future into past — fatal for time series.
-
-✅ Train on Jan–Mar, test on Apr. Then train on Jan–Apr, test on May. Step forward each iteration.
-
-L1 uses `sklearn.model_selection.TimeSeriesSplit` with up to 5 folds; this is the template for L2+.
-
-### Calibration
-
-Sizing maps conviction → position size. Model probabilities must be calibrated (Platt scaling or isotonic regression on the validation set), or sizing breaks silently.
-
-**Status:** L1 currently uses raw `predict_proba` output without explicit calibration. Reliability diagrams haven't been generated yet — when they show miscalibration, add Platt/isotonic on a held-out fold before final fit. This is a known L1 follow-up.
+Random K-fold leaks future into past — fatal for time series. All models use `sklearn.model_selection.TimeSeriesSplit`. Train on Jan–Mar, test on Apr. Step forward.
 
 ### Regime drift
 
-Crypto regimes shift — bull/bear/range. A static model trained on bull-market data underperforms in chop. Mitigations:
-
-- Sample-recency weighting in training loss.
-- Periodic retrain (weekly / monthly).
-- Hold out a "regime-change" validation set explicitly (e.g., the most recent 3 months always).
-- Online learning for L1 (logistic regression supports incremental updates trivially).
-
-`recentIc` from [`ic-weights.ts`](../packages/pipeline/src/orchestrator/trade-idea/ic-weights.ts) is the live early-warning indicator — when a dim's recent IC diverges sharply from full-history IC, retrain. The Signals panel surfaces both.
+Crypto regimes shift fast. Mitigations:
+- Periodic retrain (weekly/monthly target).
+- Hold out most-recent 90 days as regime validation set.
+- `recentIc` from [`ic-weights.ts`](../packages/pipeline/src/orchestrator/trade-idea/ic-weights.ts) surfaces per-dim drift in the Signals panel.
 
 ### Hand-crafted features as priors
 
-The current heuristics encode domain knowledge that's hard to recover from limited data — e.g., the funding-phase decay logic in [`confluence.ts:84-128`](../packages/pipeline/src/orchestrator/trade-idea/confluence.ts) ("fresh extreme = trend-following, decays to mean-reversion when exhaustion fires"). Don't throw these away; feed them as engineered features alongside the raw inputs. The model can then learn whether to trust them.
-
-### Data inventory checklist
-
-Before any L3/L4 work, audit:
-
-- Number of resolved `TradeIdea` rows per asset (`pnpm ml:audit`).
-- Number of `DimensionSnapshot` rows per dimension per asset, time range.
-- Schema stability: how many of those snapshots have the *current* feature set vs older shapes.
-- Distribution of outcomes (avoid training on a class-imbalanced set without resampling).
+The heuristic encoding in `extractRawFeatures()` encodes domain knowledge (funding decay, regime transitions) that pure data rarely recovers with limited samples. Don't replace it — it's the feature engineering layer.
 
 ### Evaluation
 
-Don't optimize raw accuracy. Optimize what actually matters:
-
-- **Sharpe-equivalent:** mean(quality) / stddev(quality) over the test set.
-- **Calibration:** reliability diagram — does P(win)=0.7 actually win 70% of the time?
-- **Tail behavior:** worst 5% of trades — are they worse than the heuristic's worst 5%?
-- **A/B vs heuristic:** L1 already supports this — `confluence.total` (heuristic) and `confluence.mlTotal` are persisted side by side on every new trade idea, so a backtest can compare both decisions over the same rows without re-running the pipeline.
+- **Primary:** OOF IC (Pearson/Spearman) — direction prediction.
+- **Secondary:** hit rate at each horizon.
+- **Tail:** worst 5% of trades vs heuristic baseline.
+- **A/B:** `confluence.total` (heuristic) and `confluence.mlTotal` persisted side-by-side; backtest compares both without re-running the pipeline.
 
 ---
 
-## Current status & next steps
+## Current status
 
-1. **L1 — shipped.** Default ML aggregator, shadow heuristic preserved, 4 features, 2 per-asset models. Retrain workflow at [`packages/pipeline/training/README.md`](../packages/pipeline/training/README.md).
-2. **L2a — shipped.** Per-dim sub-models live. 8 ONNX models (4 dims × 2 assets), amplitude-encoded features, L1-sparse logistic regression. First retrain done on ~60 days of data — OOF accuracy 44–58%, consistent with limited data; will improve as rows accumulate. Inference at [`intradim-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/intradim-ml.ts), feature encoding at [`extract-features.ts`](../packages/pipeline/src/orchestrator/trade-idea/extract-features.ts). Full pipeline description at [`ml_inference.md`](./ml_inference.md).
-3. **Near-term follow-ups:**
-   - **Retrain L1 on ML-sourced per-dim scores.** The current L1 was trained when per-dim scores came from the heuristic. Now that L2a is live, retrain L1 on trade ideas where `confluence.intradim` is populated — it will learn to aggregate ML scores rather than heuristic scores.
-   - **Calibration check** — reliability diagrams for L1 pWin vs qualityAtPoint. Add Platt scaling if miscalibrated.
-   - **Weekly retrain cadence** — currently manual; automate once data volume justifies it.
-4. **L3 — gated on data volume.** Audit `DimensionSnapshot` history and prototype the synthetic-label backfill before considering L3 directly.
-5. **L4 — only after L3 has been in production long enough to have a clear ceiling.**
+| Model | Status | Notes |
+|-------|--------|-------|
+| Snapshot BTC v1 | ✅ Trained & deployed | OOF IC +0.630, ~500 rows |
+| Snapshot ETH v1 | ✅ Trained & deployed | OOF IC +0.668, ~480 rows |
+| L2a (intradim) | Legacy | Runs for display; not retrained |
+| L1 (aggregator) | Legacy | Fallback when snapshot absent |

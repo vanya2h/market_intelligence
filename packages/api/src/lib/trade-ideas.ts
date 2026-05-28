@@ -32,11 +32,19 @@ export interface SizingInfo {
   dailyVolPct: number;
 }
 
+export interface ModelStats {
+  oofIc: number;
+  hitRate: number;
+  nSamples: number;
+}
+
 export interface AggregatorInfo {
   /** "ml" = ONNX model produced the total; "fallback" = equal-weight arithmetic average. */
   source: "ml" | "fallback";
   /** Model version (e.g. "v1") when source = "ml". */
   modelVersion?: string;
+  /** Walk-forward CV stats from the model's meta.json — available when snapshot model ran. */
+  stats?: ModelStats;
 }
 
 export interface TradeIdeaLevel {

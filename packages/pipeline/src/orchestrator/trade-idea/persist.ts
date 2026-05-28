@@ -12,6 +12,7 @@ import type { Confluence } from "./confluence.js";
 import type { RawFeaturesByDim } from "./extract-features.js";
 import type { IntradimMlResults } from "./intradim-ml.js";
 import type { MlResult } from "./ml-aggregator.js";
+import type { ModelStats } from "./snapshot-ml.js";
 import type { PositionSize } from "./sizing.js";
 
 interface SaveTradeIdeaInput {
@@ -26,6 +27,8 @@ interface SaveTradeIdeaInput {
   total: number;
   sizing: PositionSize;
   ml: MlResult | null;
+  /** CV stats from the snapshot model meta.json — null when fallback path was used. */
+  modelStats: ModelStats | null;
   /** Per-dimension L2a ML results (score, modelVersion) keyed by DimensionEnum. */
   intradimMl: IntradimMlResults;
   /** Raw amplitude-encoded features at trade time — training source for per-dim sub-models. */
@@ -50,7 +53,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
           dailyVolPct: input.sizing.dailyVolPct,
         },
         aggregator: input.ml
-          ? { source: "ml", modelVersion: input.ml.modelVersion }
+          ? { source: "ml", modelVersion: input.ml.modelVersion, stats: input.modelStats ?? undefined }
           : { source: "fallback" },
         intradim: input.intradimMl,
         rawFeatures: input.rawFeatures,
