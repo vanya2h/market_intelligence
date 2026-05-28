@@ -4,6 +4,16 @@ This document describes the live ML scoring pipeline: what runs on every brief, 
 
 ---
 
+## Strategy: momentum, not mean-reversion
+
+The system is built on a momentum thesis: **if a trend is active, ride it**. This shapes every layer:
+
+- Feature encodings are momentum-biased (`BULL_EXTENDED` = bullish, not "fade the extension").
+- The model target is `qualityAtPoint` (signed, time-decayed return) — not a win/loss binary.
+- Model output is **trend strength** ∈ [-1, +1]: positive = bullish momentum, negative = bearish, near-zero = no trend.
+
+---
+
 ## Architecture overview
 
 The system uses two stacked ML layers:
@@ -14,14 +24,14 @@ Raw context (per dimension)
     ▼
 [extract-features.ts]   ← amplitude-encoded feature vectors
     │
-    ├── [intradim-ml.ts] L2a   ← per-dim ONNX models: P(price goes up)
+    ├── [intradim-ml.ts] L2a   ← per-dim ONNX models: trend strength ∈ [-1, +1]
     │       │ fallback ↓
     │   [confluence.ts]        ← heuristic score if model missing
     │
     ▼
 Effective per-dim scores [-1, +1]   (4 values)
     │
-    ├── [ml-aggregator.ts] L1  ← cross-dim ONNX model: P(trade wins)
+    ├── [ml-aggregator.ts] L1  ← cross-dim ONNX model: trend strength ∈ [-1, +1]
     │       │ fallback ↓
     │   equal-weight mean       ← if L1 model missing
     │
@@ -40,23 +50,23 @@ Every layer degrades gracefully. A missing ONNX file triggers a warning and the 
 
 ### What they answer
 
-Each L2a model answers a single question: **"Given what we see in this dimension right now, what is P(price goes up)?"**
+Each L2a model answers: **"What is the trend strength in this dimension right now?"**
 
-This is the market-direction label, not trade success:
-- `LONG` trade + `qualityAtPoint > 0` → price went up → `label = 1`
-- `LONG` trade + `qualityAtPoint < 0` → price went down → `label = 0`
-- `SHORT` trade + `qualityAtPoint > 0` → price went UP (SHORT lost) → `label = 1`
-- `SHORT` trade + `qualityAtPoint < 0` → price went DOWN (SHORT won) → `label = 0`
+This is a regression on `qualityAtPoint` (the time-decayed, direction-signed return):
 
-The model answers "should we buy here?" unconditionally — the pipeline separately decides whether to follow or fade the signal based on the full cross-dim picture.
+- Large positive `qualityAtPoint` → strong upward momentum → target near `+1`
+- Large negative `qualityAtPoint` → strong downward momentum → target near `-1`
+- Near-zero `qualityAtPoint` → choppy / no trend → target near `0`
+
+The label is normalized: `clip(qualityAtPoint / (3 × std), -1, 1)`. This maps 3-sigma returns to ±1.
 
 ### Output
 
 ```
-score = 2 × pUp - 1    ∈ [-1, +1]
+score = clamp(regression_output, -1, +1)  ∈ [-1, +1]
 ```
 
-+1 = fully confident price will rise, -1 = fully confident price will fall, 0 = no signal. Same contract as the heuristic scores it replaces.
++1 = strong bullish trend, -1 = strong bearish trend, 0 = no trend / ranging.
 
 ### Feature extraction ([`extract-features.ts`](../packages/pipeline/src/orchestrator/trade-idea/extract-features.ts))
 
@@ -64,26 +74,24 @@ Raw context objects are flattened into `Record<string, number>`. Two encoding ru
 
 **Numerics** — passed through as-is. Examples: `fundingPct1m`, `rsiH4`, `oiZScore30d`, `reserveChange7dPct`.
 
-**Categoricals** — each Prisma enum value is mapped to a signed amplitude in `[-1, +1]` via [`feature_schema.json`](../packages/pipeline/training/feature_schema.json). Examples:
+**Categoricals** — each Prisma enum value is mapped to a signed amplitude in `[-1, +1]` via [`feature_schema.json`](../packages/pipeline/training/feature_schema.json). Encodings are **momentum-biased** — extended trends score in the direction of the trend:
 
 | Enum | Value | Amplitude |
 |---|---|---|
 | PositioningRegime | CROWDED_SHORT | +1.0 |
 | PositioningRegime | CROWDED_LONG | -1.0 |
-| HtfRegime | BEAR_EXTENDED | +0.8 (mean-reversion: extreme bear = buy) |
-| HtfRegime | BULL_EXTENDED | -0.8 |
+| HtfRegime | BULL_EXTENDED | +0.8 (momentum: strong bull = ride it) |
+| HtfRegime | BEAR_EXTENDED | -0.8 (momentum: strong bear = keep shorting) |
+| OiSignal | EXTREME | +0.6 (high OI = strong trend participation) |
+| OiSignal | ELEVATED | +0.3 |
 | ExchangeFlowsRegime | ACCUMULATION | +1.0 |
-| EtfRegime | REVERSAL_TO_INFLOW | +0.6 |
-| StressLevel | CAPITULATION | +1.0 |
-| FundingPressureSide | LONG | -0.5 (crowded longs = bearish) |
+| EtfRegime | STRONG_INFLOW | +1.0 |
 
-This encoding approach — scalars on `[-1, +1]` rather than one-hot — lets the model learn magnitude and direction of each regime state directly. One-hot would require 2–6 coefficients per enum where one scalar suffices.
+**Previous-regime fields** are encoded at 50% decay (`decay = 0.5`): `previousPositioning`, `previousRegime`, etc.
 
-**Previous-regime fields** are encoded at 50% decay (`decay = 0.5`): `previousPositioning`, `previousRegime`, etc. This tells the model how recently the regime changed without adding a separate recency feature.
+**Booleans** are signed: `isAt30dLow → 1.0`, `isAt30dHigh → -1.0`.
 
-**Booleans** are signed: `isAt30dLow → 1.0`, `isAt30dHigh → -1.0`. These are independent signals so two separate features are more informative than one.
-
-**Staleness** (HTF only): `null → -1` (signal absent), `0 → 0` (fresh), `20+ candles → 1` (stale). Lets the model discount faded signals automatically.
+**Staleness** (HTF only): `null → -1` (signal absent), `0 → 0` (fresh), `20+ candles → 1` (stale).
 
 `feature_schema.json` is the single source of truth for encoding maps. Both the Python training script and the TypeScript inference module read it — there is no drift possible between training-time and inference-time encoding.
 
@@ -96,64 +104,28 @@ This encoding approach — scalars on `[-1, +1]` rather than one-hot — lets th
 | HTF | 22 | 17 | 0 | **39** |
 | EXCHANGE_FLOWS | 8 | 3 | 2 | **13** |
 
-`durationHours` is present in all four dimensions. It encodes how long the current regime has been active, normalized to [0, 1] over a 30-day cap (720h). Value 0 = regime just started or `since` unavailable; value 1 = regime active 30+ days. This gives the model the "where are we in the regime lifecycle" signal that the previous-regime-with-decay feature cannot fully capture.
+`durationHours` is present in all four dimensions, encoding how long the current regime has been active (normalized to [0, 1] over a 30-day cap).
 
 ### Model
 
-Logistic regression with L1 regularization (sparse feature selection), `liblinear` solver, `class_weight='balanced'` (handles the ~65/35 up/down imbalance), `C=1.0`. One model per dimension per asset = 8 total.
+Lasso regression (L1 regularization, `alpha=0.05`, `max_iter=10000`). One model per dimension per asset = 8 total.
 
-L1 penalty sparsifies coefficients — features with no predictive signal are zeroed out. This is intentional: a 38-feature HTF model on 300 rows cannot afford dense weights.
-
-### Training results (first run, ~60 days of data, ~280–302 rows per dim/asset)
-
-| Dim | Asset | OOF Acc | Heuristic Acc | Non-zero / Total |
-|---|---|---|---|---|
-| HTF | BTC | 0.440 | 0.550 | 27/38 |
-| HTF | ETH | **0.580** | 0.534 | 21/38 |
-| DERIVATIVES | BTC | 0.436 | 0.497 | 10/14 |
-| DERIVATIVES | ETH | 0.539 | n/a | 11/14 |
-| EXCHANGE_FLOWS | BTC | 0.498 | 0.545 | 10/12 |
-| EXCHANGE_FLOWS | ETH | 0.500 | 0.621 | 8/12 |
-| ETFS | BTC | 0.480 | 0.505 | 9/9 |
-| ETFS | ETH | **0.564** | 0.487 | 5/9 |
-
-OOF accuracy is the honest estimate (walk-forward CV, TimeSeriesSplit). With 60 days of data it is expected to be borderline (50–60%). The heuristic numbers are also borderline, confirming neither method has a clear edge yet — but the ML models will improve as data accumulates and will absorb regime changes on retrain; the heuristic cannot.
-
-Notable per-dim findings:
-- **HTF/BTC**: heuristic beats ML out-of-fold (0.55 vs 0.44). The HTF heuristic uses a pre-computed `bias.composite` that already aggregates many sub-signals — ML may not add much beyond that composite on limited data.
-- **HTF/ETH and ETFS/ETH**: ML beats heuristic — suggesting the heuristic thresholds are miscalibrated for ETH's different volatility regime.
-- **Non-zero coefficients**: L1 is aggressively sparse. ETFS/ETH zeroed 4/9 features; EXCHANGE_FLOWS/ETH zeroed 4/12. Surviving features have real signal on this dataset.
-
-### Strongest per-feature signals (Pearson IC vs market direction)
-
-**HTF/ETH** (most predictive dim overall):
-
-| Feature | IC |
-|---|---|
-| rsiH4 | -0.322 (overbought H4 RSI = bearish) |
-| rsiDaily | -0.263 |
-| stalenessMfiExtreme | +0.240 (stale extremes = reversal fading) |
-| biasMomentum | +0.225 |
-| cvdFuturesLongRegime | -0.221 |
-
-**ETFS/ETH**: `priorStreakSigmas` IC = +0.339 — cumulative prior streak magnitude (in σ units) is the strongest ETF signal for ETH.
-
-**EXCHANGE_FLOWS/ETH**: `previousRegime` IC = -0.283 — the *prior* exchange flows regime is more predictive than the current one, suggesting mean-reversion after regime transitions.
+L1 penalty sparsifies coefficients — features with no predictive signal are zeroed out. Key evaluation metric: Pearson IC of predicted trend strength vs actual normalized `qualityAtPoint`.
 
 ### Inference ([`intradim-ml.ts`](../packages/pipeline/src/orchestrator/trade-idea/intradim-ml.ts))
 
 ```typescript
 const intradimMl = await runIntradimMl(asset, rawFeatures);
-// { DERIVATIVES: { score: 0.2, pUp: 0.6, modelVersion: "v1" }, HTF: { ... }, ... }
+// { DERIVATIVES: { score: 0.2, modelVersion: "v1" }, HTF: { ... }, ... }
 ```
 
 All 4 models run in parallel (`Promise.all`). Each model:
 1. Looks up the ONNX session from a success-only cache (Map keyed by `${dim}_${asset}`)
 2. Reads `feature_order` from the `.meta.json` to build the float array in canonical order
-3. Runs inference, reads the probability output at index `onnx_output_index_for_win`
-4. Returns `{ score: 2*pUp - 1, pUp, modelVersion }` or `null` on any failure
+3. Runs inference, reads the scalar regression output
+4. Clamps to [-1, +1] and returns `{ score, modelVersion }` or throws on any failure
 
-Missing model files produce a one-time warning and `null`. The cache never stores failures — a freshly-trained model is picked up on the next brief without restarting the process.
+Missing model files produce a one-time error and throw. The cache never stores failures — a freshly-trained model is picked up on the next brief without restarting the process.
 
 ---
 
@@ -163,14 +135,14 @@ After L2a inference, per-dim scores are merged:
 
 ```typescript
 const confluence: Confluence = {
-  DERIVATIVES: intradimMl.DERIVATIVES?.score ?? heuristicConfluence.DERIVATIVES,
-  ETFS:        intradimMl.ETFS?.score        ?? heuristicConfluence.ETFS,
-  HTF:         intradimMl.HTF?.score         ?? heuristicConfluence.HTF,
-  EXCHANGE_FLOWS: intradimMl.EXCHANGE_FLOWS?.score ?? heuristicConfluence.EXCHANGE_FLOWS,
+  DERIVATIVES: intradimMl.DERIVATIVES.score,
+  ETFS:        intradimMl.ETFS.score,
+  HTF:         intradimMl.HTF.score,
+  EXCHANGE_FLOWS: intradimMl.EXCHANGE_FLOWS.score,
 };
 ```
 
-The heuristic score is still computed for every dim on every brief — it is never skipped. It is the fallback and the audit comparator. In the console output, ML-driven dims are marked with `*`: `HTF:+0.24*  DERIVATIVES:-0.05  ETFS:+0.36*  EXCHANGE_FLOWS:+0.18*  (* = L2a ML, 3/4 dims)`.
+The heuristic score from `confluence.ts` is still computed on every brief as a fallback — it is never skipped. If L2a throws for any dimension, the pipeline falls back to the heuristic score for that dim.
 
 ---
 
@@ -178,25 +150,23 @@ The heuristic score is still computed for every dim on every brief — it is nev
 
 ### What it answers
 
-Given the four per-dim scores (now ML-corrected where possible), **"P(this trade wins given the full cross-dim picture)?"**
-
-Trade-success label: `qualityAtPoint > 0` = win, regardless of direction.
+Given the four per-dim trend strength scores, **"What is the overall trend strength?"**
 
 ### Output
 
 ```
-mlTotal = 2 × pWin - 1    ∈ [-1, +1]
+mlTotal = clamp(regression_output, -1, +1)  ∈ [-1, +1]
 ```
 
 ### Model
 
-Logistic regression (L2 regularization, default sklearn), `class_weight='balanced'`. 4 features = 4 per-dim confluence scores. Per-asset.
+Ridge regression (L2 regularization, `alpha=1.0`). 4 features = 4 per-dim trend strength scores. Per-asset.
+
+Same label: normalized `qualityAtPoint`. Ridge is stable with only 4 inputs and ~300 rows.
 
 ### Inference ([`ml-aggregator.ts`](../packages/pipeline/src/orchestrator/trade-idea/ml-aggregator.ts))
 
-Takes the 4 effective per-dim scores (post-L2a merge) as input. Returns `{ mlTotal, pWin, modelVersion }` or `null`.
-
-The critical coupling: **the per-dim scores fed to L1 are whatever the effective confluence is — ML-corrected or heuristic**. This means when L2a models improve the per-dim scores, L1 gets better inputs automatically without retraining. However, when L1 was originally trained, it used heuristic scores as inputs. Once L2a is stable, retrain L1 on rows where per-dim scores came from L2a models.
+Takes the 4 effective per-dim scores as input. Returns `{ mlTotal, modelVersion }` or `null`.
 
 ### Fallback chain
 
@@ -216,7 +186,7 @@ multiplier       = 2.0 × conviction^1.5
 positionSizePct  = clamp(base × multiplier, 0, 150%)
 ```
 
-Where `base = DAILY_VOL_TARGET / (ATR_4h / price)`. Position size naturally goes to zero as conviction approaches zero — there is no hard "skip" threshold; the model determines whether to take a position by the magnitude of its total output.
+Where `base = DAILY_VOL_TARGET / (ATR_4h / price)`. Position size naturally goes to zero as trend strength approaches zero — the model determines whether to take a position by the magnitude of its total output.
 
 ---
 
@@ -226,21 +196,21 @@ Every trade idea stores the full audit trail in `TradeIdea.confluence` (JSONB):
 
 ```json
 {
-  "DERIVATIVES": -0.05,
+  "DERIVATIVES": 0.18,
   "ETFS": 0.36,
   "HTF": 0.24,
-  "EXCHANGE_FLOWS": 0.18,
-  "total": 0.183,
+  "EXCHANGE_FLOWS": 0.42,
+  "total": 0.30,
   "sizing": { "positionSizePct": 42, "convictionMultiplier": 0.71, "dailyVolPct": 1.8 },
-  "aggregator": { "source": "ml", "modelVersion": "v1", "pWin": 0.591 },
+  "aggregator": { "source": "ml", "modelVersion": "v1" },
   "intradim": {
-    "DERIVATIVES": { "score": -0.05, "pUp": 0.475, "modelVersion": "v1" },
-    "ETFS":        { "score": 0.36,  "pUp": 0.68,  "modelVersion": "v1" },
-    "HTF":         { "source": "heuristic" },
-    "EXCHANGE_FLOWS": { "score": 0.18, "pUp": 0.59, "modelVersion": "v1" }
+    "DERIVATIVES": { "score": 0.18, "modelVersion": "v1" },
+    "ETFS":        { "score": 0.36, "modelVersion": "v1" },
+    "HTF":         { "score": 0.24, "modelVersion": "v1" },
+    "EXCHANGE_FLOWS": { "score": 0.42, "modelVersion": "v1" }
   },
   "rawFeatures": {
-    "DERIVATIVES": { "fundingPct1m": 62, "oiZScore30d": 0.4, "stressState": 0.0, ... },
+    "DERIVATIVES": { "fundingPct1m": 62, "oiZScore30d": 0.4, ... },
     "ETFS": { "todaySigma": 1.8, "regime": 1.0, ... },
     "HTF": { "biasComposite": 0.28, "rsiH4": 54, ... },
     "EXCHANGE_FLOWS": { "reserveChange7dPct": -1.2, "isAt30dLow": 1.0, ... }
@@ -248,12 +218,10 @@ Every trade idea stores the full audit trail in `TradeIdea.confluence` (JSONB):
 }
 ```
 
-- Per-dim scores (top-level) are the **effective** scores (ML or heuristic) — what actually drove the decision.
-- `aggregator` records which L1 source ran (ml or fallback) and its `pWin`.
-- `intradim` records per-dim L2a results. A missing key means heuristic was used for that dim.
-- `rawFeatures` is the training source for future retraining — these are the amplitude-encoded inputs, not the raw analyzer outputs.
-
-This layout allows per-row auditing: for any historical trade idea, you can reconstruct which dims used ML, what pUp each model produced, what the heuristic would have said (compare effective score to heuristic), and re-run the full L1 aggregator with different model weights.
+- Per-dim scores (top-level) are the **effective** scores — what actually drove the decision.
+- `aggregator` records which L1 source ran (ml or fallback).
+- `intradim` records per-dim L2a results.
+- `rawFeatures` is the training source for future retraining.
 
 ---
 
@@ -261,9 +229,9 @@ This layout allows per-row auditing: for any historical trade idea, you can reco
 
 ```
 packages/pipeline/models/
-  confluence_btc_v1.{onnx,meta.json}    ← L1 BTC
+  confluence_btc_v1.{onnx,meta.json}    ← L1 BTC (Ridge regression)
   confluence_eth_v1.{onnx,meta.json}    ← L1 ETH
-  dim_derivatives_btc_v1.{onnx,meta.json}   ← L2a
+  dim_derivatives_btc_v1.{onnx,meta.json}   ← L2a (Lasso regression)
   dim_derivatives_eth_v1.{onnx,meta.json}
   dim_etfs_btc_v1.{onnx,meta.json}
   dim_etfs_eth_v1.{onnx,meta.json}
@@ -273,7 +241,7 @@ packages/pipeline/models/
   dim_exchange_flows_eth_v1.{onnx,meta.json}
 ```
 
-Each `.meta.json` records: feature order, trained-at timestamp, n_samples, date range, CV metrics, per-feature Pearson IC, non-zero coefficients, heuristic baseline comparison.
+Each `.meta.json` records: `model_type`, `quality_scale` (normalization factor), `feature_order`, trained-at timestamp, n_samples, date range, CV metrics (R², MAE, Pearson IC), per-feature IC, non-zero coefficients, and ONNX output name.
 
 ### Versioning
 
@@ -285,7 +253,7 @@ INTRADIM_ML_VERSION=v2 pnpm brief
 ML_AGGREGATOR_VERSION=v2 pnpm brief
 ```
 
-Old artifacts are not deleted on retrain — the old `.onnx` stays on disk as a rollback target. The pipeline picks up new models on the next brief without restart (failures are never cached; successful loads are).
+Old artifacts are not deleted on retrain — the old `.onnx` stays on disk as a rollback target.
 
 ---
 
@@ -293,9 +261,9 @@ Old artifacts are not deleted on retrain — the old `.onnx` stays on disk as a 
 
 ### When to retrain
 
-- **Weekly** — crypto regimes drift; models trained on 60 days of data have a short shelf life.
-- **After schema changes** — any new feature in `extract-features.ts` or `feature_schema.json` invalidates existing models (trained on old feature vectors).
-- **After performance drop** — if recent OOF accuracy on fresh data drops below the heuristic baseline, retrain to absorb the regime.
+- **After this strategy change** — existing v1 ONNX models were trained with classification labels and mean-reversion feature encodings. They must be retrained immediately.
+- **Weekly** — crypto regimes drift; models trained on limited data have a short shelf life.
+- **After feature schema changes** — any change to `feature_schema.json` or `extract-features.ts` invalidates existing models.
 
 ### Retrain L2a (per-dim sub-models)
 
@@ -316,16 +284,16 @@ for DIM in HTF DERIVATIVES EXCHANGE_FLOWS ETFS; do
 done
 ```
 
-### Retrain L1 (cross-dim aggregator)
+Key flag: `--alpha` controls Lasso regularization (default `0.05`). Increase for smaller datasets.
 
-After L2a is stable (or when per-dim data drift is detected):
+### Retrain L1 (cross-dim aggregator)
 
 ```bash
 .venv/bin/python train.py --asset BTC --verify
 .venv/bin/python train.py --asset ETH --verify
 ```
 
-Note: the current L1 was trained on heuristic per-dim scores as inputs. Once L2a is the dominant input source, retrain L1 on rows where `confluence.intradim` was set — it will learn to aggregate ML scores rather than heuristic scores.
+Note: retrain L1 after L2a is stable so it aggregates ML-sourced per-dim scores rather than heuristic ones.
 
 ### Data prerequisites
 
@@ -342,7 +310,7 @@ pnpm ml:backfill-features  # patch rawFeatures into any rows missing it
 
 1. Add the dimension to `DimensionEnum` and `CONFLUENCE_DIMENSIONS` in `dimensions.ts`.
 2. Write an extractor function in `extract-features.ts` and add it to `extractRawFeatures`.
-3. Add the dimension's `feature_sets` entry to `feature_schema.json` (must stay in lockstep with the extractor).
+3. Add the dimension's `feature_sets` entry to `feature_schema.json` (momentum-biased encodings).
 4. Run `pnpm ml:backfill-features` to patch `rawFeatures` on historical trade ideas.
 5. Train the new dim's L2a model: `train_dim.py --dim NEW_DIM --asset BTC`.
 6. Add the new dim to `runIntradimMl` in `intradim-ml.ts`.

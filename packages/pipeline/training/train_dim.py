@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Train per-dimension intra-dim sub-model (L2a).
+Train per-dimension intra-dim sub-model (L2a) — momentum regression.
 
-Reads rawFeatures.<dim> from TradeIdea rows, trains a logistic regression
-with L1 regularization on the market-direction label, and exports ONNX.
+Reads rawFeatures.<dim> from TradeIdea rows, trains a Lasso regression
+(L1-regularized) on a normalized qualityAtPoint target, and exports ONNX.
 
-Label semantics (market direction, not trade success):
-  LONG + qualityAtPoint > 0  → price went UP   → label 1
-  LONG + qualityAtPoint < 0  → price went DOWN  → label 0
-  SHORT + qualityAtPoint > 0 → SHORT won = price DOWN → label 0
-  SHORT + qualityAtPoint < 0 → SHORT lost = price UP  → label 1
+Label semantics (trend strength, not direction):
+  qualityAtPoint > 0 and large  → strong upward momentum  → target near +1
+  qualityAtPoint < 0 and large  → strong downward momentum → target near -1
+  qualityAtPoint near 0         → choppy / no trend        → target near 0
 
-This is different from train.py (L1) which labels on trade success. The
-per-dim model must answer "should we buy?" not "did our choice win?".
+Label normalization: clip(qualityAtPoint / (3 * std), -1, 1)
+Maps 3-sigma returns to ±1. The model learns to predict trend strength.
+
+Model output: a scalar in roughly [-1, +1] representing trend strength.
+Positive = bullish trend; negative = bearish trend; near-zero = no trend.
 
 Usage:
   python train_dim.py --dim DERIVATIVES --asset BTC
@@ -32,8 +34,8 @@ import pandas as pd
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, brier_score_loss, log_loss
+from sklearn.linear_model import Lasso
+from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import TimeSeriesSplit
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
@@ -121,26 +123,16 @@ def fetch_rows(asset: str, dim: str) -> pd.DataFrame:
 
         quality = float(peak["qualityAtPoint"])
         direction = row["direction"]
+        if direction not in ("LONG", "SHORT"):
+            continue
 
-        # Market-direction label: 1 = price went up, 0 = price went down
-        if direction == "LONG":
-            went_up = quality > 0
-        elif direction == "SHORT":
-            went_up = quality < 0
-        else:
-            continue  # FLAT — skip
-
-        # Extract features in canonical order; missing keys default to 0.0
         features = {name: float(raw.get(name, 0.0)) for name in feat_names}
 
-        # Per-dim heuristic score stored at trade time (handles both old lowercase
-        # and new uppercase enum-keyed formats)
         conf = row["confluence"] or {}
         heuristic = conf.get(dim) or conf.get(dim.lower()) or conf.get(_legacy_key(dim))
 
         record = {
             "createdAt": row["createdAt"],
-            "label": int(went_up),
             "qualityAtPoint": quality,
             **features,
         }
@@ -152,7 +144,6 @@ def fetch_rows(asset: str, dim: str) -> pd.DataFrame:
 
 
 def _legacy_key(dim: str) -> str:
-    """Map EXCHANGE_FLOWS → exchangeFlows etc. for old lowercase-key rows."""
     mapping = {
         "DERIVATIVES": "derivatives",
         "ETFS": "etfs",
@@ -165,17 +156,17 @@ def _legacy_key(dim: str) -> str:
 # ─── Metrics ─────────────────────────────────────────────────────────────────
 
 
-def evaluate(y_true, y_proba, label):
-    pred = (y_proba > 0.5).astype(int)
+def evaluate(y_true: np.ndarray, y_pred: np.ndarray, label: str) -> dict:
+    ic = float(np.corrcoef(y_true, y_pred)[0, 1]) if y_true.std() > 0 and y_pred.std() > 0 else 0.0
     return {
         "label": label,
-        "accuracy": float(accuracy_score(y_true, pred)),
-        "log_loss": float(log_loss(y_true, np.clip(y_proba, 1e-6, 1 - 1e-6))),
-        "brier": float(brier_score_loss(y_true, y_proba)),
+        "r2": float(r2_score(y_true, y_pred)),
+        "mae": float(mean_absolute_error(y_true, y_pred)),
+        "pearson_ic": ic,
     }
 
 
-def walk_forward_cv(X: np.ndarray, y: np.ndarray, C: float) -> dict:
+def walk_forward_cv(X: np.ndarray, y: np.ndarray, alpha: float) -> dict:
     n_splits = min(5, max(2, len(X) // 40))
     if len(X) < 60:
         return {"folds": 0, "note": "too few samples for CV"}
@@ -183,28 +174,21 @@ def walk_forward_cv(X: np.ndarray, y: np.ndarray, C: float) -> dict:
     oof_pred = np.full(len(X), np.nan)
     fold_metrics = []
     for fold, (tr, te) in enumerate(tscv.split(X)):
-        if len(np.unique(y[tr])) < 2:
-            continue
-        clf = LogisticRegression(
-            l1_ratio=1, solver="liblinear", C=C,
-            class_weight="balanced", max_iter=1000,
-        )
-        clf.fit(X[tr], y[tr])
-        win_idx = list(clf.classes_).index(1)
-        proba = clf.predict_proba(X[te])[:, win_idx]
-        oof_pred[te] = proba
-        fold_metrics.append(evaluate(y[te], proba, f"fold{fold}"))
+        reg = Lasso(alpha=alpha, max_iter=10000)
+        reg.fit(X[tr], y[tr])
+        pred = reg.predict(X[te])
+        oof_pred[te] = pred
+        fold_metrics.append(evaluate(y[te], pred, f"fold{fold}"))
     valid = ~np.isnan(oof_pred)
     summary = (
         evaluate(y[valid], oof_pred[valid], "oof")
-        if valid.sum() > 0 and len(np.unique(y[valid])) == 2
+        if valid.sum() > 0
         else {"label": "oof", "note": "insufficient signal"}
     )
     return {"folds": n_splits, "fold_metrics": fold_metrics, "oof": summary}
 
 
-def pearson_ic(df: pd.DataFrame, feat_names: list[str]) -> dict:
-    y = np.where(df["label"].to_numpy() == 1, 1.0, -1.0)
+def pearson_ic(df: pd.DataFrame, feat_names: list[str], y: np.ndarray) -> dict:
     ic = {}
     for f in feat_names:
         x = df[f].to_numpy()
@@ -218,22 +202,18 @@ def pearson_ic(df: pd.DataFrame, feat_names: list[str]) -> dict:
 # ─── ONNX verification ────────────────────────────────────────────────────────
 
 
-def verify_onnx(onnx_path: Path, X: np.ndarray, y: np.ndarray, win_idx: int) -> dict:
+def verify_onnx(onnx_path: Path, X: np.ndarray, y: np.ndarray) -> dict:
     import onnxruntime as ort
     sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
     input_name = sess.get_inputs()[0].name
-    outputs = sess.run(None, {input_name: X.astype(np.float32)})
-    output_names = [o.name for o in sess.get_outputs()]
-    proba_idx = next((i for i, n in enumerate(output_names) if "prob" in n.lower()), 1)
-    proba = outputs[proba_idx]
-    if proba.ndim == 2:
-        proba = proba[:, win_idx]
+    output_name = sess.get_outputs()[0].name
+    outputs = sess.run([output_name], {input_name: X.astype(np.float32)})
+    pred = np.array(outputs[0]).flatten()
     return {
         "input_name": input_name,
-        "output_names": output_names,
-        "probability_output_index": proba_idx,
-        "metrics": evaluate(y, proba, "onnx_roundtrip"),
-        "first_5_probs": proba[:5].tolist(),
+        "output_name": output_name,
+        "metrics": evaluate(y, pred, "onnx_roundtrip"),
+        "first_5_preds": pred[:5].tolist(),
     }
 
 
@@ -250,9 +230,9 @@ def main():
         default=str(REPO_ROOT / "packages" / "pipeline" / "models"),
     )
     parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--C", type=float, default=1.0,
-                        help="L1 regularization inverse strength. Higher = less regularization. "
-                             "Use --C 3.0 for ETFS dims to let streak features survive pruning.")
+    parser.add_argument("--alpha", type=float, default=0.05,
+                        help="Lasso L1 regularization strength. Higher = sparser. "
+                             "Default 0.05 is moderate — increase for small datasets.")
     args = parser.parse_args()
 
     feat_names = feature_names(args.dim)
@@ -263,47 +243,52 @@ def main():
     if len(df) == 0:
         sys.exit(f"No usable rows for {args.asset}/{args.dim}.")
 
-    wins = int((df["label"] == 1).sum())
-    losses = int((df["label"] == 0).sum())
     print(
-        f"  {len(df)} rows, {df['createdAt'].min()} → {df['createdAt'].max()}, "
-        f"went_up={wins}, went_down={losses}"
+        f"  {len(df)} rows, {df['createdAt'].min()} → {df['createdAt'].max()}"
     )
 
-    # Cap reversalRatio — extreme outliers (e.g. 130x when prior streak was tiny)
-    # blow up the logit; anything beyond 3x carries no additional information.
+    # Cap reversalRatio — extreme outliers blow up the regression
     if "reversalRatio" in df.columns:
         df["reversalRatio"] = df["reversalRatio"].clip(upper=3.0)
 
+    # Normalize qualityAtPoint → trend strength target in [-1, +1]
+    # clip(quality / (3 * std), -1, 1) maps 3-sigma returns to ±1
+    q_std = float(df["qualityAtPoint"].std())
+    if q_std == 0:
+        sys.exit("All qualityAtPoint values identical — cannot train.")
+    quality_scale = 3.0 * q_std
+    y_raw = df["qualityAtPoint"].to_numpy(dtype=np.float64)
+    y = np.clip(y_raw / quality_scale, -1.0, 1.0).astype(np.float64)
+
+    print(f"  qualityAtPoint std={q_std:.4f}  scale={quality_scale:.4f}")
+    print(f"  y range: [{y.min():.3f}, {y.max():.3f}]  mean={y.mean():.3f}")
+
     X = df[feat_names].to_numpy(dtype=np.float32)
-    y = df["label"].to_numpy(dtype=np.int64)
 
     # ── Heuristic baseline ─────────────────────────────────────────────────
     if "heuristic_score" in df.columns and not df["heuristic_score"].isna().any():
-        h_proba = np.clip((df["heuristic_score"].to_numpy() + 1) / 2, 0.0, 1.0)
-        h_metrics = evaluate(y, h_proba, f"heuristic_{args.dim}")
+        h_pred = df["heuristic_score"].to_numpy(dtype=np.float64)
+        h_metrics = evaluate(y, h_pred, f"heuristic_{args.dim}")
         print(
             f"\n  Heuristic baseline ({args.dim}): "
-            f"accuracy={h_metrics['accuracy']:.3f}  "
-            f"log_loss={h_metrics['log_loss']:.3f}  "
-            f"brier={h_metrics['brier']:.3f}"
+            f"R²={h_metrics['r2']:.3f}  MAE={h_metrics['mae']:.3f}  IC={h_metrics['pearson_ic']:+.3f}"
         )
     else:
         print("\n  Heuristic baseline: not available for this dim/asset")
         h_metrics = None
 
     # ── Walk-forward CV ────────────────────────────────────────────────────
-    print(f"\nWalk-forward CV (L1, TimeSeriesSplit, C={args.C})...")
-    cv = walk_forward_cv(X, y, C=args.C)
-    if "oof" in cv and "accuracy" in cv.get("oof", {}):
+    print(f"\nWalk-forward CV (Lasso, TimeSeriesSplit, alpha={args.alpha})...")
+    cv = walk_forward_cv(X, y.astype(np.float32), alpha=args.alpha)
+    if "oof" in cv and "pearson_ic" in cv.get("oof", {}):
         m = cv["oof"]
-        print(f"  OOF: accuracy={m['accuracy']:.3f}  log_loss={m['log_loss']:.3f}  brier={m['brier']:.3f}")
+        print(f"  OOF: R²={m['r2']:.3f}  MAE={m['mae']:.3f}  IC={m['pearson_ic']:+.3f}")
     else:
         print(f"  CV: {cv}")
 
     # ── Per-feature IC ─────────────────────────────────────────────────────
-    print("\nPer-feature Pearson IC (vs went_up label):")
-    ic = pearson_ic(df, feat_names)
+    print("\nPer-feature Pearson IC (vs trend strength target):")
+    ic = pearson_ic(df, feat_names, y)
     top = sorted(ic.items(), key=lambda kv: abs(kv[1]), reverse=True)[:10]
     for feat, v in top:
         sign = "+" if v >= 0 else ""
@@ -311,25 +296,21 @@ def main():
 
     # ── Final model ────────────────────────────────────────────────────────
     print("\nTraining final model on full dataset...")
-    final = LogisticRegression(
-        l1_ratio=1, solver="liblinear", C=args.C,
-        class_weight="balanced", max_iter=1000,
-    )
-    final.fit(X, y)
-    win_idx = list(final.classes_).index(1)
-    train_metrics = evaluate(y, final.predict_proba(X)[:, win_idx], "train_full")
+    final = Lasso(alpha=args.alpha, max_iter=10000)
+    final.fit(X, y.astype(np.float32))
+    train_pred = final.predict(X)
+    train_metrics = evaluate(y, train_pred, "train_full")
     print(
-        f"  In-sample: accuracy={train_metrics['accuracy']:.3f}  "
-        f"log_loss={train_metrics['log_loss']:.3f}  brier={train_metrics['brier']:.3f}"
+        f"  In-sample: R²={train_metrics['r2']:.3f}  "
+        f"MAE={train_metrics['mae']:.3f}  IC={train_metrics['pearson_ic']:+.3f}"
     )
 
-    # Top non-zero coefficients
-    nonzero = [(f, c) for f, c in zip(feat_names, final.coef_[0]) if c != 0.0]
+    nonzero = [(f, c) for f, c in zip(feat_names, final.coef_) if c != 0.0]
     nonzero.sort(key=lambda fc: abs(fc[1]), reverse=True)
     print(f"  Non-zero coefficients: {len(nonzero)} / {len(feat_names)}")
     for feat, coef in nonzero[:10]:
         print(f"    {feat:<32s} {coef:+.4f}")
-    print(f"  Intercept: {float(final.intercept_[0]):+.4f}")
+    print(f"  Intercept: {float(final.intercept_):+.4f}")
 
     # ── Export ────────────────────────────────────────────────────────────
     out_dir = Path(args.output_dir)
@@ -339,12 +320,7 @@ def main():
     meta_path = out_dir / f"{model_name}.meta.json"
 
     initial_type = [("X", FloatTensorType([None, len(feat_names)]))]
-    onx = convert_sklearn(
-        final,
-        initial_types=initial_type,
-        target_opset=17,
-        options={id(final): {"zipmap": False}},
-    )
+    onx = convert_sklearn(final, initial_types=initial_type, target_opset=17)
     with open(onnx_path, "wb") as f:
         f.write(onx.SerializeToString())
     print(f"\nWrote {onnx_path}")
@@ -354,8 +330,9 @@ def main():
         "dim": args.dim,
         "asset": args.asset,
         "version": args.version,
-        "model_type": "logistic_regression_l1",
-        "label": "went_up: 1=price_went_up, 0=price_went_down",
+        "model_type": "lasso_regression",
+        "label": "trend_strength: clip(qualityAtPoint / quality_scale, -1, 1)",
+        "quality_scale": quality_scale,
         "feature_order": feat_names,
         "n_features": len(feat_names),
         "trained_at": datetime.now(timezone.utc).isoformat(),
@@ -364,10 +341,9 @@ def main():
             "start": df["createdAt"].min().isoformat() if len(df) else None,
             "end": df["createdAt"].max().isoformat() if len(df) else None,
         },
-        "class_balance": {"went_up": wins, "went_down": losses},
         "non_zero_coefficients": {f: float(c) for f, c in nonzero},
-        "intercept": float(final.intercept_[0]),
-        "regularization": {"l1_ratio": 1, "C": 1.0, "solver": "liblinear", "class_weight": "balanced"},
+        "intercept": float(final.intercept_),
+        "regularization": {"penalty": "l1", "alpha": args.alpha, "solver": "lasso"},
         "cv": cv,
         "pearson_ic_top10": {f: float(v) for f, v in top},
         "heuristic_baseline": h_metrics,
@@ -375,19 +351,15 @@ def main():
         "onnx_input_name": "X",
         "onnx_input_shape": [None, len(feat_names)],
         "onnx_input_dtype": "float32",
-        "onnx_output_index_for_win": int(win_idx),
-        "label_mapping": {"0": "went_down (price fell)", "1": "went_up (price rose)"},
+        "onnx_output_name": "variable",
     }
 
     if args.verify:
         print("\nVerifying ONNX roundtrip...")
-        verify_result = verify_onnx(onnx_path, X, y, win_idx)
+        verify_result = verify_onnx(onnx_path, X, y)
         metadata["onnx_verification"] = verify_result
         m = verify_result["metrics"]
-        print(
-            f"  ONNX in-sample: accuracy={m['accuracy']:.3f}  "
-            f"brier={m['brier']:.3f}"
-        )
+        print(f"  ONNX in-sample: R²={m['r2']:.3f}  IC={m['pearson_ic']:+.3f}")
 
     with open(meta_path, "w") as f:
         json.dump(metadata, f, indent=2, default=str)

@@ -4,11 +4,7 @@ import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { DIMENSION_LABELS } from "../lib/dimensions";
 import { Tooltip } from "./Tooltip";
 
-/**
- * Conviction "fully loaded" threshold on the new -1..+1 scale (= 0.5 of full).
- * Used purely for color/label switching in the UI; the trade decision itself
- * is mechanical and unconditional.
- */
+/** Trend strength threshold for "strong" color on the Total row (0.5 = 50/100). */
 const CONVICTION_THRESHOLD = 0.5;
 
 /** Format a -1..+1 score as a signed integer percentage. */
@@ -30,11 +26,11 @@ function gaugeColor(score: number): string {
 
 function gaugeLabel(score: number): string {
   const abs = Math.abs(score);
-  const dir = score > 0 ? "Buy" : score < 0 ? "Sell" : "";
+  const dir = score > 0 ? "Uptrend" : score < 0 ? "Downtrend" : "";
   if (abs >= 70) return `Strong ${dir}`;
-  if (abs >= 40) return `Moderate ${dir}`;
+  if (abs >= 40) return `${dir}`;
   if (abs >= 15) return `Weak ${dir}`;
-  return "No Edge";
+  return "Ranging";
 }
 
 export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
@@ -99,22 +95,21 @@ export function OpportunityGauge({ tradeIdea }: { tradeIdea: TradeIdea }) {
       <div className="text-[0.625rem]" style={{ color: "var(--text-muted)" }}>
         {taken ? (
           <span>
-            Trade{" "}
+            Riding{" "}
             <span style={{ color }} className="font-medium">
               {tradeIdea.direction}
             </span>{" "}
-            taken — sized to conviction
+            trend — sized to strength
           </span>
         ) : score !== 0 ? (
           <span>
-            Bias{" "}
             <span style={{ color }} className="font-medium">
-              {score > 0 ? "LONG" : "SHORT"}
+              {score > 0 ? "Bullish" : "Bearish"}
             </span>{" "}
-            — strength {Math.abs(score)}/100
+            momentum — strength {Math.abs(score)}/100
           </span>
         ) : (
-          <span>No directional edge detected</span>
+          <span>No trend detected — market ranging</span>
         )}
       </div>
     </div>
@@ -129,13 +124,13 @@ function dimScoreColor(score: number): string {
 
 const CONFLUENCE_TOOLTIPS: Record<DimensionEnum, string> = {
   [DimensionEnum.HTF]:
-    "HTF structure: volatility compression, CVD divergence, RSI stretch, volume profile displacement, and MA mean-reversion pull.",
+    "HTF structure: trend regime (bull/bear extended), CVD momentum, RSI momentum, volume profile position, and MA alignment.",
   [DimensionEnum.DERIVATIVES]:
-    "Derivatives positioning: crowded longs/shorts, stress events (capitulation/unwinding), funding extremes, and open interest fuel.",
+    "Derivatives positioning: trend-confirming OI participation, funding direction, and stress/capitulation events.",
   [DimensionEnum.ETFS]:
-    "ETF institutional flows: flow sigma with regime contradiction, reversal confirmation after streaks, reversal ratio, and reversal regime.",
+    "ETF institutional flows: sustained inflow/outflow regime, streak momentum, and flow trend direction.",
   [DimensionEnum.EXCHANGE_FLOWS]:
-    "Exchange flows: 7d/30d reserve changes (accumulation vs distribution) and 30-day reserve extremes.",
+    "Exchange flows: accumulation vs distribution regime and 7d/30d reserve trend direction.",
 };
 
 /** Per-dimension confluence breakdown — rows matching the Overview section style */

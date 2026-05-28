@@ -36,7 +36,7 @@ export interface TradeDecision {
   compositeTarget: number;
   /** Recommended position size (% of account notional) and sizing diagnostics */
   sizing: PositionSize;
-  /** ML aggregator diagnostics (pWin, modelVersion), or null if model unavailable. */
+  /** ML aggregator diagnostics (modelVersion), or null if model unavailable. */
   ml: MlResult | null;
   /** Per-dimension L2a ML results. Missing key = heuristic was used for that dim. */
   intradimMl: IntradimMlResults;
@@ -115,7 +115,7 @@ export async function processTradeIdea(
     .map((l) => `${l.label}@${l.price.toFixed(0)}`)
     .join(" ");
 
-  const aggLabel = ml ? chalk.magenta(`ml ${ml.modelVersion} pWin=${ml.pWin}`) : chalk.yellow("equal-weight fallback");
+  const aggLabel = ml ? chalk.magenta(`ml ${ml.modelVersion}`) : chalk.yellow("equal-weight fallback");
 
   console.log(
     `      ${chalk.green("▸")} trade idea: ${chalk.bold(direction)} ` +

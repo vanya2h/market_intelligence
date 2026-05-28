@@ -1,5 +1,5 @@
 {
-  "_comment": "Categorical amplitude maps for per-dimension ML feature encoding. Each enum value maps to a [-1, +1] signed score where +1 = maximally bullish, -1 = maximally bearish, 0 = neutral. Used identically by training (Python) and inference (Node) to prevent encoding drift. Unknown/missing values default to 0.0.",
+  "_comment": "Categorical amplitude maps for per-dimension ML feature encoding. Each enum value maps to a [-1, +1] signed score where +1 = maximally bullish, -1 = maximally bearish, 0 = neutral. Encodings are momentum-biased: extended trends score in the direction of the trend (ride it), not against it. Used identically by training (Python) and inference (Node) to prevent encoding drift. Unknown/missing values default to 0.0.",
 
   "categoricals": {
     "PositioningRegime": {
@@ -15,10 +15,10 @@
       "STRESS_NONE": 0.0
     },
     "OiSignal": {
-      "DEPRESSED": 0.6,
+      "DEPRESSED": 0.0,
       "OI_NORMAL": 0.0,
-      "ELEVATED": -0.3,
-      "EXTREME": -0.8
+      "ELEVATED": 0.3,
+      "EXTREME": 0.6
     },
     "EtfRegime": {
       "STRONG_INFLOW": 1.0,
@@ -29,14 +29,14 @@
       "STRONG_OUTFLOW": -1.0
     },
     "HtfRegime": {
-      "BEAR_EXTENDED": 0.8,
+      "BULL_EXTENDED": 0.8,
       "ACCUMULATION": 0.6,
       "RECLAIMING": 0.5,
       "MACRO_BULLISH": 0.3,
       "RANGING": 0.0,
       "MACRO_BEARISH": -0.3,
       "DISTRIBUTION": -0.6,
-      "BULL_EXTENDED": -0.8
+      "BEAR_EXTENDED": -0.8
     },
     "MarketStructure": {
       "HH_HL": 0.8,
