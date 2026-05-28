@@ -26,7 +26,7 @@ interface SaveTradeIdeaInput {
   total: number;
   sizing: PositionSize;
   ml: MlResult | null;
-  /** Per-dimension L2a ML results (score, pUp) keyed by DimensionEnum. */
+  /** Per-dimension L2a ML results (score, modelVersion) keyed by DimensionEnum. */
   intradimMl: IntradimMlResults;
   /** Raw amplitude-encoded features at trade time — training source for per-dim sub-models. */
   rawFeatures: RawFeaturesByDim;
@@ -50,7 +50,7 @@ export async function saveTradeIdea(input: SaveTradeIdeaInput): Promise<string> 
           dailyVolPct: input.sizing.dailyVolPct,
         },
         aggregator: input.ml
-          ? { source: "ml", modelVersion: input.ml.modelVersion, pWin: input.ml.pWin }
+          ? { source: "ml", modelVersion: input.ml.modelVersion }
           : { source: "fallback" },
         intradim: input.intradimMl,
         rawFeatures: input.rawFeatures,

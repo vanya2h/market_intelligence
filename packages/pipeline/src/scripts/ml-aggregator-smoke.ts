@@ -73,7 +73,7 @@ async function main() {
       const ml = await runMlAggregator(asset, scores);
       if (ml) {
         console.log(
-          `    ${label.padEnd(16)} heuristic=${heuristicTotal.toFixed(3)}  →  mlTotal=${chalk.bold(String(ml.mlTotal))}  [${chalk.magenta(`ml ${ml.modelVersion} pWin=${ml.pWin}`)}]`,
+          `    ${label.padEnd(16)} heuristic=${heuristicTotal.toFixed(3)}  →  mlTotal=${chalk.bold(String(ml.mlTotal))}  [${chalk.magenta(`ml ${ml.modelVersion}`)}]`,
         );
       } else {
         console.log(

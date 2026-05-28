@@ -37,8 +37,6 @@ export interface AggregatorInfo {
   source: "ml" | "fallback";
   /** Model version (e.g. "v1") when source = "ml". */
   modelVersion?: string;
-  /** P(win) in [0,1] from the ML model when source = "ml". */
-  pWin?: number;
 }
 
 export interface TradeIdeaLevel {

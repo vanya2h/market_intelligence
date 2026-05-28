@@ -30,9 +30,8 @@ function AggregatorBadge({ aggregator }: { aggregator: AggregatorInfo | undefine
   const isMl = aggregator?.source === "ml";
   const color = isMl ? "var(--amber)" : "var(--text-muted)";
   const versionLabel = isMl && aggregator?.modelVersion ? ` ${aggregator.modelVersion}` : "";
-  const pWinPct = typeof aggregator?.pWin === "number" ? Math.round(aggregator.pWin * 100) : null;
   const title = isMl
-    ? `Total derived from learned logistic regression. P(win) = ${pWinPct}% mapped to [-1, +1] via 2p-1.`
+    ? "Total is a learned trend strength score in [-1, +1] from the ML regression model."
     : aggregator
       ? "Total is the IC-weighted average of the four per-dim scores (heuristic fallback)."
       : "Legacy record — predates the ML aggregator, so the total is the IC-weighted heuristic.";
@@ -47,11 +46,6 @@ function AggregatorBadge({ aggregator }: { aggregator: AggregatorInfo | undefine
       title={title}
     >
       <span>{isMl ? `ML${versionLabel}` : "Heuristic"}</span>
-      {pWinPct !== null && (
-        <span className="font-mono-jb tabular-nums" style={{ opacity: 0.75 }}>
-          · pWin {pWinPct}%
-        </span>
-      )}
     </span>
   );
 }

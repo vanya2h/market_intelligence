@@ -1,9 +1,15 @@
 /**
  * L2a Per-Dimension ML Sub-Models
  *
- * ONNX-backed logistic regression per dimension per asset. Answers "P(price
- * goes up)" from raw amplitude-encoded features (extract-features.ts).
- * Output score = 2*pUp - 1 in [-1, +1].
+ * ONNX-backed Lasso regression per dimension per asset. Answers "what is the
+ * trend strength in this dimension?" from raw amplitude-encoded features
+ * (extract-features.ts). Output score ∈ [-1, +1]: positive = bullish momentum,
+ * negative = bearish momentum, near-zero = no trend.
+ *
+ * Backward-compatible with old classification models: if the meta.json has
+ * `onnx_output_index_for_win`, the model is treated as a probability classifier
+ * and score = 2*pUp - 1 (old behavior). New regression models use `onnx_output_name`
+ * and return the raw regression scalar (clamped to [-1, +1]).
  *
  * Cache: successful loads only (same pattern as ml-aggregator.ts). Failures
  * are not cached so a freshly-trained model is picked up on the next brief.
@@ -28,22 +34,26 @@ interface DimModelMeta {
   asset: string;
   version: string;
   feature_order: string[];
-  onnx_output_index_for_win: number;
+  /** Present on new regression models. */
+  onnx_output_name?: string;
+  /** Present on old classification models — used to detect the model type. */
+  onnx_output_index_for_win?: number;
 }
 
 interface LoadedDimModel {
   session: ort.InferenceSession;
   meta: DimModelMeta;
   inputName: string;
-  probabilityOutputName: string;
+  outputName: string;
+  /** True = old logistic-regression model; false = new regression model. */
+  isClassification: boolean;
+  /** Index of the win-class probability column (classification only). */
   winIndex: number;
 }
 
 export interface IntradimMlResult {
-  /** Score in -1..+1 (2 * pUp - 1). */
+  /** Trend strength in -1..+1. Positive = bullish momentum, negative = bearish. */
   score: number;
-  /** Raw P(price went up) in [0, 1]. */
-  pUp: number;
   modelVersion: string;
 }
 
@@ -79,15 +89,23 @@ async function loadDimModel(dim: DimensionEnum, asset: $Enums.Asset): Promise<Lo
 
   const meta = JSON.parse(fs.readFileSync(paths.meta, "utf-8")) as DimModelMeta;
   const session = await ort.InferenceSession.create(paths.onnx);
-  const probName =
-    session.outputNames.find((n) => n.toLowerCase().includes("prob")) ??
-    session.outputNames[session.outputNames.length - 1]!;
+
+  // Old classification models have `onnx_output_index_for_win` in meta.
+  // New regression models have `onnx_output_name` (or neither — default to regression).
+  const isClassification = typeof meta.onnx_output_index_for_win === "number";
+  const winIndex = meta.onnx_output_index_for_win ?? 1;
+  const outputName = isClassification
+    ? (session.outputNames.find((n) => n.toLowerCase().includes("prob")) ??
+      session.outputNames[session.outputNames.length - 1]!)
+    : (meta.onnx_output_name ?? session.outputNames[0]!);
+
   const loaded: LoadedDimModel = {
     session,
     meta,
     inputName: session.inputNames[0]!,
-    probabilityOutputName: probName,
-    winIndex: meta.onnx_output_index_for_win ?? 1,
+    outputName,
+    isClassification,
+    winIndex,
   };
   cache.set(key, loaded);
   return loaded;
@@ -111,18 +129,31 @@ async function runDimModel(
   const tensor = new ort.Tensor("float32", features, [1, features.length]);
 
   const result = await model.session.run({ [model.inputName]: tensor });
-  const probsTensor = result[model.probabilityOutputName];
-  if (!probsTensor) {
-    throw new Error(`[intradim-ml] output tensor missing for ${dim}/${asset}`);
+  const outputTensor = result[model.outputName];
+  if (!outputTensor) {
+    throw new Error(`[intradim-ml] output tensor "${model.outputName}" missing for ${dim}/${asset}`);
   }
-  const probs = probsTensor.data as Float32Array;
-  const pUp = probs[model.winIndex];
-  if (typeof pUp !== "number" || Number.isNaN(pUp)) {
-    throw new Error(`[intradim-ml] invalid probability for ${dim}/${asset}: ${String(pUp)}`);
+
+  let score: number;
+  if (model.isClassification) {
+    // Old model: probability output → convert to [-1, +1] via 2*pUp-1
+    const probs = outputTensor.data as Float32Array;
+    const pUp = probs[model.winIndex];
+    if (typeof pUp !== "number" || Number.isNaN(pUp)) {
+      throw new Error(`[intradim-ml] invalid probability for ${dim}/${asset}: ${String(pUp)}`);
+    }
+    score = 2 * pUp - 1;
+  } else {
+    // New model: regression scalar, clamp to [-1, +1]
+    const rawScore = (outputTensor.data as Float32Array)[0];
+    if (typeof rawScore !== "number" || Number.isNaN(rawScore)) {
+      throw new Error(`[intradim-ml] invalid regression output for ${dim}/${asset}: ${String(rawScore)}`);
+    }
+    score = Math.max(-1, Math.min(1, rawScore));
   }
+
   return {
-    score: round3(2 * pUp - 1),
-    pUp: round3(pUp),
+    score: round3(score),
     modelVersion: model.meta.version,
   };
 }

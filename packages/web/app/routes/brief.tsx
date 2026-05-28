@@ -9,7 +9,7 @@ import { MobileBriefSummary } from "../components/MobileBriefSummary";
 import { StickyFooter } from "../components/StickyFooter";
 import { TradeIdeaSection } from "../components/TradeIdeaSection";
 import { getBriefById } from "../lib/brief";
-import { getCandles, getTradeIdeaByBriefId } from "../lib/trade-idea";
+import { getCandles, getTradeHistory, getTradeIdeaByBriefId } from "../lib/trade-idea";
 import { api } from "../server/api.server";
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -23,17 +23,19 @@ export async function loader({ params }: LoaderFunctionArgs) {
     getTradeIdeaByBriefId(id)(api).catch(() => null),
   ]);
 
-  const candles = tradeIdea
-    ? await getCandles(tradeIdea.asset, tradeIdea.createdAt.getTime(), api).catch(() => [])
-    : [];
+  const asset = tradeIdea?.asset ?? brief.asset;
+  const [candles, trendHistory] = await Promise.all([
+    tradeIdea ? getCandles(asset, tradeIdea.createdAt.getTime(), api).catch(() => []) : Promise.resolve([]),
+    getTradeHistory(asset)(api).catch(() => []),
+  ]);
 
-  return { brief, tradeIdea, candles };
+  return { brief, tradeIdea, candles, trendHistory };
 }
 
 type LoaderData = Awaited<ReturnType<typeof loader>>;
 
 export default function BriefPage() {
-  const { brief, tradeIdea, candles } = useLoaderData<LoaderData>();
+  const { brief, tradeIdea, candles, trendHistory } = useLoaderData<LoaderData>();
 
   return (
     <div className="min-h-screen">
@@ -45,7 +47,7 @@ export default function BriefPage() {
       {/* Desktop: side-by-side layout */}
       <div className="flex">
         {/* Left sidebar — desktop only */}
-        <BriefSidebar brief={brief} tradeIdea={tradeIdea} />
+        <BriefSidebar brief={brief} tradeIdea={tradeIdea} trendHistory={trendHistory} />
 
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col">

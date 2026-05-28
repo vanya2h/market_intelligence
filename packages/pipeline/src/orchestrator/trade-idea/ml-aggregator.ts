@@ -1,15 +1,17 @@
 /**
- * ML Aggregator (L1) — ONNX-backed logistic regression on the four per-dim scores.
+ * ML Aggregator (L1) — ONNX-backed Ridge regression on the four per-dim scores.
  *
- * Produces a learned `mlTotal` in -1..+1 (P(win) mapped via 2p-1) that runs
- * alongside the heuristic `total` so the rest of the pipeline (sizing, bias,
- * targets) can switch between them via `decisionScore()`.
+ * Produces a learned `mlTotal` in -1..+1 representing cross-dim trend strength.
+ * Positive = bullish momentum; negative = bearish momentum; near-zero = no trend.
  *
- * Always tries to run. On any failure (model artifacts missing, inference
- * error, malformed output) returns null with a console warning; the caller
- * silently falls back to the heuristic `total` via `decisionScore()`. We
- * avoid caching failures so a freshly-trained model is picked up on the
- * next brief without a process restart.
+ * Backward-compatible with old classification models: if the meta.json has
+ * `onnx_output_index_for_win`, the model is treated as a probability classifier
+ * and mlTotal = 2*pWin-1 (old behavior). New regression models use `onnx_output_name`
+ * and return the raw regression scalar (clamped to [-1, +1]).
+ *
+ * Always tries to run. On any failure returns null with a console warning;
+ * the caller silently falls back to the heuristic `total` via `decisionScore()`.
+ * Failures are not cached so a freshly-trained model is picked up on the next brief.
  *
  * Models live at packages/pipeline/models/confluence_<asset>_<version>.{onnx,meta.json}
  * and are produced by packages/pipeline/training/train.py.
@@ -29,7 +31,10 @@ interface ModelMeta {
   asset: string;
   version: string;
   feature_order: string[];
-  onnx_output_index_for_win: number;
+  /** Present on new regression models. */
+  onnx_output_name?: string;
+  /** Present on old classification models — used to detect the model type. */
+  onnx_output_index_for_win?: number;
   trained_at: string;
   n_samples: number;
 }
@@ -38,18 +43,19 @@ interface LoadedModel {
   session: ort.InferenceSession;
   meta: ModelMeta;
   inputName: string;
-  probabilityOutputName: string;
+  outputName: string;
+  /** True = old logistic-regression model; false = new regression model. */
+  isClassification: boolean;
+  /** Index of the win-class probability column (classification only). */
   winIndex: number;
 }
 
 /** Result of a successful ML inference. */
 export interface MlResult {
-  /** -1..+1, equal to 2 * pWin - 1. */
+  /** Trend strength in -1..+1. Positive = bullish, negative = bearish. */
   mlTotal: number;
   /** Model version string from metadata, e.g. "v1". */
   modelVersion: string;
-  /** Raw P(win) in [0,1]. */
-  pWin: number;
 }
 
 /** Successful loads only — failures are not cached so retraining is picked up. */
@@ -84,15 +90,23 @@ async function loadModel(asset: $Enums.Asset): Promise<LoadedModel | null> {
   try {
     const meta = JSON.parse(fs.readFileSync(paths.meta, "utf-8")) as ModelMeta;
     const session = await ort.InferenceSession.create(paths.onnx);
-    const probName =
-      session.outputNames.find((n) => n.toLowerCase().includes("prob")) ??
-      session.outputNames[session.outputNames.length - 1]!;
+
+    // Old classification models have `onnx_output_index_for_win` in meta.
+    // New regression models have `onnx_output_name` (or neither — default to regression).
+    const isClassification = typeof meta.onnx_output_index_for_win === "number";
+    const winIndex = meta.onnx_output_index_for_win ?? 1;
+    const outputName = isClassification
+      ? (session.outputNames.find((n) => n.toLowerCase().includes("prob")) ??
+        session.outputNames[session.outputNames.length - 1]!)
+      : (meta.onnx_output_name ?? session.outputNames[0]!);
+
     const loaded: LoadedModel = {
       session,
       meta,
       inputName: session.inputNames[0]!,
-      probabilityOutputName: probName,
-      winIndex: meta.onnx_output_index_for_win ?? 1,
+      outputName,
+      isClassification,
+      winIndex,
     };
     cache.set(asset, loaded);
     return loaded;
@@ -124,21 +138,35 @@ export async function runMlAggregator(asset: $Enums.Asset, scores: Confluence): 
 
   try {
     const result = await model.session.run({ [model.inputName]: tensor });
-    const probsTensor = result[model.probabilityOutputName];
-    if (!probsTensor) {
-      console.warn(`[ml-aggregator] output ${model.probabilityOutputName} missing for ${asset}; falling back.`);
+    const outputTensor = result[model.outputName];
+    if (!outputTensor) {
+      console.warn(`[ml-aggregator] output "${model.outputName}" missing for ${asset}; falling back.`);
       return null;
     }
-    const probs = probsTensor.data as Float32Array;
-    const pWin = probs[model.winIndex];
-    if (typeof pWin !== "number" || Number.isNaN(pWin)) {
-      console.warn(`[ml-aggregator] invalid probability output for ${asset} (${pWin}); falling back.`);
-      return null;
+
+    let mlTotal: number;
+    if (model.isClassification) {
+      // Old model: probability output → convert to [-1, +1] via 2*pWin-1
+      const probs = outputTensor.data as Float32Array;
+      const pWin = probs[model.winIndex];
+      if (typeof pWin !== "number" || Number.isNaN(pWin)) {
+        console.warn(`[ml-aggregator] invalid probability output for ${asset} (${pWin}); falling back.`);
+        return null;
+      }
+      mlTotal = 2 * pWin - 1;
+    } else {
+      // New model: regression scalar, clamp to [-1, +1]
+      const rawScore = (outputTensor.data as Float32Array)[0];
+      if (typeof rawScore !== "number" || Number.isNaN(rawScore)) {
+        console.warn(`[ml-aggregator] invalid regression output for ${asset} (${rawScore}); falling back.`);
+        return null;
+      }
+      mlTotal = Math.max(-1, Math.min(1, rawScore));
     }
+
     return {
-      mlTotal: round3(2 * pWin - 1),
+      mlTotal: round3(mlTotal),
       modelVersion: model.meta.version,
-      pWin: round3(pWin),
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
