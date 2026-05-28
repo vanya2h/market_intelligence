@@ -91,10 +91,12 @@ This encoding approach — scalars on `[-1, +1]` rather than one-hot — lets th
 
 | Dimension | Numeric | Categorical | Boolean | Total |
 |---|---|---|---|---|
-| DERIVATIVES | 8 | 6 | 0 | **14** |
-| ETFS | 7 | 2 | 0 | **9** |
-| HTF | 21 | 17 | 0 | **38** |
-| EXCHANGE_FLOWS | 7 | 3 | 2 | **12** |
+| DERIVATIVES | 9 | 6 | 0 | **15** |
+| ETFS | 8 | 2 | 0 | **10** |
+| HTF | 22 | 17 | 0 | **39** |
+| EXCHANGE_FLOWS | 8 | 3 | 2 | **13** |
+
+`durationHours` is present in all four dimensions. It encodes how long the current regime has been active, normalized to [0, 1] over a 30-day cap (720h). Value 0 = regime just started or `since` unavailable; value 1 = regime active 30+ days. This gives the model the "where are we in the regime lifecycle" signal that the previous-regime-with-decay feature cannot fully capture.
 
 ### Model
 

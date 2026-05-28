@@ -13,14 +13,15 @@
 
 import chalk from "chalk";
 import { computeDelta } from "../orchestrator/delta.js";
-import { CONFLUENCE_DIMENSIONS } from "../orchestrator/dimensions.js";
+import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../orchestrator/dimensions.js";
 import { runAllDimensions } from "../orchestrator/pipeline.js";
 import { synthesizeRich } from "../orchestrator/rich-synthesizer.js";
 import { buildPrompt, buildSystemPrompt, synthesize } from "../orchestrator/synthesizer.js";
 import { computeCompositeTarget, type Direction } from "../orchestrator/trade-idea/composite-target.js";
-import { getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
-import { computeConfluence } from "../orchestrator/trade-idea/confluence.js";
+import { type Confluence, getConfluenceTotal } from "../orchestrator/trade-idea/confluence.js";
+import { extractRawFeatures } from "../orchestrator/trade-idea/extract-features.js";
 import type { TradeDecision } from "../orchestrator/trade-idea/index.js";
+import { runIntradimMl } from "../orchestrator/trade-idea/intradim-ml.js";
 import { computePositionSize } from "../orchestrator/trade-idea/sizing.js";
 import {
   type DerivativesOutput,
@@ -219,12 +220,17 @@ async function main() {
   let decision: TradeDecision | null = null;
 
   if (htfOut) {
-    const perDim = computeConfluence(outputs);
-    const total = getConfluenceTotal(perDim);
+    const intradimMl = await runIntradimMl(asset, extractRawFeatures(outputs));
+    const confluence: Confluence = {
+      [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES].score,
+      [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS].score,
+      [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF].score,
+      [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS].score,
+    };
+    const total = getConfluenceTotal(confluence);
     const direction: Direction = total >= 0 ? "LONG" : "SHORT";
-    const confluence = perDim;
 
-    const parts = CONFLUENCE_DIMENSIONS.map((d) => `${d}=${scoreStr(perDim[d])}`).join("  ");
+    const parts = CONFLUENCE_DIMENSIONS.map((d) => `${d}=${scoreStr(confluence[d])}`).join("  ");
     console.log(`  ${chalk.bold(direction.padEnd(6))} ${parts}`);
 
     const { entryPrice, compositeTarget } = computeCompositeTarget(htfOut.context, direction);
@@ -238,7 +244,7 @@ async function main() {
       compositeTarget,
       sizing,
       ml: null,
-      intradimMl: {},
+      intradimMl,
     };
 
     console.log();

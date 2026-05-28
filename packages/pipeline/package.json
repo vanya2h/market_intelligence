@@ -31,6 +31,7 @@
     "ml:train-dim": "python3 packages/pipeline/training/train_dim.py",
     "ml:compare": "tsx src/scripts/ml-vs-heuristic.ts",
     "ml:smoke": "tsx src/scripts/ml-aggregator-smoke.ts",
+    "backtest:ml": "tsx src/scripts/backtest-ml.ts",
     "debug:sentiment": "tsx src/scripts/debug-sentiment.ts",
     "debug:synthesizer": "tsx src/scripts/debug-synthesizer.ts",
     "debug:twitter": "tsx src/scripts/debug-twitter-synth.bin.ts",

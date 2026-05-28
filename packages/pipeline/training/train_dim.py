@@ -250,6 +250,9 @@ def main():
         default=str(REPO_ROOT / "packages" / "pipeline" / "models"),
     )
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--C", type=float, default=1.0,
+                        help="L1 regularization inverse strength. Higher = less regularization. "
+                             "Use --C 3.0 for ETFS dims to let streak features survive pruning.")
     args = parser.parse_args()
 
     feat_names = feature_names(args.dim)
@@ -266,6 +269,11 @@ def main():
         f"  {len(df)} rows, {df['createdAt'].min()} → {df['createdAt'].max()}, "
         f"went_up={wins}, went_down={losses}"
     )
+
+    # Cap reversalRatio — extreme outliers (e.g. 130x when prior streak was tiny)
+    # blow up the logit; anything beyond 3x carries no additional information.
+    if "reversalRatio" in df.columns:
+        df["reversalRatio"] = df["reversalRatio"].clip(upper=3.0)
 
     X = df[feat_names].to_numpy(dtype=np.float32)
     y = df["label"].to_numpy(dtype=np.int64)
@@ -285,8 +293,8 @@ def main():
         h_metrics = None
 
     # ── Walk-forward CV ────────────────────────────────────────────────────
-    print("\nWalk-forward CV (L1, TimeSeriesSplit)...")
-    cv = walk_forward_cv(X, y, C=1.0)
+    print(f"\nWalk-forward CV (L1, TimeSeriesSplit, C={args.C})...")
+    cv = walk_forward_cv(X, y, C=args.C)
     if "oof" in cv and "accuracy" in cv.get("oof", {}):
         m = cv["oof"]
         print(f"  OOF: accuracy={m['accuracy']:.3f}  log_loss={m['log_loss']:.3f}  brier={m['brier']:.3f}")
@@ -304,7 +312,7 @@ def main():
     # ── Final model ────────────────────────────────────────────────────────
     print("\nTraining final model on full dataset...")
     final = LogisticRegression(
-        l1_ratio=1, solver="liblinear", C=1.0,
+        l1_ratio=1, solver="liblinear", C=args.C,
         class_weight="balanced", max_iter=1000,
     )
     final.fit(X, y)

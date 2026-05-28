@@ -30,11 +30,15 @@ import type { DerivativesContext } from "../types.js";
 import "../env.js";
 
 const DRY_RUN = process.argv.includes("--dry-run");
+// --force re-computes rawFeatures even on rows that already have them.
+// Use after adding new features to extract-features.ts so existing rows get updated.
+const FORCE = process.argv.includes("--force");
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function isMissingRawFeatures(confluence: unknown): boolean {
+function needsBackfill(confluence: unknown): boolean {
   if (confluence == null || typeof confluence !== "object") return false;
+  if (FORCE) return true;
   return !("rawFeatures" in (confluence as object));
 }
 
@@ -44,33 +48,37 @@ function isMissingRawFeatures(confluence: unknown): boolean {
  * so we only need those two fields to be correct.
  */
 function buildOutputs(contexts: {
-  derivatives: { context: unknown } | null;
-  etfs: { context: unknown } | null;
-  htf: { context: unknown } | null;
-  exchangeFlows: { context: unknown } | null;
+  derivatives: { context: unknown; since: Date } | null;
+  etfs: { context: unknown; since: Date } | null;
+  htf: { context: unknown; since: Date } | null;
+  exchangeFlows: { context: unknown; since: Date } | null;
 }): DimensionOutput[] {
   const out: DimensionOutput[] = [];
   if (contexts.derivatives?.context) {
     out.push({
       dimension: "DERIVATIVES",
+      since: contexts.derivatives.since.toISOString(),
       context: contexts.derivatives.context as DerivativesContext,
     } as unknown as DerivativesOutput);
   }
   if (contexts.etfs?.context) {
     out.push({
       dimension: "ETFS",
+      since: contexts.etfs.since.toISOString(),
       context: contexts.etfs.context as EtfContext,
     } as unknown as EtfsOutput);
   }
   if (contexts.htf?.context) {
     out.push({
       dimension: "HTF",
+      since: contexts.htf.since.toISOString(),
       context: contexts.htf.context as HtfContext,
     } as unknown as HtfOutput);
   }
   if (contexts.exchangeFlows?.context) {
     out.push({
       dimension: "EXCHANGE_FLOWS",
+      since: contexts.exchangeFlows.since.toISOString(),
       context: contexts.exchangeFlows.context as ExchangeFlowsContext,
     } as unknown as ExchangeFlowsOutput);
   }
@@ -92,17 +100,17 @@ async function main() {
       confluence: true,
       brief: {
         select: {
-          derivatives: { select: { context: true } },
-          etfs: { select: { context: true } },
-          htf: { select: { context: true } },
-          exchangeFlows: { select: { context: true } },
+          derivatives: { select: { context: true, since: true } },
+          etfs: { select: { context: true, since: true } },
+          htf: { select: { context: true, since: true } },
+          exchangeFlows: { select: { context: true, since: true } },
         },
       },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  const toBackfill = trades.filter((t) => isMissingRawFeatures(t.confluence));
+  const toBackfill = trades.filter((t) => needsBackfill(t.confluence));
 
   console.log(`  Total trade ideas:    ${trades.length}`);
   console.log(`  Already have rawFeatures: ${trades.length - toBackfill.length}`);
@@ -134,7 +142,7 @@ async function main() {
         continue;
       }
 
-      const rawFeatures = extractRawFeatures(outputs);
+      const rawFeatures = extractRawFeatures(outputs, trade.createdAt);
       const dimsPresent = outputs.map((o) => o.dimension).join(", ");
 
       if (DRY_RUN) {

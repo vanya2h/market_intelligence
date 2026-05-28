@@ -6,6 +6,7 @@
   "model_type": "logistic_regression_l1",
   "label": "went_up: 1=price_went_up, 0=price_went_down",
   "feature_order": [
+    "durationHours",
     "fundingPct1m",
     "liqPct1m",
     "liqPct3m",
@@ -21,8 +22,8 @@
     "oiSignal",
     "fundingPressureSide"
   ],
-  "n_features": 14,
-  "trained_at": "2026-05-24T14:48:46.191329+00:00",
+  "n_features": 15,
+  "trained_at": "2026-05-28T02:06:33.642461+00:00",
   "n_samples": 277,
   "date_range": {
     "start": "2026-03-27T17:17:49.974000",
@@ -33,21 +34,21 @@
     "went_down": 97
   },
   "non_zero_coefficients": {
-    "oiSignal": 1.9953293097637999,
-    "previousStress": -1.432911996213868,
-    "positioningState": -0.6943055115509577,
-    "previousPositioning": 0.4412828901770549,
-    "fundingPressureSide": 0.236986288318544,
-    "fundingPressureCycles": -0.17607522808120601,
-    "oiZScore30d": 0.047996973669269846,
-    "liqPct1m": -0.013160462695023,
-    "cbPremiumPercentile1m": 0.009194035415583465,
-    "fundingPct1m": -0.004420961521585708,
-    "liqPct3m": -0.001703239204324688
+    "oiSignal": 1.9952888241526525,
+    "previousStress": -1.4329519194508296,
+    "positioningState": -0.6943291916221881,
+    "previousPositioning": 0.4412882890062663,
+    "fundingPressureSide": 0.23705132352968744,
+    "fundingPressureCycles": -0.17608185185279565,
+    "oiZScore30d": 0.04799719177712658,
+    "liqPct1m": -0.013147716496017344,
+    "cbPremiumPercentile1m": 0.009193103561958231,
+    "fundingPct1m": -0.0044207107439146135,
+    "liqPct3m": -0.0017161170732042951
   },
-  "intercept": 1.1932808053929949,
+  "intercept": 1.1932982854366736,
   "regularization": {
-    "penalty": "l1",
+    "l1_ratio": 1,
     "C": 1.0,
     "solver": "liblinear",
     "class_weight": "balanced"
@@ -58,39 +59,39 @@
       {
         "label": "fold0",
         "accuracy": 0.391304347826087,
-        "log_loss": 2.32133862075345,
-        "brier": 0.49770157637669954
+        "log_loss": 2.321272285880828,
+        "brier": 0.497671516540661
       },
       {
         "label": "fold1",
         "accuracy": 0.5217391304347826,
-        "log_loss": 1.251857275248376,
-        "brier": 0.3853968208420879
+        "log_loss": 1.2518875576749742,
+        "brier": 0.38540036125824567
       },
       {
         "label": "fold2",
         "accuracy": 0.782608695652174,
-        "log_loss": 0.48548715226168765,
-        "brier": 0.15398042963779962
+        "log_loss": 0.48548833115475276,
+        "brier": 0.15398056925372264
       },
       {
         "label": "fold3",
         "accuracy": 0.6956521739130435,
-        "log_loss": 0.5984048831097563,
-        "brier": 0.20484081511759686
+        "log_loss": 0.5984053449160225,
+        "brier": 0.20484075743278465
       },
       {
         "label": "fold4",
         "accuracy": 0.30434782608695654,
-        "log_loss": 0.8884341404413476,
-        "brier": 0.341461137561953
+        "log_loss": 0.8884370854070258,
+        "brier": 0.341463617299696
       }
     ],
     "oof": {
       "label": "oof",
       "accuracy": 0.5391304347826087,
-      "log_loss": 1.1091044143629234,
-      "brier": 0.3166761559072274
+      "log_loss": 1.1090981210067206,
+      "brier": 0.31667136435702203
     }
   },
   "pearson_ic_top10": {
@@ -100,22 +101,22 @@
     "liqPct3m": -0.2072471543686194,
     "liqPct1m": -0.202797927642099,
     "oiChange24h": -0.1800046164121504,
+    "durationHours": 0.1101556470151813,
     "oiChange7d": -0.109234418580561,
     "previousStress": -0.0945805036134291,
-    "fundingPct1m": -0.08859243079854995,
-    "fundingPressureSide": 0.057313538353089985
+    "fundingPct1m": -0.08859243079854995
   },
   "heuristic_baseline": null,
   "training_metrics_in_sample": {
     "label": "train_full",
     "accuracy": 0.6823104693140795,
-    "log_loss": 0.5963571784843887,
-    "brier": 0.20516445113555892
+    "log_loss": 0.5963567207537489,
+    "brier": 0.20516415728128315
   },
   "onnx_input_name": "X",
   "onnx_input_shape": [
     null,
-    14
+    15
   ],
   "onnx_input_dtype": "float32",
   "onnx_output_index_for_win": 1,
@@ -133,15 +134,15 @@
     "metrics": {
       "label": "onnx_roundtrip",
       "accuracy": 0.6823104693140795,
-      "log_loss": 0.5963571820832949,
-      "brier": 0.20516444742679596
+      "log_loss": 0.5963567075198885,
+      "brier": 0.2051641345024109
     },
     "first_5_probs": [
-      0.37698352336883545,
-      0.3684936761856079,
-      0.3704991340637207,
-      0.3756692409515381,
-      0.37674370408058167
+      0.37699320912361145,
+      0.3685041666030884,
+      0.370509535074234,
+      0.3756793737411499,
+      0.37675389647483826
     ]
   }
 }

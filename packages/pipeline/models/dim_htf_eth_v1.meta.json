@@ -6,6 +6,7 @@
   "model_type": "logistic_regression_l1",
   "label": "went_up: 1=price_went_up, 0=price_went_down",
   "feature_order": [
+    "durationHours",
     "biasComposite",
     "biasTrend",
     "biasMomentum",
@@ -45,8 +46,8 @@
     "maCrossType",
     "maRecentCross"
   ],
-  "n_features": 38,
-  "trained_at": "2026-05-24T14:48:42.913024+00:00",
+  "n_features": 39,
+  "trained_at": "2026-05-28T02:06:29.662186+00:00",
   "n_samples": 296,
   "date_range": {
     "start": "2026-03-27T17:17:49.974000",
@@ -57,31 +58,31 @@
     "went_down": 104
   },
   "non_zero_coefficients": {
-    "nearPriceVsPocPct": -2.5759711661156564,
-    "regime": -2.388721238641499,
-    "stalenessMfiExtreme": 2.2095442440627755,
-    "spotFuturesDivergence": -1.2841090126742962,
-    "divergenceConfluenceStrength": -0.9584215597014938,
-    "maCrossType": -0.6232859819167897,
-    "cvdFuturesMechanism": -0.5734761938211954,
-    "cvdFuturesLongRegime": -0.5439764723323677,
-    "stalenessRsiExtreme": -0.3059193768732164,
-    "structuralPriceVsPocPct": -0.2698482107679125,
-    "rsiDaily": 0.23785615263160337,
-    "cvdFuturesExtreme": 0.21680597117104985,
-    "rsiH4": -0.1516083501353526,
-    "biasFlow": 0.11506676183961827,
-    "cvdSpotDivergence": -0.05352492777388074,
-    "mfiDaily": -0.03892324055971994,
-    "recentDisplacement": -0.037732828033772516,
-    "priceVsSthPct": -0.035683215002950214,
-    "biasCompression": 0.03071841948084043,
-    "atrPercentile": -0.02099781832975171,
-    "mfiH4": 0.001789394495756357
+    "nearPriceVsPocPct": -2.5760346049956064,
+    "regime": -2.388461730882717,
+    "stalenessMfiExtreme": 2.209172446856964,
+    "spotFuturesDivergence": -1.2840952200198719,
+    "divergenceConfluenceStrength": -0.9582316355925252,
+    "maCrossType": -0.6231995156579869,
+    "cvdFuturesMechanism": -0.5735658948819008,
+    "cvdFuturesLongRegime": -0.5440310871687306,
+    "stalenessRsiExtreme": -0.30592874626838384,
+    "structuralPriceVsPocPct": -0.2698710311293584,
+    "rsiDaily": 0.2377927202216576,
+    "cvdFuturesExtreme": 0.21696771383515076,
+    "rsiH4": -0.1515591733607745,
+    "biasFlow": 0.11495905679805693,
+    "cvdSpotDivergence": -0.05344793083776269,
+    "mfiDaily": -0.03891690444079122,
+    "recentDisplacement": -0.037699837785243315,
+    "priceVsSthPct": -0.0357170721706837,
+    "biasCompression": 0.030618188029578823,
+    "atrPercentile": -0.020997491819385882,
+    "mfiH4": 0.0017852839936018843
   },
   "intercept": 0.0,
   "regularization": {
-    "penalty": "l1",
+    "l1_ratio": 1,
     "C": 1.0,
     "solver": "liblinear",
     "class_weight": "balanced"
@@ -92,39 +93,39 @@
       {
         "label": "fold0",
         "accuracy": 0.6326530612244898,
-        "log_loss": 0.8500712731627027,
-        "brier": 0.2432522736269457
+        "log_loss": 0.8501071446785398,
+        "brier": 0.24325869049914006
       },
       {
         "label": "fold1",
         "accuracy": 0.6122448979591837,
-        "log_loss": 1.0926980180815469,
-        "brier": 0.29176053177926176
+        "log_loss": 1.0927522549354676,
+        "brier": 0.29176140445535437
       },
       {
         "label": "fold2",
         "accuracy": 0.5510204081632653,
-        "log_loss": 0.9812558864144847,
-        "brier": 0.31906885241263777
+        "log_loss": 0.9812477181982042,
+        "brier": 0.31906782416700813
       },
       {
         "label": "fold3",
         "accuracy": 0.32653061224489793,
-        "log_loss": 2.2365674947834306,
-        "brier": 0.5645512446966712
+        "log_loss": 2.236520921644384,
+        "brier": 0.564549186707009
       },
       {
         "label": "fold4",
         "accuracy": 0.7755102040816326,
-        "log_loss": 0.5715474272645957,
-        "brier": 0.19002188745709225
+        "log_loss": 0.5715530321072223,
+        "brier": 0.19002431926746025
       }
     ],
     "oof": {
       "label": "oof",
       "accuracy": 0.5795918367346938,
-      "log_loss": 1.1464280199413521,
-      "brier": 0.3217309579945217
+      "log_loss": 1.1464362143127635,
+      "brier": 0.32173228501919443
     }
   },
   "pearson_ic_top10": {
@@ -148,13 +149,13 @@
   "training_metrics_in_sample": {
     "label": "train_full",
     "accuracy": 0.7905405405405406,
-    "log_loss": 0.457596856371721,
-    "brier": 0.15134413644950237
+    "log_loss": 0.4575995635597154,
+    "brier": 0.15134383429274315
   },
   "onnx_input_name": "X",
   "onnx_input_shape": [
     null,
-    38
+    39
   ],
   "onnx_input_dtype": "float32",
   "onnx_output_index_for_win": 1,
@@ -172,15 +173,15 @@
     "metrics": {
       "label": "onnx_roundtrip",
       "accuracy": 0.7905405405405406,
-      "log_loss": 0.45759685776245274,
-      "brier": 0.15134413540363312
+      "log_loss": 0.4575996094046878,
+      "brier": 0.15134386718273163
     },
     "first_5_probs": [
-      0.9531872272491455,
-      0.9524386525154114,
-      0.9555057287216187,
-      0.9555057287216187,
-      0.9576879739761353
+      0.9531508684158325,
+      0.9524019956588745,
+      0.9554705619812012,
+      0.9554705619812012,
+      0.9576535224914551
     ]
   }
 }

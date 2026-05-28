@@ -19,7 +19,7 @@ import type { HtfContext } from "../../htf/types.js";
 import { CONFLUENCE_DIMENSIONS, DimensionEnum } from "../dimensions.js";
 import type { DimensionOutput } from "../types.js";
 import { computeCompositeTarget, type Direction } from "./composite-target.js";
-import { computeConfluence, type Confluence, getConfluenceTotal } from "./confluence.js";
+import { type Confluence, getConfluenceTotal } from "./confluence.js";
 import { extractRawFeatures } from "./extract-features.js";
 import { type IntradimMlResults, runIntradimMl } from "./intradim-ml.js";
 import { type MlResult, runMlAggregator } from "./ml-aggregator.js";
@@ -55,16 +55,13 @@ export async function processTradeIdea(
   htfContext: HtfContext,
   outputs: DimensionOutput[],
 ): Promise<{ id: string; decision: TradeDecision }> {
-  const heuristicConfluence = computeConfluence(outputs);
   const rawFeatures = extractRawFeatures(outputs);
-
-  // L2a: per-dim ML scores replace heuristic scores where models are available
   const intradimMl = await runIntradimMl(asset, rawFeatures);
   const confluence: Confluence = {
-    [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES]?.score ?? heuristicConfluence[DimensionEnum.DERIVATIVES],
-    [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS]?.score ?? heuristicConfluence[DimensionEnum.ETFS],
-    [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF]?.score ?? heuristicConfluence[DimensionEnum.HTF],
-    [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS]?.score ?? heuristicConfluence[DimensionEnum.EXCHANGE_FLOWS],
+    [DimensionEnum.DERIVATIVES]: intradimMl[DimensionEnum.DERIVATIVES].score,
+    [DimensionEnum.ETFS]: intradimMl[DimensionEnum.ETFS].score,
+    [DimensionEnum.HTF]: intradimMl[DimensionEnum.HTF].score,
+    [DimensionEnum.EXCHANGE_FLOWS]: intradimMl[DimensionEnum.EXCHANGE_FLOWS].score,
   };
 
   // L1: cross-dim aggregator on the (ML-replaced) per-dim scores
@@ -104,9 +101,8 @@ export async function processTradeIdea(
   // ─── Console output ───────────────────────────────────────────────
   const confStr = CONFLUENCE_DIMENSIONS.map((dim) => {
     const s = confluence[dim];
-    const mlUsed = dim in intradimMl;
     const icon = s > 0 ? chalk.green(`+${s}`) : s < 0 ? chalk.red(`${s}`) : chalk.dim("0");
-    return `${dim}:${icon}${mlUsed ? chalk.magenta("*") : ""}`;
+    return `${dim}:${icon}`;
   }).join("  ");
 
   const targetDist = Math.abs(compositeTarget - entryPrice);
@@ -120,7 +116,6 @@ export async function processTradeIdea(
     .join(" ");
 
   const aggLabel = ml ? chalk.magenta(`ml ${ml.modelVersion} pWin=${ml.pWin}`) : chalk.yellow("equal-weight fallback");
-  const mlDimCount = Object.keys(intradimMl).length;
 
   console.log(
     `      ${chalk.green("▸")} trade idea: ${chalk.bold(direction)} ` +
@@ -132,7 +127,7 @@ export async function processTradeIdea(
   );
   console.log(`        stops: ${stops}`);
   console.log(`        targets: ${targets}`);
-  console.log(`        ${confStr}  ${chalk.dim(`(* = L2a ML, ${mlDimCount}/4 dims)`)}`);
+  console.log(`        ${confStr}`);
 
   return { id, decision };
 }
